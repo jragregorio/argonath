@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Family {
+  id        String   @id @default(cuid())
+  clerkOrgId String  @unique
+  name      String
+  parentPin String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  children Child[]
+  auditLogs AuditLog[]
+}
+
+model Child {
+  id          String   @id @default(cuid())
+  familyId    String
+  displayName String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  family             Family              @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  devices            Device[]
+  policies           ScreenTimePolicy[]
+  extensionRequests  ExtensionRequest[]
+  snapshots          Snapshot[]
+  extensionOverrides ExtensionOverride[]
+
+  @@index([familyId])
+}
+
+model Device {
+  id           String    @id @default(cuid())
+  childId      String
+  pairingCode  String?   @unique
+  pairingExpiresAt DateTime?
+  deviceToken  String?   @unique
+  platform     String    @default("windows")
+  machineName  String?
+  displayName  String?
+  agentVersion String?
+  lastSeenAt   DateTime?
+  isOnline     Boolean   @default(false)
+  isLocked     Boolean   @default(false)
+  adminLock    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  child             Child              @relation(fields: [childId], references: [id], onDelete: Cascade)
+  usageLogs         UsageLog[]
+  extensionRequests ExtensionRequest[]
+  snapshots         Snapshot[]
+
+  @@index([childId])
+  @@index([deviceToken])
+}
+
+model ScreenTimePolicy {
+  id                String   @id @default(cuid())
+  childId           String
+  dailyLimitMinutes Int      @default(120)
+  allowedWindows    Json     @default("[]")
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId])
+}
+
+model UsageLog {
+  id            String   @id @default(cuid())
+  deviceId      String
+  date          DateTime @db.Date
+  activeMinutes Int      @default(0)
+  idleMinutes   Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, date])
+  @@index([deviceId])
+}
+
+model ExtensionRequest {
+  id               String    @id @default(cuid())
+  childId          String
+  deviceId         String
+  requestedMinutes Int
+  status           String    @default("pending")
+  resolvedAt       DateTime?
+  resolvedBy       String?
+  createdAt        DateTime  @default(now())
+
+  child  Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([childId])
+  @@index([deviceId])
+  @@index([status])
+}
+
+model ExtensionOverride {
+  id              String   @id @default(cuid())
+  childId         String
+  extraMinutes    Int
+  expiresAt       DateTime
+  sourceRequestId String?
+  createdAt       DateTime @default(now())
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId])
+  @@index([expiresAt])
+}
+
+model Snapshot {
+  id          String   @id @default(cuid())
+  childId     String
+  deviceId    String
+  type        String
+  storageKey  String
+  requestedBy String
+  capturedAt  DateTime @default(now())
+  expiresAt   DateTime?
+
+  child  Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([childId])
+  @@index([deviceId])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  familyId  String
+  userId    String
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([createdAt])
+}
+
+model CaptureRateLimit {
+  id        String   @id @default(cuid())
+  deviceId  String
+  hourStart DateTime
+  count     Int      @default(0)
+
+  @@unique([deviceId, hourStart])
+  @@index([deviceId])
+}

@@ -1,0 +1,108 @@
+using System.Windows.Forms;
+using Argonath.Core;
+using Argonath.Core.Services;
+using Argonath.LockUI;
+
+namespace Argonath.Agent;
+
+public class Worker : BackgroundService
+{
+    private readonly ILogger<Worker> _logger;
+    private readonly EnforcementEngine _engine;
+    private readonly ConfigStore _configStore;
+    private RealtimeService? _realtime;
+
+    public Worker(
+        ILogger<Worker> logger,
+        EnforcementEngine engine,
+        ConfigStore configStore)
+    {
+        _logger = logger;
+        _engine = engine;
+        _configStore = configStore;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        if (!_configStore.IsPaired())
+        {
+            _logger.LogWarning("Agent not paired. Run Argonath.Tray to pair first.");
+            return;
+        }
+
+        _engine.LockRequired += () =>
+        {
+            var monitors = Screen.AllScreens
+                .Select(s => new MonitorBounds(
+                    s.Bounds.Left,
+                    s.Bounds.Top,
+                    s.Bounds.Width,
+                    s.Bounds.Height,
+                    s.Primary
+                ))
+                .ToList();
+
+            LockWindowManager.Show(
+                minutes => _engine.RequestExtensionAsync(minutes),
+                async pin =>
+                {
+                    var result = _engine.ValidateParentPin(pin);
+                    if (!result.ok)
+                    {
+                        return result;
+                    }
+
+                    try
+                    {
+                        await _engine.ClearAdminLockAsync();
+                    }
+                    catch
+                    {
+                        // Still shut down even if the dashboard clear fails.
+                    }
+
+                    LockWindowManager.Hide();
+                    // Stopping the service host ends enforcement until the agent is started again.
+                    Environment.Exit(0);
+                    return result;
+                },
+                _engine.CurrentEvaluation,
+                monitors
+            );
+        };
+
+        _engine.UnlockRequired += () => LockWindowManager.Hide();
+        _engine.PolicyChanged += eval => LockWindowManager.Update(eval);
+        _engine.CaptureRequested += async (payload, type) =>
+        {
+            await _engine.HandleCaptureAsync(payload, type);
+        };
+
+        _realtime = new RealtimeService(_configStore, evt => _engine.HandleRealtimeEvent(evt));
+
+        await _engine.InitializeAsync();
+        await _realtime.ConnectAsync();
+
+        _logger.LogInformation("Argonath Agent service started");
+
+        var lastHeartbeat = DateTime.UtcNow;
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            _engine.Tick();
+
+            if (
+                _engine.IsLocked ||
+                (DateTime.UtcNow - lastHeartbeat).TotalSeconds >= 5
+            )
+            {
+                await _engine.SendHeartbeatAsync();
+                lastHeartbeat = DateTime.UtcNow;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+        }
+
+        _realtime.Dispose();
+    }
+}
