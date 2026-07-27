@@ -5,6 +5,8 @@ import "./globals.css";
 
 const devAuthBypassEnabled =
   process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+const clerkPublishableKey =
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim() ?? "";
 
 export const metadata: Metadata = {
   title: "Argonath — Parental Screen Time Control",
@@ -24,13 +26,12 @@ export default function RootLayout({
     </html>
   );
 
-  if (devAuthBypassEnabled) {
+  // Skip Clerk during local bypass or when keys are not yet configured (e.g. Vercel build).
+  if (devAuthBypassEnabled || !clerkPublishableKey) {
     return content;
   }
 
   return (
-    <ClerkProvider>
-      {content}
-    </ClerkProvider>
+    <ClerkProvider publishableKey={clerkPublishableKey}>{content}</ClerkProvider>
   );
 }

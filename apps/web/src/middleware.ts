@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 
 const devAuthBypassEnabled =
   process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+const clerkConfigured = Boolean(
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim()
+);
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -12,7 +15,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/cron(.*)",
 ]);
 
-export default devAuthBypassEnabled
+export default !clerkConfigured || devAuthBypassEnabled
   ? () => NextResponse.next()
   : clerkMiddleware(async (auth, req) => {
       if (!isPublicRoute(req)) {
