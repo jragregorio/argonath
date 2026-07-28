@@ -81,6 +81,11 @@ export default function ChildrenPage() {
                 {createChild.isPending ? "Creating..." : "Create"}
               </Button>
             </form>
+            {createChild.error && (
+              <p className="mt-3 text-sm text-destructive">
+                {createChild.error.message || "Failed to create child. Check that you are signed in."}
+              </p>
+            )}
           </CardContent>
         </Card>
       )}

@@ -17,10 +17,14 @@ const handler = (req: Request) =>
             orgId: process.env.DEV_BYPASS_ORG_ID ?? "dev-family",
           }
         : await auth();
+      // Clerk orgId is only set with an active Organization. For solo parents,
+      // fall back to a stable per-user family key so the dashboard works without orgs.
+      const userId = authState.userId ?? null;
+      const orgId = authState.orgId ?? (userId ? `user_${userId}` : null);
       const deviceToken = req.headers.get("x-device-token");
       return createContext({
-        userId: authState.userId,
-        orgId: authState.orgId,
+        userId,
+        orgId,
         deviceToken,
       });
     },

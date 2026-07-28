@@ -73,7 +73,6 @@ function NavFooter() {
       ) : (
         <>
           <OrganizationSwitcher
-            hidePersonal
             afterCreateOrganizationUrl="/dashboard"
             afterLeaveOrganizationUrl="/dashboard"
             afterSelectOrganizationUrl="/dashboard"
