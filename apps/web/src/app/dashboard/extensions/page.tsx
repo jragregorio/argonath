@@ -17,12 +17,14 @@ export default function ExtensionsPage() {
     onSuccess: () => {
       utils.extension.listPending.invalidate();
       utils.children.list.invalidate();
+      utils.dashboard.navBadges.invalidate();
     },
   });
 
   const deviceIds = devices?.map((d) => d.id) ?? [];
   useFamilyRealtime(deviceIds, () => {
     utils.extension.listPending.invalidate();
+    utils.dashboard.navBadges.invalidate();
   });
 
   return (

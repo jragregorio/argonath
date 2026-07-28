@@ -17,6 +17,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/dev-config";
 import { trpc } from "@/lib/trpc";
+import { useFamilyRealtime } from "@/lib/realtime";
 import { APP_VERSION } from "@warden/shared";
 
 const devAuthBypassEnabled =
@@ -39,6 +40,30 @@ const focusRing =
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const utils = trpc.useUtils();
+  const { data: badges } = trpc.dashboard.navBadges.useQuery(undefined, {
+    refetchInterval: 5000,
+  });
+  const { data: devices } = trpc.device.list.useQuery(undefined, {
+    refetchInterval: 15_000,
+  });
+  const deviceIds = devices?.map((d) => d.id) ?? [];
+
+  useFamilyRealtime(deviceIds, (event) => {
+    if (
+      event.type === "snapshot:ready" ||
+      event.type === "snapshot:failed" ||
+      event.type.startsWith("extension:")
+    ) {
+      utils.dashboard.navBadges.invalidate();
+    }
+  });
+
+  const badgeFor = (href: string): number => {
+    if (href === "/dashboard/extensions") return badges?.pendingRequests ?? 0;
+    if (href === "/dashboard/snapshots") return badges?.unviewedSnapshots ?? 0;
+    return 0;
+  };
 
   return (
     <nav className="flex-1 space-y-1">
@@ -46,6 +71,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         const isActive =
           pathname === href ||
           (href !== "/dashboard" && pathname.startsWith(href));
+        const count = badgeFor(href);
         return (
           <Link
             key={href}
@@ -57,8 +83,19 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary"
             }`}
           >
-            <Icon className="w-5 h-5" />
-            {label}
+            <Icon className="w-5 h-5 shrink-0" />
+            <span className="flex-1 truncate">{label}</span>
+            {count > 0 && (
+              <span
+                className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold leading-none ${
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-primary/90 text-primary-foreground"
+                }`}
+              >
+                {count > 9 ? "9+" : count}
+              </span>
+            )}
           </Link>
         );
       })}

@@ -73,6 +73,7 @@ export default function DashboardPage() {
     utils.children.list.invalidate();
     utils.device.list.invalidate();
     utils.extension.listPending.invalidate();
+    utils.dashboard.navBadges.invalidate();
   });
 
   if (isLoading) {

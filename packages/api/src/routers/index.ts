@@ -696,6 +696,32 @@ export const extensionRouter = router({
     }),
 });
 
+export const dashboardRouter = router({
+  navBadges: protectedProcedure.query(async ({ ctx }) => {
+    const family = await getFamilyForUser(ctx);
+    const now = new Date();
+
+    const [pendingRequests, unviewedSnapshots] = await Promise.all([
+      prisma.extensionRequest.count({
+        where: {
+          child: { familyId: family.id },
+          status: "pending",
+        },
+      }),
+      prisma.snapshot.count({
+        where: {
+          child: { familyId: family.id },
+          status: "ready",
+          viewedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+      }),
+    ]);
+
+    return { pendingRequests, unviewedSnapshots };
+  }),
+});
+
 export const snapshotRouter = router({
   list: protectedProcedure
     .input(z.object({ childId: z.string().optional() }))
@@ -732,6 +758,19 @@ export const snapshotRouter = router({
 
       return withUrls;
     }),
+
+  markAllViewed: parentProcedure.mutation(async ({ ctx }) => {
+    const family = await getFamilyForUser(ctx);
+    const result = await prisma.snapshot.updateMany({
+      where: {
+        child: { familyId: family.id },
+        status: "ready",
+        viewedAt: null,
+      },
+      data: { viewedAt: new Date() },
+    });
+    return { updated: result.count };
+  }),
 
   getStatus: protectedProcedure
     .input(z.object({ snapshotId: z.string() }))
@@ -1229,6 +1268,7 @@ export const appRouter = router({
   policy: policyRouter,
   device: deviceRouter,
   extension: extensionRouter,
+  dashboard: dashboardRouter,
   snapshot: snapshotRouter,
   agent: agentRouter,
 });

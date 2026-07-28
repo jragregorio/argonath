@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useFamilyRealtime } from "@/lib/realtime";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,11 +16,24 @@ export default function SnapshotsPage() {
     { refetchInterval: 5000 }
   );
   const { data: devices } = trpc.device.list.useQuery();
+  const markAllViewed = trpc.snapshot.markAllViewed.useMutation({
+    onSuccess: () => {
+      utils.dashboard.navBadges.invalidate();
+    },
+  });
+
+  useEffect(() => {
+    markAllViewed.mutate();
+    // Mark ready snapshots as viewed once when opening this page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount-only
+  }, []);
 
   const deviceIds = devices?.map((d) => d.id) ?? [];
   useFamilyRealtime(deviceIds, (event) => {
     if (event.type === "snapshot:ready") {
       utils.snapshot.list.invalidate();
+      // Parent is already on the page — clear the badge for the new capture.
+      markAllViewed.mutate();
     }
   });
 

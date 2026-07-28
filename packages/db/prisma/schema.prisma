@@ -189,6 +189,8 @@ model Snapshot {
   status      String   @default("ready")
   requestedBy String
   capturedAt  DateTime @default(now())
+  /// Set when a parent has opened the Snapshots page (clears nav badge).
+  viewedAt    DateTime?
   expiresAt   DateTime?
 
   child  Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
@@ -197,6 +199,7 @@ model Snapshot {
   @@index([childId])
   @@index([deviceId])
   @@index([deviceId, status])
+  @@index([status, viewedAt])
   @@index([expiresAt])
 }
 
