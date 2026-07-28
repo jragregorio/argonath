@@ -27,6 +27,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/dev-config";
+import {
+  optimisticAdminLock,
+  rollbackAdminLock,
+} from "@/lib/device-cache";
 
 const DAYS = [
   { value: 1, label: "Mon" },
@@ -88,13 +92,50 @@ export default function ChildDetailPage() {
     },
   });
   const setAdminLock = trpc.device.setAdminLock.useMutation({
-    onSuccess: () => {
-      utils.children.get.invalidate({ childId });
-      utils.device.list.invalidate();
+    onMutate: async ({ deviceId, locked }) =>
+      optimisticAdminLock(utils, deviceId, locked, childId),
+    onError: (_err, _vars, context) => rollbackAdminLock(utils, context),
+    onSettled: () => {
+      void utils.children.get.invalidate({ childId });
+      void utils.device.list.invalidate();
     },
   });
+  const [captureFeedback, setCaptureFeedback] = useState<
+    Record<string, string>
+  >({});
   const requestCapture = trpc.snapshot.requestCapture.useMutation({
-    onSuccess: () => utils.snapshot.list.invalidate(),
+    onMutate: ({ deviceId, type }) => {
+      setCaptureFeedback((prev) => ({
+        ...prev,
+        [deviceId]:
+          type === "screen"
+            ? "Requesting screenshot…"
+            : "Requesting webcam capture…",
+      }));
+    },
+    onSuccess: (_data, { deviceId, type }) => {
+      setCaptureFeedback((prev) => ({
+        ...prev,
+        [deviceId]:
+          type === "screen"
+            ? "Screenshot requested — waiting for device"
+            : "Webcam capture requested — waiting for device",
+      }));
+      void utils.snapshot.list.invalidate();
+    },
+    onError: (err, { deviceId }) => {
+      setCaptureFeedback((prev) => ({
+        ...prev,
+        [deviceId]: err.message || "Capture failed",
+      }));
+      window.setTimeout(() => {
+        setCaptureFeedback((prev) => {
+          const next = { ...prev };
+          delete next[deviceId];
+          return next;
+        });
+      }, 5000);
+    },
   });
 
   const [pairingCode, setPairingCode] = useState<{
@@ -120,9 +161,23 @@ export default function ChildDetailPage() {
   const currentActive = isActive ?? policy?.isActive ?? true;
 
   const deviceIds = child?.devices.map((d) => d.id) ?? [];
-  useFamilyRealtime(deviceIds, () => {
-    utils.children.get.invalidate({ childId });
-    utils.policy.getEvaluation.invalidate({ childId });
+  useFamilyRealtime(deviceIds, (event) => {
+    if (event.type === "snapshot:ready") {
+      setCaptureFeedback((prev) => ({
+        ...prev,
+        [event.deviceId]: "Capture received",
+      }));
+      void utils.snapshot.list.invalidate();
+      window.setTimeout(() => {
+        setCaptureFeedback((prev) => {
+          const next = { ...prev };
+          delete next[event.deviceId];
+          return next;
+        });
+      }, 3000);
+    }
+    void utils.children.get.invalidate({ childId });
+    void utils.policy.getEvaluation.invalidate({ childId });
   });
 
   if (isLoading) {
@@ -530,7 +585,6 @@ export default function ChildDetailPage() {
                           locked: false,
                         })
                       }
-                      disabled={setAdminLock.isPending}
                     >
                       <Unlock className="w-4 h-4 mr-2" />
                       Release lockdown
@@ -545,7 +599,7 @@ export default function ChildDetailPage() {
                           locked: true,
                         })
                       }
-                      disabled={setAdminLock.isPending || !device.deviceToken}
+                      disabled={!device.deviceToken}
                       title={
                         !device.deviceToken
                           ? "Device must be paired first"
@@ -568,7 +622,7 @@ export default function ChildDetailPage() {
                             type: "screen",
                           })
                         }
-                        disabled={requestCapture.isPending}
+                        disabled={Boolean(captureFeedback[device.id])}
                         title="Capture screen"
                       >
                         <Camera className="w-4 h-4" />
@@ -582,7 +636,7 @@ export default function ChildDetailPage() {
                             type: "webcam",
                           })
                         }
-                        disabled={requestCapture.isPending}
+                        disabled={Boolean(captureFeedback[device.id])}
                         title="Capture webcam"
                       >
                         <Video className="w-4 h-4" />
@@ -601,6 +655,11 @@ export default function ChildDetailPage() {
                     Remove
                   </Button>
                 </div>
+                {captureFeedback[device.id] && (
+                  <p className="text-xs text-muted-foreground">
+                    {captureFeedback[device.id]}
+                  </p>
+                )}
               </div>
             ))}
 

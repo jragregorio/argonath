@@ -417,12 +417,12 @@ export const deviceRouter = router({
         deviceId: device.id,
       });
 
-      await broadcastToDevice(device.id, {
+      void broadcastToDevice(device.id, {
         type: input.locked ? "device:locked" : "device:unlocked",
         deviceId: device.id,
         payload: { adminLock: input.locked },
         timestamp: new Date().toISOString(),
-      });
+      }).catch(() => {});
 
       return updated;
     }),
@@ -639,7 +639,7 @@ export const snapshotRouter = router({
         });
       }
 
-      await broadcastToDevice(device.id, {
+      void broadcastToDevice(device.id, {
         type: input.type === "screen" ? "capture:screen" : "capture:webcam",
         deviceId: device.id,
         payload: {
@@ -648,7 +648,7 @@ export const snapshotRouter = router({
           storageKey,
         },
         timestamp: new Date().toISOString(),
-      });
+      }).catch(() => {});
 
       await logAudit(family.id, ctx.userId, "capture_requested", {
         deviceId: device.id,

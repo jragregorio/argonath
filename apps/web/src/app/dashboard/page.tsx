@@ -10,6 +10,10 @@ import { Monitor, AlertCircle, Lock, Unlock, Users, Clock } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getDeviceDisplayName } from "@warden/shared";
+import {
+  optimisticAdminLock,
+  rollbackAdminLock,
+} from "@/lib/device-cache";
 
 export default function DashboardPage() {
   const utils = trpc.useUtils();
@@ -19,9 +23,12 @@ export default function DashboardPage() {
   });
   const { data: pendingRequests } = trpc.extension.listPending.useQuery();
   const setAdminLock = trpc.device.setAdminLock.useMutation({
-    onSuccess: () => {
-      utils.device.list.invalidate();
-      utils.children.list.invalidate();
+    onMutate: async ({ deviceId, locked }) =>
+      optimisticAdminLock(utils, deviceId, locked),
+    onError: (_err, _vars, context) => rollbackAdminLock(utils, context),
+    onSettled: () => {
+      void utils.device.list.invalidate();
+      void utils.children.list.invalidate();
     },
   });
 
@@ -174,7 +181,6 @@ export default function DashboardPage() {
                           locked: false,
                         })
                       }
-                      disabled={setAdminLock.isPending}
                     >
                       <Unlock className="w-4 h-4 mr-2" />
                       Release lockdown
@@ -189,7 +195,7 @@ export default function DashboardPage() {
                           locked: true,
                         })
                       }
-                      disabled={setAdminLock.isPending || !device.deviceToken}
+                      disabled={!device.deviceToken}
                       title={
                         !device.deviceToken
                           ? "Device must be paired first"
