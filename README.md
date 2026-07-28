@@ -5,7 +5,7 @@ Parental screen time control SaaS with a parent web dashboard and a Windows agen
 ## Architecture
 
 - **Parent dashboard** (`apps/web`) — Next.js 15 web app for tracking, policies, extension approvals, and on-demand captures
-- **Windows agent** (`apps/agent`) — .NET 8 service for system-wide time tracking, machine lock, and capture execution
+- **Windows app** (`apps/agent/Warden.Tray`) — .NET 8 tray app for system-wide time tracking, lockdown, and a child-facing time-remaining display
 - **API** (`packages/api`) — tRPC routers + custom JWT auth + Supabase Realtime/Storage integration
 - **Database** (`packages/db`) — Prisma + Supabase PostgreSQL
 
@@ -60,13 +60,15 @@ npm run dev
 
 7. Create an account at `/sign-up`, or set `NEXT_PUBLIC_DEV_AUTH_BYPASS=true` for local testing without sign-in.
 
-8. Build and run the Windows agent (requires .NET 8 SDK):
+8. Build and run the Windows app on a child PC (requires .NET 8 SDK to build, or use a published `Warden.Tray.exe`):
 
 ```bash
 cd apps/agent
 dotnet build
 dotnet run --project Warden.Tray
 ```
+
+The tray app shows a **time remaining** countdown. Closing the window keeps Warden in the system tray — the child can reopen it anytime to check time left.
 
 ## Environment variables
 
@@ -92,7 +94,7 @@ See `apps/web/.env.example` for the full list. Key variables:
 1. Sign in to the parent dashboard
 2. Add a child profile
 3. Click "Generate pairing code"
-4. Enter the 6-digit code in the Windows agent setup screen
+4. Enter the 6-digit code in `Warden.Tray` on the child PC
 
 ## License
 

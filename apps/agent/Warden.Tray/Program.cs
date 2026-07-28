@@ -84,7 +84,11 @@ static class Program
         };
 
         _engine.UnlockRequired += () => LockWindowManager.Hide();
-        _engine.PolicyChanged += eval => LockWindowManager.Update(eval);
+        _engine.PolicyChanged += eval =>
+        {
+            LockWindowManager.Update(eval);
+            UpdateTrayStatusText();
+        };
 
         _engine.CaptureRequested += async (payload, type) =>
         {
@@ -119,6 +123,7 @@ static class Program
         _tickTimer.Tick += async (_, _) =>
         {
             _engine.Tick();
+            UpdateTrayStatusText();
 
             var shouldPollServer =
                 _engine.IsLocked || (DateTime.UtcNow - _lastHeartbeatAt).TotalSeconds >= 5;
@@ -129,6 +134,7 @@ static class Program
                 {
                     await _engine.SendHeartbeatAsync();
                     _lastHeartbeatAt = DateTime.UtcNow;
+                    UpdateTrayStatusText();
                 }
                 catch (DeviceUnpairedException ex)
                 {
@@ -171,9 +177,10 @@ static class Program
         _trayIcon = new NotifyIcon
         {
             Icon = SystemIcons.Shield,
-            Text = "Warden Agent",
+            Text = "Warden",
             Visible = true
         };
+        UpdateTrayStatusText();
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(
@@ -181,6 +188,29 @@ static class Program
             null,
             (_, _) => _mainWindow?.Dispatcher.Invoke(() => _mainWindow.ShowFromTray())
         );
+        var startupItem = new ToolStripMenuItem("Start with Windows")
+        {
+            Checked = StartupHelper.IsEnabled(),
+            CheckOnClick = true
+        };
+        startupItem.Click += (_, _) =>
+        {
+            try
+            {
+                StartupHelper.SetEnabled(startupItem.Checked);
+            }
+            catch (Exception ex)
+            {
+                startupItem.Checked = StartupHelper.IsEnabled();
+                MessageBox.Show(
+                    ex.Message,
+                    "Warden",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+            }
+        };
+        menu.Items.Add(startupItem);
         menu.Items.Add(
             "Refresh policy",
             null,
@@ -233,6 +263,16 @@ static class Program
         _trayIcon.ContextMenuStrip = menu;
         _trayIcon.DoubleClick += (_, _) =>
             _mainWindow?.Dispatcher.Invoke(() => _mainWindow.ShowFromTray());
+    }
+
+    private static void UpdateTrayStatusText()
+    {
+        if (_trayIcon == null || _engine == null)
+        {
+            return;
+        }
+
+        _trayIcon.Text = TrayStatusText.Format(_engine);
     }
 
     private static void ShutdownWarden()

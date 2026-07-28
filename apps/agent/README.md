@@ -1,60 +1,83 @@
-# Warden Windows Agent
+# Warden Windows App
 
-.NET 8 Windows agent for system-wide screen time enforcement.
+.NET 8 Windows app for system-wide screen time enforcement.
+
+## Recommended install: `Warden.Tray`
+
+Use **`Warden.Tray`** on child devices. It is the full desktop app:
+
+- Shows a **time remaining** countdown the child can open any time
+- Runs in the system tray after the window is closed
+- Enforces screen-time limits and parent lockdown
+- Handles realtime commands (lock, capture, policy updates)
+
+The child can see time left in two places:
+
+1. **Warden window** — large `HH:MM:SS` countdown plus used/limit minutes
+2. **Tray icon tooltip** — hover the shield icon for a quick `Xm YYs left` summary
+
+Use tray **Open Warden** or double-click the tray icon to reopen the status window.
 
 ## Projects
 
 | Project | Purpose |
 |---------|---------|
+| `Warden.Tray` | **Primary app** — status window + tray + enforcement |
 | `Warden.Core` | Shared logic: API client, policy engine, idle detection, capture |
-| `Warden.Tray` | Status window + system tray (run this for home/dev) |
 | `Warden.LockUI` | Full-screen WPF lock overlay |
-| `Warden.Agent` | Windows Service for background enforcement |
+| `Warden.Agent` | Optional Windows Service (no child UI; advanced/headless use only) |
 
 ## Prerequisites
 
-- .NET 8 SDK
+- .NET 8 SDK (to build) or a published `Warden.Tray.exe`
 - Windows 10/11
 
 ## Development
 
 ```bash
-# Pair and run (opens a status window; closes to the system tray)
+# Pair and run (opens the child status window)
 dotnet run --project Warden.Tray
 ```
 
-Tray opens a modern status window after pairing. Closing the window keeps Warden running in the tray — use **Open Warden** or double-click the tray icon to restore it. Exit requires the parent PIN.
+Closing the window keeps Warden running in the tray. Exit requires the parent PIN.
+
+## Publish for a child PC
 
 ```bash
-# Install as Windows Service (after pairing via Tray)
-dotnet publish Warden.Agent -c Release
-sc create WardenAgent binPath="path\to\Warden.Agent.exe"
-sc start WardenAgent
+dotnet publish Warden.Tray -c Release -r win-x64 --self-contained false
 ```
+
+Published binary:
+
+`Warden.Tray/bin/Release/net8.0-windows/win-x64/publish/Warden.Tray.exe`
+
+Copy that folder to the child machine (for example `C:\Program Files\Warden\`), run it once to pair, then enable **Start with Windows** from the tray menu.
 
 ## Pairing
 
-1. Start the parent dashboard and generate a pairing code for a child
-2. Run `Warden.Tray`
-3. Enter API URL, Supabase URL, Supabase anon key, and the 6-digit code
-4. Agent connects and begins enforcing policies
+1. In the parent dashboard, add a child and generate a pairing code
+2. Run `Warden.Tray` on the child PC
+3. Enter the 6-digit code
+4. Warden fetches API and realtime settings automatically
+
+## Optional: Windows Service
+
+`Warden.Agent` is only for headless background enforcement with no child-facing UI. Pair with `Warden.Tray` first, then install the service if you need it:
+
+```bash
+dotnet publish Warden.Agent -c Release -r win-x64
+sc create WardenAgent binPath= "C:\Program Files\Warden\Warden.Agent.exe" start= auto
+sc start WardenAgent
+```
+
+For most families, **`Warden.Tray` alone is enough**.
 
 ## Configuration
 
-Stored in `%LOCALAPPDATA%\Warden\config.json`:
-
-- `ApiBaseUrl` — Warden web API URL
-- `SupabaseUrl` — For realtime commands
-- `SupabaseAnonKey` — Supabase anon key
-- `DeviceToken` — Set automatically after pairing
+Stored in `%LOCALAPPDATA%\Warden\config.json` after pairing.
 
 ## Lock limitations
 
-While locked, Warden installs a low-level keyboard hook that blocks common bypass shortcuts (Alt+Tab, Win+Tab / Win key chords, Ctrl+Esc, Alt+Esc, Alt+F4, Ctrl+Shift+Esc).
+While locked, Warden blocks common bypass shortcuts (Alt+Tab, Win+Tab, Ctrl+Esc, Alt+F4, etc.).
 
-Windows does **not** allow user-mode apps to block:
-
-- **Ctrl+Alt+Del** (Secure Attention Sequence)
-- **Win+L** (often still reaches the OS)
-
-Hardening beyond this needs kiosk / Keyboard Filter / policy approaches, which are out of scope for the current agent.
+Windows does **not** allow user-mode apps to block **Ctrl+Alt+Del** or reliably block **Win+L**. Kiosk / policy hardening is out of scope for the current app.

@@ -99,7 +99,8 @@ No Supabase Realtime required for this flow.
 ## Ignore during this phase
 
 - **Snapshots** page and capture buttons (require Supabase Storage)
-- `Warden.Agent` Windows Service — use `Warden.Tray` for dev
+- Use **`Warden.Tray`** on child PCs — it shows time remaining and runs from the system tray
+- `Warden.Agent` Windows Service is optional (no child UI)
 
 ## Troubleshooting
 

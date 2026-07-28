@@ -121,6 +121,18 @@ public class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Center
         };
 
+        usageContentPanel.Children.Add(
+            new TextBlock
+            {
+                Text = "Time remaining",
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = UiTheme.MutedBrush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 8)
+            }
+        );
+
         var timerRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
