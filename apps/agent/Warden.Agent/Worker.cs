@@ -80,8 +80,16 @@ public class Worker : BackgroundService
 
         _realtime = new RealtimeService(_configStore, evt => _engine.HandleRealtimeEvent(evt));
 
-        await _engine.InitializeAsync();
-        await _realtime.ConnectAsync();
+        try
+        {
+            await _engine.InitializeAsync();
+            await _realtime.ConnectAsync();
+        }
+        catch (DeviceUnpairedException ex)
+        {
+            _logger.LogWarning(ex, "Device is no longer paired. Run Warden.Tray to pair again.");
+            return;
+        }
 
         _logger.LogInformation("Warden Agent service started");
 
@@ -96,8 +104,16 @@ public class Worker : BackgroundService
                 (DateTime.UtcNow - lastHeartbeat).TotalSeconds >= 5
             )
             {
-                await _engine.SendHeartbeatAsync();
-                lastHeartbeat = DateTime.UtcNow;
+                try
+                {
+                    await _engine.SendHeartbeatAsync();
+                    lastHeartbeat = DateTime.UtcNow;
+                }
+                catch (DeviceUnpairedException ex)
+                {
+                    _logger.LogWarning(ex, "Device is no longer paired. Stopping service loop.");
+                    return;
+                }
             }
 
             await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);

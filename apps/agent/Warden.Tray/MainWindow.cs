@@ -273,19 +273,23 @@ public class MainWindow : Window
         _statusValue.Foreground = statusBrush;
 
         var eval = _engine.CurrentEvaluation;
+        if (eval == null)
+        {
+            _statusValue.Text = "Syncing";
+            _statusValue.Foreground = UiTheme.MutedBrush;
+            _usageDetail.Text = "Syncing policy from dashboard...";
+            _remainingFraction = 0;
+            _usageFill.Background = UiTheme.AccentFillBrush;
+            SetTimerDisplay(0);
+            UpdateUsageFillWidth();
+            return;
+        }
+
         int usedMinutes;
         int limitMinutes;
 
-        if (eval != null)
-        {
-            usedMinutes = eval.UsedMinutes;
-            limitMinutes = Math.Max(1, eval.DailyLimitMinutes + eval.BonusMinutes);
-        }
-        else
-        {
-            usedMinutes = _engine.ActiveMinutesToday;
-            limitMinutes = Math.Max(1, usedMinutes);
-        }
+        usedMinutes = eval.UsedMinutes;
+        limitMinutes = Math.Max(1, eval.DailyLimitMinutes + eval.BonusMinutes);
 
         var limitSeconds = Math.Max(1, limitMinutes) * 60.0;
         var remainingSeconds = Math.Max(

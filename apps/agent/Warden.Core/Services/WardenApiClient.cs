@@ -4,6 +4,14 @@ using Warden.Core.Models;
 
 namespace Warden.Core.Services;
 
+public sealed class DeviceUnpairedException : Exception
+{
+    public DeviceUnpairedException()
+        : base("This device is no longer paired. Please reopen Warden and pair it again.")
+    {
+    }
+}
+
 public class WardenApiClient
 {
     private readonly HttpClient _http;
@@ -18,6 +26,20 @@ public class WardenApiClient
     {
         _http = http;
         _configStore = configStore;
+    }
+
+    private bool HandleUnpairedResponse(HttpResponseMessage response)
+    {
+        if (
+            response.StatusCode != System.Net.HttpStatusCode.Unauthorized
+            && response.StatusCode != System.Net.HttpStatusCode.NotFound
+        )
+        {
+            return false;
+        }
+
+        _configStore.Clear();
+        throw new DeviceUnpairedException();
     }
 
     private void SetDeviceTokenHeader()
@@ -75,6 +97,7 @@ public class WardenApiClient
             request
         );
 
+        HandleUnpairedResponse(response);
         return response.IsSuccessStatusCode;
     }
 
@@ -87,6 +110,7 @@ public class WardenApiClient
             $"{config.ApiBaseUrl}/api/agent?action=policy"
         );
 
+        HandleUnpairedResponse(response);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<PolicyData>(JsonOptions);
     }
@@ -101,6 +125,7 @@ public class WardenApiClient
             new { action = "requestExtension", requestedMinutes = minutes }
         );
 
+        HandleUnpairedResponse(response);
         return response.IsSuccessStatusCode;
     }
 
@@ -114,6 +139,7 @@ public class WardenApiClient
             new { action = "parentUnlock", extraMinutes }
         );
 
+        HandleUnpairedResponse(response);
         return response.IsSuccessStatusCode;
     }
 
@@ -127,6 +153,7 @@ public class WardenApiClient
             new { action = "setLocked", isLocked }
         );
 
+        HandleUnpairedResponse(response);
         return response.IsSuccessStatusCode;
     }
 
@@ -140,6 +167,7 @@ public class WardenApiClient
             new { action = "clearAdminLock" }
         );
 
+        HandleUnpairedResponse(response);
         return response.IsSuccessStatusCode;
     }
 
@@ -153,6 +181,7 @@ public class WardenApiClient
             new { action = "confirmSnapshot", snapshotId, success, errorMessage = error }
         );
 
+        HandleUnpairedResponse(response);
         return response.IsSuccessStatusCode;
     }
 }

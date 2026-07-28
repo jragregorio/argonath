@@ -95,8 +95,24 @@ static class Program
 
         _ = Task.Run(async () =>
         {
-            await _engine.InitializeAsync();
-            await _realtime.ConnectAsync();
+            try
+            {
+                await _engine.InitializeAsync();
+                await _realtime.ConnectAsync();
+            }
+            catch (DeviceUnpairedException ex)
+            {
+                _ = app.Dispatcher.BeginInvoke(() =>
+                {
+                    MessageBox.Show(
+                        ex.Message,
+                        "Warden",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information
+                    );
+                    ShutdownWarden();
+                });
+            }
         });
 
         _tickTimer = new System.Windows.Forms.Timer { Interval = 1000 };
@@ -109,8 +125,21 @@ static class Program
 
             if (shouldPollServer)
             {
-                await _engine.SendHeartbeatAsync();
-                _lastHeartbeatAt = DateTime.UtcNow;
+                try
+                {
+                    await _engine.SendHeartbeatAsync();
+                    _lastHeartbeatAt = DateTime.UtcNow;
+                }
+                catch (DeviceUnpairedException ex)
+                {
+                    MessageBox.Show(
+                        ex.Message,
+                        "Warden",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information
+                    );
+                    ShutdownWarden();
+                }
             }
         };
         _tickTimer.Start();
@@ -121,7 +150,7 @@ static class Program
             pin =>
             {
                 var result = _engine!.ValidateParentPin(pin);
-                if (result.ok || string.IsNullOrEmpty(_configStore.Load().ParentPin))
+                if (result.ok)
                 {
                     ShutdownWarden();
                     return (true, null);
@@ -174,7 +203,7 @@ static class Program
                     if (pinWindow.ShowDialog() != true) return;
 
                     var result = _engine!.ValidateParentPin(pinWindow.Pin);
-                    if (result.ok || string.IsNullOrEmpty(_configStore!.Load().ParentPin))
+                    if (result.ok)
                     {
                         ShutdownWarden();
                     }
