@@ -230,27 +230,10 @@ public class EnforcementEngine
 
     public async Task HandleCaptureAsync(CapturePayload payload, string type)
     {
-        // #region agent log
-        DebugSessionLog.Write(
-            "B",
-            "EnforcementEngine.HandleCaptureAsync:entry",
-            "Capture started",
-            new { payload.SnapshotId, type, hasUploadUrl = !string.IsNullOrEmpty(payload.UploadUrl) }
-        );
-        // #endregion
-
         lock (_captureLock)
         {
             if (!_captureInFlight.Add(payload.SnapshotId))
             {
-                // #region agent log
-                DebugSessionLog.Write(
-                    "A",
-                    "EnforcementEngine.HandleCaptureAsync:inflight",
-                    "Skipped duplicate capture",
-                    new { payload.SnapshotId }
-                );
-                // #endregion
                 return;
             }
         }
@@ -278,15 +261,6 @@ public class EnforcementEngine
                 error = ex.Message;
             }
 
-            // #region agent log
-            DebugSessionLog.Write(
-                "B",
-                "EnforcementEngine.HandleCaptureAsync:afterCapture",
-                "Capture result",
-                new { payload.SnapshotId, bytes = imageData?.Length ?? 0, error }
-            );
-            // #endregion
-
             // Upload + confirm off the UI thread so the tray stays responsive.
             await Task.Run(async () =>
             {
@@ -295,14 +269,6 @@ public class EnforcementEngine
                     var (uploaded, uploadError) = await CaptureService
                         .UploadCaptureAsync(payload.UploadUrl, imageData, payload.Token)
                         .ConfigureAwait(false);
-                    // #region agent log
-                    DebugSessionLog.Write(
-                        "C",
-                        "EnforcementEngine.HandleCaptureAsync:afterUpload",
-                        "Upload result",
-                        new { payload.SnapshotId, uploaded, uploadError }
-                    );
-                    // #endregion
                     await _api
                         .ConfirmSnapshotAsync(
                             payload.SnapshotId,
@@ -331,17 +297,6 @@ public class EnforcementEngine
     public async Task ProcessPendingCapturesAsync()
     {
         var pending = await _api.GetPendingCapturesAsync();
-        // #region agent log
-        if (pending.Count > 0)
-        {
-            DebugSessionLog.Write(
-                "A",
-                "EnforcementEngine.ProcessPendingCapturesAsync",
-                "Pending captures fetched",
-                new { count = pending.Count, ids = pending.Select(p => p.SnapshotId).ToArray() }
-            );
-        }
-        // #endregion
         foreach (var item in pending)
         {
             await HandleCaptureAsync(

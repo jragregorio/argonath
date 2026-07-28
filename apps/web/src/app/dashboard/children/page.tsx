@@ -19,7 +19,9 @@ export default function ChildrenPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const utils = trpc.useUtils();
-  const { data: children, isLoading } = trpc.children.list.useQuery();
+  const { data: children, isLoading } = trpc.children.list.useQuery(undefined, {
+    refetchInterval: 5000,
+  });
   const createChild = trpc.children.create.useMutation({
     onSuccess: () => {
       utils.children.list.invalidate();
@@ -176,6 +178,7 @@ export default function ChildrenPage() {
                     <Badge
                       key={device.id}
                       variant={device.isOnline ? "success" : "secondary"}
+                      title={device.isOnline ? "Online" : "Offline"}
                     >
                       {getDeviceDisplayName(device)}
                     </Badge>

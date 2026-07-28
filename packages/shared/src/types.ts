@@ -82,7 +82,19 @@ export const PAIRING_CODE_EXPIRY_MINUTES = 15;
 export const CAPTURE_RATE_LIMIT_PER_HOUR = 10;
 export const SNAPSHOT_RETENTION_DAYS = 7;
 export const HEARTBEAT_INTERVAL_SECONDS = 60;
+/** Device is considered online if a heartbeat arrived within this window. */
+export const DEVICE_ONLINE_THRESHOLD_SECONDS = HEARTBEAT_INTERVAL_SECONDS * 3;
 export const IDLE_THRESHOLD_SECONDS = 300;
+
+export function isDeviceRecentlySeen(
+  lastSeenAt: Date | string | null | undefined,
+  now: Date = new Date()
+): boolean {
+  if (!lastSeenAt) return false;
+  const seenAt = typeof lastSeenAt === "string" ? new Date(lastSeenAt) : lastSeenAt;
+  if (Number.isNaN(seenAt.getTime())) return false;
+  return now.getTime() - seenAt.getTime() <= DEVICE_ONLINE_THRESHOLD_SECONDS * 1000;
+}
 
 export const EXTENSION_PRESETS = [15, 30, 60] as const;
 

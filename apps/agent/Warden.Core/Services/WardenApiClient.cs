@@ -197,22 +197,6 @@ public class WardenApiClient
         );
 
         var body = await response.Content.ReadAsStringAsync();
-        // #region agent log
-        DebugSessionLog.Write(
-            "D",
-            "WardenApiClient.ConfirmSnapshotAsync",
-            "Confirm response",
-            new
-            {
-                snapshotId,
-                success,
-                error,
-                status = (int)response.StatusCode,
-                body = body.Length > 300 ? body[..300] : body
-            }
-        );
-        // #endregion
-
         HandleUnpairedResponse(response);
         if (!response.IsSuccessStatusCode)
         {
@@ -234,30 +218,10 @@ public class WardenApiClient
         HandleUnpairedResponse(response);
         if (!response.IsSuccessStatusCode)
         {
-            // #region agent log
-            DebugSessionLog.Write(
-                "A",
-                "WardenApiClient.GetPendingCapturesAsync",
-                "PendingCaptures HTTP failed",
-                new { status = (int)response.StatusCode, api = config.ApiBaseUrl }
-            );
-            // #endregion
             return [];
         }
 
-        var list = await response.Content.ReadFromJsonAsync<List<PendingCapture>>(JsonOptions)
+        return await response.Content.ReadFromJsonAsync<List<PendingCapture>>(JsonOptions)
             ?? [];
-        // #region agent log
-        if (list.Count > 0)
-        {
-            DebugSessionLog.Write(
-                "A",
-                "WardenApiClient.GetPendingCapturesAsync",
-                "PendingCaptures returned items",
-                new { status = (int)response.StatusCode, count = list.Count, api = config.ApiBaseUrl }
-            );
-        }
-        // #endregion
-        return list;
     }
 }

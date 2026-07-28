@@ -4,6 +4,7 @@ type BadgeProps = {
   children: React.ReactNode;
   variant?: "default" | "success" | "warning" | "destructive" | "secondary";
   className?: string;
+  title?: string;
 };
 
 const variants = {
@@ -11,12 +12,13 @@ const variants = {
   success: "bg-green-500/20 text-green-400",
   warning: "bg-yellow-500/20 text-yellow-400",
   destructive: "bg-destructive/20 text-destructive",
-  secondary: "bg-secondary text-secondary-foreground",
+  secondary: "bg-muted text-muted-foreground",
 };
 
-export function Badge({ children, variant = "default", className }: BadgeProps) {
+export function Badge({ children, variant = "default", className, title }: BadgeProps) {
   return (
     <span
+      title={title}
       className={cn(
         "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
         variants[variant],

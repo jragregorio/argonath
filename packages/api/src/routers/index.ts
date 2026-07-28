@@ -5,6 +5,7 @@ import {
   evaluatePolicy,
   generateDeviceToken,
   generatePairingCode,
+  isDeviceRecentlySeen,
   PAIRING_CODE_EXPIRY_MINUTES,
   SNAPSHOT_RETENTION_DAYS,
   type AllowedWindow,
@@ -30,6 +31,33 @@ async function getFamilyForUser(ctx: { userId: string; familyId: string }) {
   return requireFamilyAccess(ctx.userId, ctx.familyId);
 }
 
+type DeviceOnlineFields = {
+  id: string;
+  isOnline: boolean;
+  lastSeenAt: Date | null;
+};
+
+async function withLiveOnlineStatus<T extends DeviceOnlineFields>(
+  devices: T[]
+): Promise<T[]> {
+  const now = new Date();
+  const staleIds = devices
+    .filter((device) => device.isOnline && !isDeviceRecentlySeen(device.lastSeenAt, now))
+    .map((device) => device.id);
+
+  if (staleIds.length > 0) {
+    await prisma.device.updateMany({
+      where: { id: { in: staleIds } },
+      data: { isOnline: false },
+    });
+  }
+
+  return devices.map((device) => ({
+    ...device,
+    isOnline: isDeviceRecentlySeen(device.lastSeenAt, now),
+  }));
+}
+
 async function getChildForFamily(childId: string, familyId: string) {
   const child = await prisma.child.findFirst({
     where: { id: childId, familyId },
@@ -46,7 +74,10 @@ async function getChildForFamily(childId: string, familyId: string) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Child not found" });
   }
 
-  return child;
+  return {
+    ...child,
+    devices: await withLiveOnlineStatus(child.devices),
+  };
 }
 
 async function logAudit(
@@ -137,7 +168,7 @@ export const authRouter = router({
 export const childrenRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const family = await getFamilyForUser(ctx);
-    return prisma.child.findMany({
+    const children = await prisma.child.findMany({
       where: { familyId: family.id },
       include: {
         devices: true,
@@ -145,6 +176,13 @@ export const childrenRouter = router({
       },
       orderBy: { createdAt: "asc" },
     });
+
+    return Promise.all(
+      children.map(async (child) => ({
+        ...child,
+        devices: await withLiveOnlineStatus(child.devices),
+      }))
+    );
   }),
 
   create: parentProcedure
@@ -339,11 +377,12 @@ export const deviceRouter = router({
 
   list: protectedProcedure.query(async ({ ctx }) => {
     const family = await getFamilyForUser(ctx);
-    return prisma.device.findMany({
+    const devices = await prisma.device.findMany({
       where: { child: { familyId: family.id } },
       include: { child: { select: { id: true, displayName: true } } },
       orderBy: { lastSeenAt: "desc" },
     });
+    return withLiveOnlineStatus(devices);
   }),
 
   rename: parentProcedure
@@ -625,7 +664,7 @@ export const snapshotRouter = router({
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
-      if (!device.isOnline) {
+      if (!isDeviceRecentlySeen(device.lastSeenAt)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "Device is offline",
@@ -705,25 +744,6 @@ export const snapshotRouter = router({
         type: input.type,
         snapshotId: snapshot.id,
       });
-
-      // #region agent log
-      fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "8f2974",
-        },
-        body: JSON.stringify({
-          sessionId: "8f2974",
-          runId: "pre-fix",
-          hypothesisId: "E",
-          location: "routers/index.ts:requestCapture",
-          message: "requestCapture created pending snapshot",
-          data: { snapshotId: snapshot.id, deviceId: device.id, type: input.type },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
 
       return snapshot;
     }),
@@ -955,24 +975,6 @@ export const agentRouter = router({
       });
 
       if (!snapshot) {
-        // #region agent log
-        fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "8f2974",
-          },
-          body: JSON.stringify({
-            sessionId: "8f2974",
-            runId: "pre-fix",
-            hypothesisId: "D",
-            location: "routers/index.ts:confirmSnapshot",
-            message: "confirmSnapshot not found",
-            data: { snapshotId: input.snapshotId, deviceId: ctx.device.id },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
@@ -981,28 +983,6 @@ export const agentRouter = router({
           where: { id: snapshot.id },
           data: { status: "failed" },
         });
-
-        // #region agent log
-        fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "8f2974",
-          },
-          body: JSON.stringify({
-            sessionId: "8f2974",
-            runId: "pre-fix",
-            hypothesisId: "D",
-            location: "routers/index.ts:confirmSnapshot",
-            message: "confirmSnapshot marked failed",
-            data: {
-              snapshotId: snapshot.id,
-              errorMessage: input.errorMessage ?? null,
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
 
         void broadcastToDevice(ctx.device.id, {
           type: "snapshot:failed",
@@ -1021,25 +1001,6 @@ export const agentRouter = router({
         where: { id: snapshot.id },
         data: { status: "ready" },
       });
-
-      // #region agent log
-      fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "8f2974",
-        },
-        body: JSON.stringify({
-          sessionId: "8f2974",
-          runId: "pre-fix",
-          hypothesisId: "D",
-          location: "routers/index.ts:confirmSnapshot",
-          message: "confirmSnapshot marked ready",
-          data: { snapshotId: snapshot.id },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
 
       void broadcastToDevice(ctx.device.id, {
         type: "snapshot:ready",
@@ -1063,34 +1024,11 @@ export const agentRouter = router({
     });
 
     if (pending.length === 0 || !isSupabaseConfigured()) {
-      // #region agent log
-      fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "8f2974",
-        },
-        body: JSON.stringify({
-          sessionId: "8f2974",
-          runId: "pre-fix",
-          hypothesisId: "A",
-          location: "routers/index.ts:pendingCaptures",
-          message: "No pending captures returned",
-          data: {
-            deviceId: ctx.device.id,
-            pendingCount: pending.length,
-            supabaseConfigured: isSupabaseConfigured(),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       return [];
     }
 
     const supabase = getSupabaseAdmin();
     const results = [];
-    const signErrors: string[] = [];
 
     for (const snapshot of pending) {
       const { data: uploadData, error } = await supabase.storage
@@ -1098,7 +1036,6 @@ export const agentRouter = router({
         .createSignedUploadUrl(snapshot.storageKey);
 
       if (error || !uploadData) {
-        signErrors.push(`${snapshot.id}:${error?.message ?? "no upload data"}`);
         continue;
       }
 
@@ -1110,30 +1047,6 @@ export const agentRouter = router({
         storageKey: snapshot.storageKey,
       });
     }
-
-    // #region agent log
-    fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "8f2974",
-      },
-      body: JSON.stringify({
-        sessionId: "8f2974",
-        runId: "pre-fix",
-        hypothesisId: "A",
-        location: "routers/index.ts:pendingCaptures",
-        message: "pendingCaptures result",
-        data: {
-          deviceId: ctx.device.id,
-          pendingCount: pending.length,
-          returnedCount: results.length,
-          signErrors,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
 
     return results;
   }),

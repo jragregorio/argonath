@@ -162,24 +162,6 @@ export default function ChildDetailPage() {
       void (async () => {
         try {
           const status = await utils.snapshot.getStatus.fetch({ snapshotId });
-          // #region agent log
-          fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "8f2974",
-            },
-            body: JSON.stringify({
-              sessionId: "8f2974",
-              runId: "pre-fix",
-              hypothesisId: "E",
-              location: "children/[id]/page.tsx:watchCaptureStatus",
-              message: "getStatus poll",
-              data: { snapshotId, deviceId, status: status.status },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           if (status.status === "ready") {
             finishCaptureSuccess(deviceId);
             return;
@@ -191,29 +173,7 @@ export default function ChildDetailPage() {
           if (Date.now() - startedAt > 20_000) {
             finishCaptureFailure(deviceId, "Timed out — try again");
           }
-        } catch (err) {
-          // #region agent log
-          fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "8f2974",
-            },
-            body: JSON.stringify({
-              sessionId: "8f2974",
-              runId: "pre-fix",
-              hypothesisId: "E",
-              location: "children/[id]/page.tsx:watchCaptureStatus:error",
-              message: "getStatus poll error",
-              data: {
-                snapshotId,
-                deviceId,
-                error: err instanceof Error ? err.message : "unknown",
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
+        } catch {
           if (Date.now() - startedAt > 20_000) {
             finishCaptureFailure(deviceId, "Timed out — try again");
           }
