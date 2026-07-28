@@ -25,7 +25,8 @@ import {
   publicProcedure,
   router,
 } from "../trpc";
-import { requireFamilyAccess } from "../auth/session";
+import { requireFamilyAccess, revokeOtherUserSessions } from "../auth/session";
+import { hashPassword, verifyPassword } from "../auth/tokens";
 
 async function getFamilyForUser(ctx: { userId: string; familyId: string }) {
   return requireFamilyAccess(ctx.userId, ctx.familyId);
@@ -124,6 +125,20 @@ export const familyRouter = router({
     return getFamilyForUser(ctx);
   }),
 
+  rename: adminProcedure
+    .input(z.object({ name: z.string().trim().min(1).max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const updated = await prisma.family.update({
+        where: { id: family.id },
+        data: { name: input.name },
+      });
+      await logAudit(family.id, ctx.userId, "family_renamed", {
+        name: input.name,
+      });
+      return updated;
+    }),
+
   updatePin: adminProcedure
     .input(z.object({ pin: z.string().min(4).max(8) }))
     .mutation(async ({ ctx, input }) => {
@@ -163,6 +178,104 @@ export const authRouter = router({
       })),
     };
   }),
+
+  updateName: protectedProcedure
+    .input(z.object({ name: z.string().trim().min(1).max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      const user = await prisma.user.update({
+        where: { id: ctx.userId },
+        data: { name: input.name },
+        select: { id: true, email: true, name: true, createdAt: true },
+      });
+      return user;
+    }),
+
+  updateEmail: protectedProcedure
+    .input(
+      z.object({
+        email: z.string().trim().email().max(255),
+        currentPassword: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const existing = await prisma.user.findUnique({
+        where: { id: ctx.userId },
+        select: { passwordHash: true, email: true },
+      });
+      if (!existing) {
+        throw new TRPCError({ code: "UNAUTHORIZED" });
+      }
+
+      const ok = await verifyPassword(existing.passwordHash, input.currentPassword);
+      if (!ok) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Current password is incorrect",
+        });
+      }
+
+      const email = input.email.toLowerCase();
+      if (email !== existing.email.toLowerCase()) {
+        const taken = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true },
+        });
+        if (taken) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "That email is already in use",
+          });
+        }
+      }
+
+      return prisma.user.update({
+        where: { id: ctx.userId },
+        data: { email },
+        select: { id: true, email: true, name: true, createdAt: true },
+      });
+    }),
+
+  changePassword: protectedProcedure
+    .input(
+      z.object({
+        currentPassword: z.string().min(1),
+        newPassword: z.string().min(8).max(128),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.currentPassword === input.newPassword) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "New password must be different from the current password",
+        });
+      }
+
+      const existing = await prisma.user.findUnique({
+        where: { id: ctx.userId },
+        select: { passwordHash: true },
+      });
+      if (!existing) {
+        throw new TRPCError({ code: "UNAUTHORIZED" });
+      }
+
+      const ok = await verifyPassword(existing.passwordHash, input.currentPassword);
+      if (!ok) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Current password is incorrect",
+        });
+      }
+
+      const passwordHash = await hashPassword(input.newPassword);
+      await prisma.user.update({
+        where: { id: ctx.userId },
+        data: { passwordHash },
+      });
+
+      await revokeOtherUserSessions(ctx.userId, ctx.refreshTokenFamilyId);
+
+      return { ok: true };
+    }),
 });
 
 export const childrenRouter = router({

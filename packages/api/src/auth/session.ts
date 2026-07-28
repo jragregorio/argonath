@@ -181,6 +181,21 @@ async function revokeTokenFamily(tokenFamilyId: string) {
   });
 }
 
+/** Revoke all refresh sessions for a user except the current token family (if provided). */
+export async function revokeOtherUserSessions(
+  userId: string,
+  keepTokenFamilyId?: string | null
+) {
+  await prisma.refreshToken.updateMany({
+    where: {
+      userId,
+      revokedAt: null,
+      ...(keepTokenFamilyId ? { tokenFamilyId: { not: keepTokenFamilyId } } : {}),
+    },
+    data: { revokedAt: new Date() },
+  });
+}
+
 export async function refreshSession(
   rawRefresh: string,
   meta?: SessionMeta

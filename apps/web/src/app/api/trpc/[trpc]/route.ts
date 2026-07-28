@@ -1,10 +1,20 @@
 import { createContext } from "@warden/api";
 import { appRouter } from "@warden/api";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { ACCESS_COOKIE } from "@warden/api";
+import { ACCESS_COOKIE, REFRESH_COOKIE } from "@warden/api";
 
 const devAuthBypassEnabled =
   process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+
+function readCookie(cookieHeader: string, name: string): string | null {
+  const raw =
+    cookieHeader
+      .split(";")
+      .map((c) => c.trim())
+      .find((c) => c.startsWith(`${name}=`))
+      ?.slice(name.length + 1) ?? null;
+  return raw ? decodeURIComponent(raw) : null;
+}
 
 const handler = (req: Request) =>
   fetchRequestHandler({
@@ -24,15 +34,10 @@ const handler = (req: Request) =>
       }
 
       const cookieHeader = req.headers.get("cookie") ?? "";
-      const accessToken =
-        cookieHeader
-          .split(";")
-          .map((c) => c.trim())
-          .find((c) => c.startsWith(`${ACCESS_COOKIE}=`))
-          ?.slice(ACCESS_COOKIE.length + 1) ?? null;
 
       return createContext({
-        accessToken: accessToken ? decodeURIComponent(accessToken) : null,
+        accessToken: readCookie(cookieHeader, ACCESS_COOKIE),
+        refreshToken: readCookie(cookieHeader, REFRESH_COOKIE),
         deviceToken,
       });
     },

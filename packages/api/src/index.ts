@@ -24,6 +24,7 @@ export {
   switchFamilySession,
   requireFamilyAccess,
   ensureDevBypassIdentity,
+  revokeOtherUserSessions,
   type SessionTokens,
   type SessionMeta,
 } from "./auth/session";

@@ -118,36 +118,57 @@ function NavFooter() {
   const activeFamily =
     memberships.find((m) => m.familyId === meQuery.data?.familyId)?.family
       .name ?? "Family";
+  const displayName =
+    meQuery.data?.user.name?.trim() ||
+    meQuery.data?.user.email ||
+    "Account";
 
   return (
     <div className="pt-4 border-t border-border space-y-3">
       {memberships.length > 1 ? (
-        <label className="block space-y-1">
-          <span className="text-xs text-muted-foreground px-1">Family</span>
-          <div className="relative">
-            <select
-              className="w-full appearance-none rounded-lg border border-border bg-secondary px-3 py-2 pr-8 text-sm"
-              value={meQuery.data?.familyId ?? ""}
-              disabled={switching || meQuery.isLoading}
-              onChange={(e) => switchFamily(e.target.value)}
-            >
-              {memberships.map((m) => (
-                <option key={m.familyId} value={m.familyId}>
-                  {m.family.name} ({m.role})
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          </div>
-        </label>
+        <div className="space-y-2">
+          <Link
+            href="/dashboard/settings"
+            className={`block rounded-lg border border-border bg-secondary px-3 py-2 text-sm hover:bg-secondary/80 ${focusRing}`}
+          >
+            <div className="font-medium truncate">{displayName}</div>
+            <div className="text-xs text-muted-foreground truncate">
+              Account settings
+            </div>
+          </Link>
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground px-1">Family</span>
+            <div className="relative">
+              <select
+                className="w-full appearance-none rounded-lg border border-border bg-secondary px-3 py-2 pr-8 text-sm"
+                value={meQuery.data?.familyId ?? ""}
+                disabled={switching || meQuery.isLoading}
+                onChange={(e) => switchFamily(e.target.value)}
+              >
+                {memberships.map((m) => (
+                  <option key={m.familyId} value={m.familyId}>
+                    {m.family.name} ({m.role})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            </div>
+          </label>
+        </div>
       ) : (
-        <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm">
-          <div className="font-medium truncate">{activeFamily}</div>
-          <div className="text-xs text-muted-foreground">
+        <Link
+          href="/dashboard/settings"
+          className={`block rounded-lg border border-border bg-secondary px-3 py-2 text-sm hover:bg-secondary/80 ${focusRing}`}
+        >
+          <div className="font-medium truncate">{displayName}</div>
+          <div className="text-xs text-muted-foreground truncate">
+            {activeFamily}
+          </div>
+          <div className="text-xs text-muted-foreground truncate mt-0.5">
             {meQuery.data?.role ?? "…"}
             {meQuery.data?.user.email ? ` · ${meQuery.data.user.email}` : ""}
           </div>
-        </div>
+        </Link>
       )}
 
       <button
