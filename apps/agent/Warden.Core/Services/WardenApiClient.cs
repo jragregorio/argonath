@@ -28,6 +28,12 @@ public class WardenApiClient
         _configStore = configStore;
     }
 
+    private static string? NormalizeUrl(string? value)
+    {
+        var trimmed = value?.Trim().TrimEnd('/');
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
+
     private bool HandleUnpairedResponse(HttpResponseMessage response)
     {
         if (
@@ -72,6 +78,11 @@ public class WardenApiClient
             config.DeviceToken = result.DeviceToken;
             config.DeviceId = result.DeviceId;
             config.ChildName = result.ChildName;
+            config.ApiBaseUrl = NormalizeUrl(result.ApiBaseUrl) ?? config.ApiBaseUrl;
+            config.SupabaseUrl = NormalizeUrl(result.SupabaseUrl);
+            config.SupabaseAnonKey = string.IsNullOrWhiteSpace(result.SupabaseAnonKey)
+                ? null
+                : result.SupabaseAnonKey.Trim();
             _configStore.Save(config);
         }
 

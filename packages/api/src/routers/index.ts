@@ -60,6 +60,23 @@ async function logAudit(
   });
 }
 
+function getCanonicalAppUrl() {
+  const configured =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+
+  return configured?.trim().replace(/\/+$/, "") ?? null;
+}
+
+function getAgentBootstrapConfig() {
+  return {
+    apiBaseUrl: getCanonicalAppUrl(),
+    supabaseUrl:
+      process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || process.env.SUPABASE_URL?.trim() || null,
+    supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || null,
+  };
+}
+
 const allowedWindowSchema = z.object({
   day: z.number().min(1).max(7),
   start: z.string().regex(/^\d{2}:\d{2}$/),
@@ -705,6 +722,7 @@ export const agentRouter = router({
         deviceToken: token,
         deviceId: updated.id,
         childName: device.child.displayName,
+        ...getAgentBootstrapConfig(),
       };
     }),
 

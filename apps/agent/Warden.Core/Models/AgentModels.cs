@@ -2,7 +2,9 @@ namespace Warden.Core.Models;
 
 public class AgentConfig
 {
-    public string ApiBaseUrl { get; set; } = "http://localhost:3000";
+    public string ApiBaseUrl { get; set; } =
+        (Environment.GetEnvironmentVariable("WARDEN_API_BASE_URL") ?? "http://localhost:3000")
+            .TrimEnd('/');
     public string? SupabaseUrl { get; set; }
     public string? SupabaseAnonKey { get; set; }
     public string? DeviceToken { get; set; }
@@ -23,6 +25,9 @@ public class PairingResponse
     public string DeviceToken { get; set; } = "";
     public string DeviceId { get; set; } = "";
     public string ChildName { get; set; } = "";
+    public string? ApiBaseUrl { get; set; }
+    public string? SupabaseUrl { get; set; }
+    public string? SupabaseAnonKey { get; set; }
 }
 
 public class HeartbeatRequest

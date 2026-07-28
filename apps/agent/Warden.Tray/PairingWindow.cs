@@ -9,18 +9,13 @@ namespace Warden.Tray;
 public class PairingWindow : Window
 {
     private readonly WardenApiClient _api;
-    private readonly ConfigStore _configStore;
     private readonly TextBox _codeInput;
-    private readonly TextBox _apiUrlInput;
-    private readonly TextBox _supabaseUrlInput;
-    private readonly TextBox _supabaseKeyInput;
     private readonly TextBlock _statusLabel;
     private readonly Button _pairButton;
 
-    public PairingWindow(WardenApiClient api, ConfigStore configStore)
+    public PairingWindow(WardenApiClient api)
     {
         _api = api;
-        _configStore = configStore;
 
         Title = "Warden — Device Pairing";
         Width = 440;
@@ -28,7 +23,6 @@ public class PairingWindow : Window
         UiTheme.ApplyWindowChrome(this);
         ResizeMode = ResizeMode.NoResize;
 
-        var config = configStore.Load();
         var root = new StackPanel { Margin = new Thickness(28) };
 
         root.Children.Add(
@@ -44,6 +38,9 @@ public class PairingWindow : Window
         root.Children.Add(
             UiTheme.Label("Enter the 6-digit code from the parent dashboard.")
         );
+        root.Children.Add(
+            UiTheme.Label("Warden will fetch the server and realtime settings automatically.")
+        );
 
         root.Children.Add(UiTheme.Label("Pairing code", muted: false, bold: true));
         _codeInput = UiTheme.TextField();
@@ -53,23 +50,6 @@ public class PairingWindow : Window
         _codeInput.MaxLength = 6;
         _codeInput.Margin = new Thickness(0, 0, 0, 14);
         root.Children.Add(_codeInput);
-
-        root.Children.Add(UiTheme.Label("API URL", muted: false, bold: true));
-        _apiUrlInput = UiTheme.TextField(config.ApiBaseUrl);
-        _apiUrlInput.Margin = new Thickness(0, 0, 0, 14);
-        root.Children.Add(_apiUrlInput);
-
-        root.Children.Add(
-            UiTheme.Label("Supabase URL (optional — skip for core testing)", muted: false)
-        );
-        _supabaseUrlInput = UiTheme.TextField(config.SupabaseUrl ?? "");
-        _supabaseUrlInput.Margin = new Thickness(0, 0, 0, 14);
-        root.Children.Add(_supabaseUrlInput);
-
-        root.Children.Add(UiTheme.Label("Supabase Anon Key (optional)", muted: false));
-        _supabaseKeyInput = UiTheme.TextField(config.SupabaseAnonKey ?? "");
-        _supabaseKeyInput.Margin = new Thickness(0, 0, 0, 12);
-        root.Children.Add(_supabaseKeyInput);
 
         _statusLabel = new TextBlock
         {
@@ -98,15 +78,9 @@ public class PairingWindow : Window
             return;
         }
 
-        var config = _configStore.Load();
-        config.ApiBaseUrl = _apiUrlInput.Text.Trim().TrimEnd('/');
-        config.SupabaseUrl = _supabaseUrlInput.Text.Trim();
-        config.SupabaseAnonKey = _supabaseKeyInput.Text.Trim();
-        _configStore.Save(config);
-
         _pairButton.IsEnabled = false;
         _statusLabel.Foreground = UiTheme.MutedBrush;
-        _statusLabel.Text = "Pairing…";
+        _statusLabel.Text = "Pairing device…";
 
         try
         {

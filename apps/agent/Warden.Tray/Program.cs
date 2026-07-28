@@ -35,7 +35,7 @@ static class Program
 
         if (!_configStore.IsPaired())
         {
-            var pairing = new PairingWindow(api, _configStore);
+            var pairing = new PairingWindow(api);
             if (pairing.ShowDialog() != true || !_configStore.IsPaired())
             {
                 return;
