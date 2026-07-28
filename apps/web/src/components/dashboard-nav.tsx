@@ -244,7 +244,7 @@ export function DashboardNav() {
       </aside>
 
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-64 shrink-0 border-r border-border min-h-screen p-4 flex-col">
+      <aside className="hidden md:flex w-64 shrink-0 border-r border-border h-dvh sticky top-0 p-4 flex-col overflow-y-auto">
         <div className="mb-8">
           <Brand />
         </div>
