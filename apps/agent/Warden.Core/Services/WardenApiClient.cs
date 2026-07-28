@@ -187,12 +187,39 @@ public class WardenApiClient
         SetDeviceTokenHeader();
         var config = _configStore.Load();
 
+        object request = string.IsNullOrEmpty(error)
+            ? new { action = "confirmSnapshot", snapshotId, success }
+            : new { action = "confirmSnapshot", snapshotId, success, errorMessage = error };
+
         var response = await _http.PostAsJsonAsync(
             $"{config.ApiBaseUrl}/api/agent",
-            new { action = "confirmSnapshot", snapshotId, success, errorMessage = error }
+            request
         );
 
+        var body = await response.Content.ReadAsStringAsync();
+        // #region agent log
+        DebugSessionLog.Write(
+            "D",
+            "WardenApiClient.ConfirmSnapshotAsync",
+            "Confirm response",
+            new
+            {
+                snapshotId,
+                success,
+                error,
+                status = (int)response.StatusCode,
+                body = body.Length > 300 ? body[..300] : body
+            }
+        );
+        // #endregion
+
         HandleUnpairedResponse(response);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"confirmSnapshot failed ({(int)response.StatusCode}): {body}"
+            );
+        }
     }
 
     public async Task<List<PendingCapture>> GetPendingCapturesAsync()
@@ -207,10 +234,30 @@ public class WardenApiClient
         HandleUnpairedResponse(response);
         if (!response.IsSuccessStatusCode)
         {
+            // #region agent log
+            DebugSessionLog.Write(
+                "A",
+                "WardenApiClient.GetPendingCapturesAsync",
+                "PendingCaptures HTTP failed",
+                new { status = (int)response.StatusCode, api = config.ApiBaseUrl }
+            );
+            // #endregion
             return [];
         }
 
-        return await response.Content.ReadFromJsonAsync<List<PendingCapture>>(JsonOptions)
+        var list = await response.Content.ReadFromJsonAsync<List<PendingCapture>>(JsonOptions)
             ?? [];
+        // #region agent log
+        if (list.Count > 0)
+        {
+            DebugSessionLog.Write(
+                "A",
+                "WardenApiClient.GetPendingCapturesAsync",
+                "PendingCaptures returned items",
+                new { status = (int)response.StatusCode, count = list.Count, api = config.ApiBaseUrl }
+            );
+        }
+        // #endregion
+        return list;
     }
 }

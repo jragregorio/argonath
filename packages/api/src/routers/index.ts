@@ -706,6 +706,25 @@ export const snapshotRouter = router({
         snapshotId: snapshot.id,
       });
 
+      // #region agent log
+      fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "8f2974",
+        },
+        body: JSON.stringify({
+          sessionId: "8f2974",
+          runId: "pre-fix",
+          hypothesisId: "E",
+          location: "routers/index.ts:requestCapture",
+          message: "requestCapture created pending snapshot",
+          data: { snapshotId: snapshot.id, deviceId: device.id, type: input.type },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+
       return snapshot;
     }),
 });
@@ -924,7 +943,7 @@ export const agentRouter = router({
       z.object({
         snapshotId: z.string(),
         success: z.boolean(),
-        errorMessage: z.string().optional(),
+        errorMessage: z.string().nullish(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -936,6 +955,24 @@ export const agentRouter = router({
       });
 
       if (!snapshot) {
+        // #region agent log
+        fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "8f2974",
+          },
+          body: JSON.stringify({
+            sessionId: "8f2974",
+            runId: "pre-fix",
+            hypothesisId: "D",
+            location: "routers/index.ts:confirmSnapshot",
+            message: "confirmSnapshot not found",
+            data: { snapshotId: input.snapshotId, deviceId: ctx.device.id },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
@@ -944,6 +981,28 @@ export const agentRouter = router({
           where: { id: snapshot.id },
           data: { status: "failed" },
         });
+
+        // #region agent log
+        fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "8f2974",
+          },
+          body: JSON.stringify({
+            sessionId: "8f2974",
+            runId: "pre-fix",
+            hypothesisId: "D",
+            location: "routers/index.ts:confirmSnapshot",
+            message: "confirmSnapshot marked failed",
+            data: {
+              snapshotId: snapshot.id,
+              errorMessage: input.errorMessage ?? null,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
 
         void broadcastToDevice(ctx.device.id, {
           type: "snapshot:failed",
@@ -962,6 +1021,25 @@ export const agentRouter = router({
         where: { id: snapshot.id },
         data: { status: "ready" },
       });
+
+      // #region agent log
+      fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "8f2974",
+        },
+        body: JSON.stringify({
+          sessionId: "8f2974",
+          runId: "pre-fix",
+          hypothesisId: "D",
+          location: "routers/index.ts:confirmSnapshot",
+          message: "confirmSnapshot marked ready",
+          data: { snapshotId: snapshot.id },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
 
       void broadcastToDevice(ctx.device.id, {
         type: "snapshot:ready",
@@ -985,11 +1063,34 @@ export const agentRouter = router({
     });
 
     if (pending.length === 0 || !isSupabaseConfigured()) {
+      // #region agent log
+      fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "8f2974",
+        },
+        body: JSON.stringify({
+          sessionId: "8f2974",
+          runId: "pre-fix",
+          hypothesisId: "A",
+          location: "routers/index.ts:pendingCaptures",
+          message: "No pending captures returned",
+          data: {
+            deviceId: ctx.device.id,
+            pendingCount: pending.length,
+            supabaseConfigured: isSupabaseConfigured(),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       return [];
     }
 
     const supabase = getSupabaseAdmin();
     const results = [];
+    const signErrors: string[] = [];
 
     for (const snapshot of pending) {
       const { data: uploadData, error } = await supabase.storage
@@ -997,6 +1098,7 @@ export const agentRouter = router({
         .createSignedUploadUrl(snapshot.storageKey);
 
       if (error || !uploadData) {
+        signErrors.push(`${snapshot.id}:${error?.message ?? "no upload data"}`);
         continue;
       }
 
@@ -1008,6 +1110,30 @@ export const agentRouter = router({
         storageKey: snapshot.storageKey,
       });
     }
+
+    // #region agent log
+    fetch("http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "8f2974",
+      },
+      body: JSON.stringify({
+        sessionId: "8f2974",
+        runId: "pre-fix",
+        hypothesisId: "A",
+        location: "routers/index.ts:pendingCaptures",
+        message: "pendingCaptures result",
+        data: {
+          deviceId: ctx.device.id,
+          pendingCount: pending.length,
+          returnedCount: results.length,
+          signErrors,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
 
     return results;
   }),
