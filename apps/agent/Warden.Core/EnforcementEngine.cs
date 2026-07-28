@@ -251,9 +251,14 @@ public class EnforcementEngine
                     imageData = CaptureService.CaptureScreen();
                     if (imageData == null) error = "Screen capture failed";
                 }
+                else if (type == "capture:webcam" || type == "webcam")
+                {
+                    imageData = CaptureService.CaptureWebcam();
+                    if (imageData == null) error = "Webcam capture failed — no camera or frame";
+                }
                 else
                 {
-                    error = "Webcam capture not available";
+                    error = $"Unknown capture type: {type}";
                 }
             }
             catch (Exception ex)

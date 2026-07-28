@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
+using OpenCvSharp;
 
 namespace Warden.Core.Services;
 
@@ -76,29 +77,79 @@ public class CaptureService
                 }
             }
 
-            using var stream = new MemoryStream();
-            var encoder = ImageCodecInfo
-                .GetImageEncoders()
-                .FirstOrDefault(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
-
-            if (encoder != null)
-            {
-                using var encoderParams = new EncoderParameters(1);
-                encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 85L);
-                bitmap.Save(stream, encoder, encoderParams);
-            }
-            else
-            {
-                bitmap.Save(stream, ImageFormat.Jpeg);
-            }
-
-            var bytes = stream.ToArray();
-            return bytes.Length > 1024 ? bytes : null;
+            return EncodeJpeg(bitmap);
         }
         catch
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Grabs a single JPEG frame from the default webcam (index 0).
+    /// Returns null if no camera is available or a usable frame cannot be read.
+    /// </summary>
+    public static byte[]? CaptureWebcam()
+    {
+        try
+        {
+            using var capture = new VideoCapture(0, VideoCaptureAPIs.DSHOW);
+            if (!capture.IsOpened())
+            {
+                capture.Open(0);
+            }
+
+            if (!capture.IsOpened())
+            {
+                return null;
+            }
+
+            capture.Set(VideoCaptureProperties.BufferSize, 1);
+
+            using var frame = new Mat();
+            // Discard a few frames so exposure/auto-focus can settle.
+            for (var i = 0; i < 8; i++)
+            {
+                if (!capture.Read(frame) || frame.Empty())
+                {
+                    Thread.Sleep(40);
+                }
+            }
+
+            if (!capture.Read(frame) || frame.Empty())
+            {
+                return null;
+            }
+
+            Cv2.ImEncode(".jpg", frame, out var bytes, new ImageEncodingParam(ImwriteFlags.JpegQuality, 85));
+            return bytes is { Length: > 1024 } ? bytes : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static byte[]? EncodeJpeg(Bitmap bitmap)
+    {
+        using var stream = new MemoryStream();
+        var encoder = ImageCodecInfo
+            .GetImageEncoders()
+            .FirstOrDefault(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
+
+        if (encoder != null)
+        {
+            using var encoderParams = new EncoderParameters(1);
+            encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 85L);
+            bitmap.Save(stream, encoder, encoderParams);
+        }
+        else
+        {
+            bitmap.Save(stream, ImageFormat.Jpeg);
+        }
+
+        var bytes = stream.ToArray();
+        return bytes.Length > 1024 ? bytes : null;
     }
 
     private static bool TryBitBltCapture(Bitmap bitmap, int left, int top, int width, int height)
