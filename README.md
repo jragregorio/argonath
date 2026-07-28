@@ -42,7 +42,7 @@ cp apps/web/.env.example apps/web/.env.local
 cp packages/db/.env.example packages/db/.env
 ```
 
-3. Fill in `AUTH_JWT_SECRET` (32+ characters), Supabase, and database credentials in `apps/web/.env.local` and `packages/db/.env`.
+3. Fill in `AUTH_JWT_SECRET` (32+ characters), Supabase, and database credentials in `apps/web/.env.local` and `packages/db/.env`. For Vercel + Supabase PgBouncer, use the pooled `DATABASE_URL` on port `6543` with `pgbouncer=true&connection_limit=5&pool_timeout=30`.
 
 4. Create a `snapshots` bucket in Supabase Storage (private).
 
@@ -74,7 +74,7 @@ See `apps/web/.env.example` for the full list. Key variables:
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | Supabase Postgres connection (pooled) |
+| `DATABASE_URL` | Supabase Postgres pooled connection (`6543`) with `pgbouncer=true&connection_limit=5&pool_timeout=30` |
 | `DIRECT_URL` | Supabase Postgres direct connection |
 | `AUTH_JWT_SECRET` | HMAC secret for access JWTs (32+ chars) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
