@@ -14,7 +14,7 @@ Test time limits, lockout, and extension approval with only local Postgres and t
 docker compose up -d
 ```
 
-Verify: `docker compose ps` shows `argonath-postgres` running.
+Verify: `docker compose ps` shows `warden-postgres` running.
 
 ## 2. Apply database schema
 
@@ -55,7 +55,7 @@ DEV_BYPASS_ORG_ID=dev-family
 
 ```bash
 cd apps/agent
-dotnet run --project Argonath.Tray
+dotnet run --project Warden.Tray
 ```
 
 3. In the pairing form:
@@ -71,7 +71,7 @@ If usage shows leftover minutes or `(+15 bonus)` from earlier tests:
 npm run test:reset
 ```
 
-Then restart the agent (`Argonath.Tray`), set a **1–2 minute** daily limit on a child, and keep using the PC. Usage should climb every ~15s; lock should appear after the limit.
+Then restart the agent (`Warden.Tray`), set a **1–2 minute** daily limit on a child, and keep using the PC. Usage should climb every ~15s; lock should appear after the limit.
 
 ## 6. Test lockout
 
@@ -88,7 +88,7 @@ Then restart the agent (`Argonath.Tray`), set a **1–2 minute** daily limit on 
 ## 8. Test parent PIN shutdown (onsite)
 
 1. In the dashboard **Settings**, set a parent PIN (4–8 chars) and wait for a heartbeat (~15s) or use tray **Refresh policy now**
-2. When locked, on the **primary** monitor enter the PIN and click **Shut down Argonath**
+2. When locked, on the **primary** monitor enter the PIN and click **Shut down Warden**
 3. All overlays dismiss and the agent exits completely (no more enforcement until you start it again)
 
 No Supabase Realtime required for this flow.
@@ -97,7 +97,7 @@ No Supabase Realtime required for this flow.
 
 - **Snapshots** page and capture buttons (require Supabase Storage)
 - Clerk sign-in
-- `Argonath.Agent` Windows Service — use `Argonath.Tray` for dev
+- `Warden.Agent` Windows Service — use `Warden.Tray` for dev
 
 ## Troubleshooting
 

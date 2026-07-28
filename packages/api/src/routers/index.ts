@@ -1,5 +1,5 @@
-import { prisma } from "@argonath/db";
-import type { Prisma } from "@argonath/db";
+import { prisma } from "@warden/db";
+import type { Prisma } from "@warden/db";
 import {
   CAPTURE_RATE_LIMIT_PER_HOUR,
   evaluatePolicy,
@@ -8,7 +8,7 @@ import {
   PAIRING_CODE_EXPIRY_MINUTES,
   SNAPSHOT_RETENTION_DAYS,
   type AllowedWindow,
-} from "@argonath/shared";
+} from "@warden/shared";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {

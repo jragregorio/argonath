@@ -34,7 +34,7 @@ async function agentGetPolicy(deviceToken) {
 }
 
 async function main() {
-  console.log("Argonath core flow verification\n");
+  console.log("Warden core flow verification\n");
 
   let family = await prisma.family.findUnique({
     where: { clerkOrgId: DEV_ORG_ID },
@@ -152,7 +152,7 @@ async function main() {
   }
 
   console.log("\nAll core flow checks passed.");
-  console.log("Next: run Argonath.Tray and verify full-screen lock UI manually.");
+  console.log("Next: run Warden.Tray and verify full-screen lock UI manually.");
 }
 
 main()

@@ -1,12 +1,12 @@
 using System.Text.Json;
-using Argonath.Core.Models;
-using Argonath.Core.Services;
+using Warden.Core.Models;
+using Warden.Core.Services;
 
-namespace Argonath.Core;
+namespace Warden.Core;
 
 public class EnforcementEngine
 {
-    private readonly ArgonathApiClient _api;
+    private readonly WardenApiClient _api;
     private readonly ConfigStore _configStore;
     private double _activeSecondsToday;
     private double _idleSecondsToday;
@@ -34,7 +34,7 @@ public class EnforcementEngine
     public double UsedSecondsToday => _otherDevicesMinutes * 60.0 + _activeSecondsToday;
     public PolicyEvaluation? CurrentEvaluation { get; private set; }
 
-    public EnforcementEngine(ArgonathApiClient api, ConfigStore configStore)
+    public EnforcementEngine(WardenApiClient api, ConfigStore configStore)
     {
         _api = api;
         _configStore = configStore;

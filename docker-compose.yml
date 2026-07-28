@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: argonath-postgres
+    container_name: warden-postgres
     restart: unless-stopped
     ports:
       - "5432:5432"
@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: guardian
     volumes:
-      - argonath_pgdata:/var/lib/postgresql/data
+      - warden_pgdata:/var/lib/postgresql/data
 
 volumes:
-  argonath_pgdata:
+  warden_pgdata:

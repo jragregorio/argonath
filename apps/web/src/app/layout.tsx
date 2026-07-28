@@ -9,7 +9,7 @@ const clerkPublishableKey =
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim() ?? "";
 
 export const metadata: Metadata = {
-  title: "Argonath — Parental Screen Time Control",
+  title: "Warden — Parental Screen Time Control",
   description: "Monitor and manage your child's screen time",
 };
 

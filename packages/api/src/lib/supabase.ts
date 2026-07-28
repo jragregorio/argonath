@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { getDeviceChannelName } from "@argonath/shared";
-import type { RealtimeEvent } from "@argonath/shared";
+import { getDeviceChannelName } from "@warden/shared";
+import type { RealtimeEvent } from "@warden/shared";
 
 export { getDeviceChannelName };
 
@@ -61,7 +61,7 @@ export async function broadcastToDevice(
   const channel = supabase.channel(`device:${deviceId}`);
   await channel.send({
     type: "broadcast",
-    event: "argonath",
+    event: "warden",
     payload: event,
   });
   await supabase.removeChannel(channel);
@@ -73,7 +73,7 @@ export async function cleanupExpiredSnapshots(): Promise<number> {
   }
 
   const supabase = getSupabaseAdmin();
-  const { prisma } = await import("@argonath/db");
+  const { prisma } = await import("@warden/db");
 
   const expired = await prisma.snapshot.findMany({
     where: { expiresAt: { lte: new Date() } },

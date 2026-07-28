@@ -1,13 +1,13 @@
 
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Argonath.Core", "Argonath.Core\Argonath.Core.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Warden.Core", "Warden.Core\Warden.Core.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Argonath.Agent", "Argonath.Agent\Argonath.Agent.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Warden.Agent", "Warden.Agent\Warden.Agent.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Argonath.Tray", "Argonath.Tray\Argonath.Tray.csproj", "{C3D4E5F6-A7B8-9012-CDEF-123456789012}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Warden.Tray", "Warden.Tray\Warden.Tray.csproj", "{C3D4E5F6-A7B8-9012-CDEF-123456789012}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Argonath.LockUI", "Argonath.LockUI\Argonath.LockUI.csproj", "{D4E5F6A7-B8C9-0123-DEF0-234567890123}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Warden.LockUI", "Warden.LockUI\Warden.LockUI.csproj", "{D4E5F6A7-B8C9-0123-DEF0-234567890123}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

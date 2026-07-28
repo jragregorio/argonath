@@ -1,4 +1,4 @@
-import { cleanupExpiredSnapshots } from "@argonath/api";
+import { cleanupExpiredSnapshots } from "@warden/api";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {

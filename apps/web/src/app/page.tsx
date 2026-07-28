@@ -8,7 +8,7 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield className="w-8 h-8 text-primary" />
-            <span className="text-xl font-bold">Argonath</span>
+            <span className="text-xl font-bold">Warden</span>
           </div>
           <div className="flex gap-4">
             <Link

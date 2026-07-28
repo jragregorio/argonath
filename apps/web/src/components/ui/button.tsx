@@ -1,4 +1,4 @@
-import { cn } from "@argonath/ui";
+import { cn } from "@warden/ui";
 import { type ButtonHTMLAttributes, forwardRef } from "react";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {

@@ -1,5 +1,5 @@
 {
-  "name": "@argonath/api",
+  "name": "@warden/api",
   "version": "0.0.1",
   "private": true,
   "main": "./src/index.ts",
@@ -13,8 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@argonath/db": "*",
-    "@argonath/shared": "*",
+    "@warden/db": "*",
+    "@warden/shared": "*",
     "@supabase/supabase-js": "^2.49.8",
     "@trpc/server": "^11.1.2",
     "superjson": "^2.2.2",

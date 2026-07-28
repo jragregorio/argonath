@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Argonath.Core.Services;
+namespace Warden.Core.Services;
 
 public class IdleTimeDetector
 {

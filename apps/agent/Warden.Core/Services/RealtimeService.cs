@@ -1,8 +1,8 @@
 using System.Text.Json;
-using Argonath.Core.Models;
+using Warden.Core.Models;
 using Websocket.Client;
 
-namespace Argonath.Core.Services;
+namespace Warden.Core.Services;
 
 public class RealtimeService : IDisposable
 {
@@ -49,7 +49,7 @@ public class RealtimeService : IDisposable
 
                 if (root.TryGetProperty("payload", out var payload) &&
                     payload.TryGetProperty("event", out var eventName) &&
-                    eventName.GetString() == "argonath" &&
+                    eventName.GetString() == "warden" &&
                     payload.TryGetProperty("payload", out var eventPayload))
                 {
                     var realtimeEvent = JsonSerializer.Deserialize<RealtimeEvent>(

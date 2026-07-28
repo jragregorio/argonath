@@ -11,8 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { AllowedWindow } from "@argonath/shared";
-import { getDeviceDisplayName, getPolicyStatusLabel } from "@argonath/shared";
+import type { AllowedWindow } from "@warden/shared";
+import { getDeviceDisplayName, getPolicyStatusLabel } from "@warden/shared";
 import {
   ArrowLeft,
   Camera,

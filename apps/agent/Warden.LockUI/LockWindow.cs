@@ -3,10 +3,10 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
-using Argonath.Core.Models;
-using Argonath.Core.Services;
+using Warden.Core.Models;
+using Warden.Core.Services;
 
-namespace Argonath.LockUI;
+namespace Warden.LockUI;
 
 public readonly record struct MonitorBounds(
     int Left,
@@ -29,7 +29,7 @@ public class LockWindow : Window
     {
         _isPrimary = bounds.IsPrimary;
 
-        Title = "argonath";
+        Title = "Warden";
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         WindowState = WindowState.Normal;
@@ -255,7 +255,7 @@ public class LockWindow : Window
 
         panel.Children.Add(new TextBlock
         {
-            Text = "Use the primary display to request more time, or Shut down Argonath with a parent PIN.",
+            Text = "Use the primary display to request more time, or Shut down Warden with a parent PIN.",
             FontSize = 14,
             Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -291,7 +291,7 @@ public class LockWindow : Window
         PasswordBox pinBox,
         Func<string, Task<(bool ok, string? error)>> onParentShutdown)
     {
-        var btn = CreateBlueButton("Shut down Argonath");
+        var btn = CreateBlueButton("Shut down Warden");
         btn.Background = new SolidColorBrush(Color.FromRgb(220, 38, 38));
         btn.HorizontalAlignment = HorizontalAlignment.Center;
         btn.Click += async (_, _) =>

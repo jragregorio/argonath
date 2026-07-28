@@ -1,4 +1,4 @@
-import { appRouter, createContext } from "@argonath/api";
+import { appRouter, createContext } from "@warden/api";
 import { auth } from "@clerk/nextjs/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 

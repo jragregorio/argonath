@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 
-namespace Argonath.Tray;
+namespace Warden.Tray;
 
 public class PinWindow : Window
 {
@@ -12,7 +12,7 @@ public class PinWindow : Window
 
     public PinWindow()
     {
-        Title = "Argonath — Parent PIN";
+        Title = "Warden — Parent PIN";
         Width = 360;
         SizeToContent = SizeToContent.Height;
         UiTheme.ApplyWindowChrome(this);
@@ -33,7 +33,7 @@ public class PinWindow : Window
             }
         );
         root.Children.Add(
-            UiTheme.Label("Required to exit Argonath on this device.")
+            UiTheme.Label("Required to exit Warden on this device.")
         );
 
         _pinBox = UiTheme.PasswordField();

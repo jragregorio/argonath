@@ -1,5 +1,5 @@
-import { getDeviceChannelName } from "@argonath/shared";
-import type { RealtimeEvent } from "@argonath/shared";
+import { getDeviceChannelName } from "@warden/shared";
+import type { RealtimeEvent } from "@warden/shared";
 import { createClient } from "@supabase/supabase-js";
 import { useEffect, useRef } from "react";
 
@@ -35,7 +35,7 @@ export function useDeviceRealtime(
     const supabase = getSupabase();
     const channel = supabase
       .channel(getDeviceChannelName(deviceId))
-      .on("broadcast", { event: "argonath" }, (payload) => {
+      .on("broadcast", { event: "warden" }, (payload) => {
         callbackRef.current(payload.payload as RealtimeEvent);
       })
       .subscribe();
@@ -60,7 +60,7 @@ export function useFamilyRealtime(
     const channels = deviceIds.map((deviceId) =>
       supabase
         .channel(getDeviceChannelName(deviceId))
-        .on("broadcast", { event: "argonath" }, (payload) => {
+        .on("broadcast", { event: "warden" }, (payload) => {
           callbackRef.current(payload.payload as RealtimeEvent);
         })
         .subscribe()

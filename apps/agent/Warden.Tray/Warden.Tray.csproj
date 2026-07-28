@@ -7,15 +7,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
-    <RootNamespace>Argonath.Tray</RootNamespace>
+    <RootNamespace>Warden.Tray</RootNamespace>
     <Version>0.0.1</Version>
     <ApplicationIcon />
-    <StartupObject>Argonath.Tray.Program</StartupObject>
+    <StartupObject>Warden.Tray.Program</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Argonath.Core\Argonath.Core.csproj" />
-    <ProjectReference Include="..\Argonath.LockUI\Argonath.LockUI.csproj" />
+    <ProjectReference Include="..\Warden.Core\Warden.Core.csproj" />
+    <ProjectReference Include="..\Warden.LockUI\Warden.LockUI.csproj" />
   </ItemGroup>
 
   <ItemGroup>

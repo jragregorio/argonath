@@ -1,9 +1,9 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Net.Http.Headers;
-using Argonath.Core.Models;
+using Warden.Core.Models;
 
-namespace Argonath.Core.Services;
+namespace Warden.Core.Services;
 
 public class CaptureService
 {

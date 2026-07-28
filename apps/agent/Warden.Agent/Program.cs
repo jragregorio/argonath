@@ -1,16 +1,16 @@
-using Argonath.Agent;
-using Argonath.Core;
-using Argonath.Core.Services;
-using Argonath.LockUI;
+using Warden.Agent;
+using Warden.Core;
+using Warden.Core.Services;
+using Warden.LockUI;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddWindowsService(options =>
 {
-    options.ServiceName = "Argonath Agent";
+    options.ServiceName = "Warden Agent";
 });
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<ConfigStore>();
-builder.Services.AddSingleton<ArgonathApiClient>();
+builder.Services.AddSingleton<WardenApiClient>();
 builder.Services.AddSingleton<EnforcementEngine>();
 builder.Services.AddHostedService<Worker>();
 

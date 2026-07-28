@@ -1,4 +1,4 @@
-# Argonath
+# Warden
 
 Parental screen time control SaaS with a parent web dashboard and a Windows agent for system-wide enforcement.
 
@@ -64,7 +64,7 @@ npm run dev
 ```bash
 cd apps/agent
 dotnet build
-dotnet run --project Argonath.Tray
+dotnet run --project Warden.Tray
 ```
 
 ## Environment variables

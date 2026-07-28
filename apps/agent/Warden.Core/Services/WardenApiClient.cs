@@ -1,10 +1,10 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using Argonath.Core.Models;
+using Warden.Core.Models;
 
-namespace Argonath.Core.Services;
+namespace Warden.Core.Services;
 
-public class ArgonathApiClient
+public class WardenApiClient
 {
     private readonly HttpClient _http;
     private readonly ConfigStore _configStore;
@@ -14,7 +14,7 @@ public class ArgonathApiClient
         PropertyNameCaseInsensitive = true
     };
 
-    public ArgonathApiClient(HttpClient http, ConfigStore configStore)
+    public WardenApiClient(HttpClient http, ConfigStore configStore)
     {
         _http = http;
         _configStore = configStore;

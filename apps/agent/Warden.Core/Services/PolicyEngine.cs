@@ -1,6 +1,6 @@
-using Argonath.Core.Models;
+using Warden.Core.Models;
 
-namespace Argonath.Core.Services;
+namespace Warden.Core.Services;
 
 public static class PolicyEngine
 {

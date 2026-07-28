@@ -1,4 +1,4 @@
-import { cn } from "@argonath/ui";
+import { cn } from "@warden/ui";
 import { type InputHTMLAttributes, forwardRef } from "react";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(

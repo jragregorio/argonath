@@ -2,15 +2,15 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
-using Argonath.Core;
-using Argonath.Core.Services;
+using Warden.Core;
+using Warden.Core.Services;
 using Brush = System.Windows.Media.Brush;
 using FontFamily = System.Windows.Media.FontFamily;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using MessageBox = System.Windows.MessageBox;
 using Orientation = System.Windows.Controls.Orientation;
 
-namespace Argonath.Tray;
+namespace Warden.Tray;
 
 public class MainWindow : Window
 {
@@ -38,7 +38,7 @@ public class MainWindow : Window
         _configStore = configStore;
         _tryExitWithPin = tryExitWithPin;
 
-        Title = "Argonath";
+        Title = "Warden";
         Width = 420;
         SizeToContent = SizeToContent.Height;
         UiTheme.ApplyWindowChrome(this);
@@ -49,7 +49,7 @@ public class MainWindow : Window
         header.Children.Add(
             new TextBlock
             {
-                Text = "Argonath",
+                Text = "Warden",
                 FontSize = 28,
                 FontWeight = FontWeights.Bold,
                 Foreground = UiTheme.TextBrush
@@ -384,7 +384,7 @@ public class MainWindow : Window
         {
             MessageBox.Show(
                 error ?? "Incorrect PIN.",
-                "Argonath",
+                "Warden",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning
             );

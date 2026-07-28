@@ -1,4 +1,4 @@
-import type { AppRouter } from "@argonath/api/router-type";
+import type { AppRouter } from "@warden/api/router-type";
 import { createTRPCReact, type CreateTRPCReact } from "@trpc/react-query";
 
 export const trpc: CreateTRPCReact<AppRouter, unknown> =

@@ -1,14 +1,14 @@
 using System.Windows;
 using System.Windows.Controls;
-using Argonath.Core.Services;
+using Warden.Core.Services;
 using Button = System.Windows.Controls.Button;
 using TextBox = System.Windows.Controls.TextBox;
 
-namespace Argonath.Tray;
+namespace Warden.Tray;
 
 public class PairingWindow : Window
 {
-    private readonly ArgonathApiClient _api;
+    private readonly WardenApiClient _api;
     private readonly ConfigStore _configStore;
     private readonly TextBox _codeInput;
     private readonly TextBox _apiUrlInput;
@@ -17,12 +17,12 @@ public class PairingWindow : Window
     private readonly TextBlock _statusLabel;
     private readonly Button _pairButton;
 
-    public PairingWindow(ArgonathApiClient api, ConfigStore configStore)
+    public PairingWindow(WardenApiClient api, ConfigStore configStore)
     {
         _api = api;
         _configStore = configStore;
 
-        Title = "Argonath — Device Pairing";
+        Title = "Warden — Device Pairing";
         Width = 440;
         SizeToContent = SizeToContent.Height;
         UiTheme.ApplyWindowChrome(this);
@@ -34,7 +34,7 @@ public class PairingWindow : Window
         root.Children.Add(
             new TextBlock
             {
-                Text = "Argonath Agent Setup",
+                Text = "Warden Agent Setup",
                 FontSize = 22,
                 FontWeight = FontWeights.Bold,
                 Foreground = UiTheme.TextBrush,

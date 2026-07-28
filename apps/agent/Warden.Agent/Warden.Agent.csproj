@@ -4,7 +4,7 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>Argonath.Agent</RootNamespace>
+    <RootNamespace>Warden.Agent</RootNamespace>
     <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
@@ -15,8 +15,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Argonath.Core\Argonath.Core.csproj" />
-    <ProjectReference Include="..\Argonath.LockUI\Argonath.LockUI.csproj" />
+    <ProjectReference Include="..\Warden.Core\Warden.Core.csproj" />
+    <ProjectReference Include="..\Warden.LockUI\Warden.LockUI.csproj" />
   </ItemGroup>
 
 </Project>

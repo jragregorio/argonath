@@ -1,4 +1,4 @@
-namespace Argonath.Core.Models;
+namespace Warden.Core.Models;
 
 public class AgentConfig
 {

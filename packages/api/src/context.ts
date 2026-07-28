@@ -1,5 +1,5 @@
-import { prisma } from "@argonath/db";
-import type { Device } from "@argonath/db";
+import { prisma } from "@warden/db";
+import type { Device } from "@warden/db";
 
 export type Context = {
   userId: string | null;

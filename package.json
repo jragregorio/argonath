@@ -1,5 +1,5 @@
 {
-  "name": "argonath",
+  "name": "warden",
   "private": true,
   "workspaces": [
     "apps/*",

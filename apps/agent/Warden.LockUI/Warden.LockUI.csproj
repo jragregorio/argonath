@@ -5,11 +5,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <RootNamespace>Argonath.LockUI</RootNamespace>
+    <RootNamespace>Warden.LockUI</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Argonath.Core\Argonath.Core.csproj" />
+    <ProjectReference Include="..\Warden.Core\Warden.Core.csproj" />
   </ItemGroup>
 
 </Project>

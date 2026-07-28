@@ -1,4 +1,4 @@
-import { cn } from "@argonath/ui";
+import { cn } from "@warden/ui";
 import { type LabelHTMLAttributes, forwardRef } from "react";
 
 export const Label = forwardRef<HTMLLabelElement, LabelHTMLAttributes<HTMLLabelElement>>(

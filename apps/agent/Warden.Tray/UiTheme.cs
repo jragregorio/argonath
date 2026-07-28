@@ -12,7 +12,7 @@ using WpfFontFamily = System.Windows.Media.FontFamily;
 using WpfHorizontalAlignment = System.Windows.HorizontalAlignment;
 using WpfTextBox = System.Windows.Controls.TextBox;
 
-namespace Argonath.Tray;
+namespace Warden.Tray;
 
 internal static class UiTheme
 {

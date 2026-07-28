@@ -1,7 +1,7 @@
 using System.Text.Json;
-using Argonath.Core.Models;
+using Warden.Core.Models;
 
-namespace Argonath.Core.Services;
+namespace Warden.Core.Services;
 
 public class ConfigStore
 {
@@ -10,15 +10,19 @@ public class ConfigStore
     public ConfigStore()
     {
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var dir = Path.Combine(appData, "Argonath");
+        var dir = Path.Combine(appData, "Warden");
         Directory.CreateDirectory(dir);
         _configPath = Path.Combine(dir, "config.json");
 
-        // Migrate from pre-rename Guardian config if present.
-        var legacyPath = Path.Combine(appData, "Guardian", "config.json");
-        if (!File.Exists(_configPath) && File.Exists(legacyPath))
+        // Migrate from previous brand folders if present.
+        foreach (var legacyBrand in new[] { "Argonath", "Guardian" })
         {
-            File.Copy(legacyPath, _configPath);
+            var legacyPath = Path.Combine(appData, legacyBrand, "config.json");
+            if (!File.Exists(_configPath) && File.Exists(legacyPath))
+            {
+                File.Copy(legacyPath, _configPath);
+                break;
+            }
         }
     }
 

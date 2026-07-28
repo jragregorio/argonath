@@ -1,4 +1,4 @@
-import { cn } from "@argonath/ui";
+import { cn } from "@warden/ui";
 import type { HTMLAttributes } from "react";
 
 export function Skeleton({

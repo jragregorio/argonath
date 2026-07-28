@@ -89,7 +89,7 @@ function Brand() {
   return (
     <div className="flex items-center gap-2 px-2">
       <Shield className="w-7 h-7 text-primary" />
-      <span className="text-lg font-bold">Argonath</span>
+      <span className="text-lg font-bold">Warden</span>
     </div>
   );
 }

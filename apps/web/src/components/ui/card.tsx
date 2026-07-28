@@ -1,4 +1,4 @@
-import { cn } from "@argonath/ui";
+import { cn } from "@warden/ui";
 import { type HTMLAttributes, forwardRef } from "react";
 
 export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(

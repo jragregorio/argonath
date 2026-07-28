@@ -1,4 +1,4 @@
-# Argonath Windows Agent
+# Warden Windows Agent
 
 .NET 8 Windows agent for system-wide screen time enforcement.
 
@@ -6,10 +6,10 @@
 
 | Project | Purpose |
 |---------|---------|
-| `Argonath.Core` | Shared logic: API client, policy engine, idle detection, capture |
-| `Argonath.Tray` | Status window + system tray (run this for home/dev) |
-| `Argonath.LockUI` | Full-screen WPF lock overlay |
-| `Argonath.Agent` | Windows Service for background enforcement |
+| `Warden.Core` | Shared logic: API client, policy engine, idle detection, capture |
+| `Warden.Tray` | Status window + system tray (run this for home/dev) |
+| `Warden.LockUI` | Full-screen WPF lock overlay |
+| `Warden.Agent` | Windows Service for background enforcement |
 
 ## Prerequisites
 
@@ -20,37 +20,37 @@
 
 ```bash
 # Pair and run (opens a status window; closes to the system tray)
-dotnet run --project Argonath.Tray
+dotnet run --project Warden.Tray
 ```
 
-Tray opens a modern status window after pairing. Closing the window keeps Argonath running in the tray — use **Open Argonath** or double-click the tray icon to restore it. Exit requires the parent PIN.
+Tray opens a modern status window after pairing. Closing the window keeps Warden running in the tray — use **Open Warden** or double-click the tray icon to restore it. Exit requires the parent PIN.
 
 ```bash
 # Install as Windows Service (after pairing via Tray)
-dotnet publish Argonath.Agent -c Release
-sc create ArgonathAgent binPath="path\to\Argonath.Agent.exe"
-sc start ArgonathAgent
+dotnet publish Warden.Agent -c Release
+sc create WardenAgent binPath="path\to\Warden.Agent.exe"
+sc start WardenAgent
 ```
 
 ## Pairing
 
 1. Start the parent dashboard and generate a pairing code for a child
-2. Run `Argonath.Tray`
+2. Run `Warden.Tray`
 3. Enter API URL, Supabase URL, Supabase anon key, and the 6-digit code
 4. Agent connects and begins enforcing policies
 
 ## Configuration
 
-Stored in `%LOCALAPPDATA%\Argonath\config.json`:
+Stored in `%LOCALAPPDATA%\Warden\config.json`:
 
-- `ApiBaseUrl` — Argonath web API URL
+- `ApiBaseUrl` — Warden web API URL
 - `SupabaseUrl` — For realtime commands
 - `SupabaseAnonKey` — Supabase anon key
 - `DeviceToken` — Set automatically after pairing
 
 ## Lock limitations
 
-While locked, Argonath installs a low-level keyboard hook that blocks common bypass shortcuts (Alt+Tab, Win+Tab / Win key chords, Ctrl+Esc, Alt+Esc, Alt+F4, Ctrl+Shift+Esc).
+While locked, Warden installs a low-level keyboard hook that blocks common bypass shortcuts (Alt+Tab, Win+Tab / Win key chords, Ctrl+Esc, Alt+Esc, Alt+F4, Ctrl+Shift+Esc).
 
 Windows does **not** allow user-mode apps to block:
 

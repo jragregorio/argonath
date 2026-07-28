@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@argonath/shared", "@argonath/ui"],
-  serverExternalPackages: ["@argonath/api", "@argonath/db", "@prisma/client"],
+  transpilePackages: ["@warden/shared", "@warden/ui"],
+  serverExternalPackages: ["@warden/api", "@warden/db", "@prisma/client"],
 };
 
 export default nextConfig;

@@ -54,7 +54,7 @@ async function main() {
     );
   }
 
-  console.log("\nDone. Restart Argonath.Tray, set a 1–2 min limit, and retest.");
+  console.log("\nDone. Restart Warden.Tray, set a 1–2 min limit, and retest.");
 }
 
 main()

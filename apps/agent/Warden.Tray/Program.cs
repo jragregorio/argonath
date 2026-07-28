@@ -1,12 +1,12 @@
 using System.Net.Http;
 using System.Windows;
-using Argonath.Core;
-using Argonath.Core.Services;
-using Argonath.LockUI;
+using Warden.Core;
+using Warden.Core.Services;
+using Warden.LockUI;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
 
-namespace Argonath.Tray;
+namespace Warden.Tray;
 
 static class Program
 {
@@ -31,7 +31,7 @@ static class Program
 
         _configStore = new ConfigStore();
         var http = new HttpClient();
-        var api = new ArgonathApiClient(http, _configStore);
+        var api = new WardenApiClient(http, _configStore);
 
         if (!_configStore.IsPaired())
         {
@@ -75,7 +75,7 @@ static class Program
                         // Still shut down even if the dashboard clear fails.
                     }
 
-                    ShutdownArgonath();
+                    ShutdownWarden();
                     return result;
                 },
                 _engine.CurrentEvaluation,
@@ -123,7 +123,7 @@ static class Program
                 var result = _engine!.ValidateParentPin(pin);
                 if (result.ok || string.IsNullOrEmpty(_configStore.Load().ParentPin))
                 {
-                    ShutdownArgonath();
+                    ShutdownWarden();
                     return (true, null);
                 }
 
@@ -142,13 +142,13 @@ static class Program
         _trayIcon = new NotifyIcon
         {
             Icon = SystemIcons.Shield,
-            Text = "Argonath Agent",
+            Text = "Warden Agent",
             Visible = true
         };
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(
-            "Open Argonath",
+            "Open Warden",
             null,
             (_, _) => _mainWindow?.Dispatcher.Invoke(() => _mainWindow.ShowFromTray())
         );
@@ -176,13 +176,13 @@ static class Program
                     var result = _engine!.ValidateParentPin(pinWindow.Pin);
                     if (result.ok || string.IsNullOrEmpty(_configStore!.Load().ParentPin))
                     {
-                        ShutdownArgonath();
+                        ShutdownWarden();
                     }
                     else
                     {
                         MessageBox.Show(
                             result.error ?? "Incorrect PIN.",
-                            "Argonath",
+                            "Warden",
                             MessageBoxButton.OK,
                             MessageBoxImage.Warning
                         );
@@ -206,7 +206,7 @@ static class Program
             _mainWindow?.Dispatcher.Invoke(() => _mainWindow.ShowFromTray());
     }
 
-    private static void ShutdownArgonath()
+    private static void ShutdownWarden()
     {
         // Never block the UI thread on network (GetResult deadlocks the WPF sync context).
         var engine = _engine;

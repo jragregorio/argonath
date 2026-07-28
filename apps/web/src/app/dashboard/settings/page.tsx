@@ -27,7 +27,7 @@ export default function SettingsPage() {
           <CardTitle>Parent PIN</CardTitle>
           <CardDescription>
             Required to exit the Windows agent from the tray menu or lock screen
-            (&quot;Shut down Argonath&quot;). Synced to agents on the next heartbeat.
+            (&quot;Shut down Warden&quot;). Synced to agents on the next heartbeat.
           </CardDescription>
         </CardHeader>
         <CardContent>

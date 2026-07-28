@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getDeviceDisplayName } from "@argonath/shared";
+import { getDeviceDisplayName } from "@warden/shared";
 import { Pencil, Plus, Trash2, User } from "lucide-react";
 import Link from "next/link";
 

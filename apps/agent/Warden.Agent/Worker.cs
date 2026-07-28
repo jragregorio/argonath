@@ -1,9 +1,9 @@
 using System.Windows.Forms;
-using Argonath.Core;
-using Argonath.Core.Services;
-using Argonath.LockUI;
+using Warden.Core;
+using Warden.Core.Services;
+using Warden.LockUI;
 
-namespace Argonath.Agent;
+namespace Warden.Agent;
 
 public class Worker : BackgroundService
 {
@@ -26,7 +26,7 @@ public class Worker : BackgroundService
     {
         if (!_configStore.IsPaired())
         {
-            _logger.LogWarning("Agent not paired. Run Argonath.Tray to pair first.");
+            _logger.LogWarning("Agent not paired. Run Warden.Tray to pair first.");
             return;
         }
 
@@ -83,7 +83,7 @@ public class Worker : BackgroundService
         await _engine.InitializeAsync();
         await _realtime.ConnectAsync();
 
-        _logger.LogInformation("Argonath Agent service started");
+        _logger.LogInformation("Warden Agent service started");
 
         var lastHeartbeat = DateTime.UtcNow;
 

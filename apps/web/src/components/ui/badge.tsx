@@ -1,4 +1,4 @@
-import { cn } from "@argonath/ui";
+import { cn } from "@warden/ui";
 
 type BadgeProps = {
   children: React.ReactNode;

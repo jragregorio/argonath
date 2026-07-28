@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Monitor, AlertCircle, Lock, Unlock, Users, Clock } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { getDeviceDisplayName } from "@argonath/shared";
+import { getDeviceDisplayName } from "@warden/shared";
 
 export default function DashboardPage() {
   const utils = trpc.useUtils();
