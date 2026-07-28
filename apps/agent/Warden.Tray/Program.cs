@@ -13,10 +13,12 @@ static class Program
     private static EnforcementEngine? _engine;
     private static RealtimeService? _realtime;
     private static System.Windows.Forms.Timer? _tickTimer;
+    private static System.Windows.Forms.Timer? _captureTimer;
     private static NotifyIcon? _trayIcon;
     private static MainWindow? _mainWindow;
     private static DateTime _lastHeartbeatAt = DateTime.UtcNow;
     private static ConfigStore? _configStore;
+    private static bool _capturePollInFlight;
 
     [STAThread]
     static void Main()
@@ -114,6 +116,10 @@ static class Program
             {
                 await _engine.InitializeAsync();
                 await _realtime.ConnectAsync();
+                await app.Dispatcher.InvokeAsync(async () =>
+                {
+                    await PollPendingCapturesAsync();
+                });
             }
             catch (DeviceUnpairedException ex)
             {
@@ -146,12 +152,6 @@ static class Program
                     await _engine.SendHeartbeatAsync();
                     _lastHeartbeatAt = DateTime.UtcNow;
                     UpdateTrayStatusText();
-
-                    // HTTP fallback when realtime capture events are missed.
-                    await app.Dispatcher.InvokeAsync(async () =>
-                    {
-                        await _engine.ProcessPendingCapturesAsync();
-                    });
                 }
                 catch (DeviceUnpairedException ex)
                 {
@@ -166,6 +166,27 @@ static class Program
             }
         };
         _tickTimer.Start();
+
+        // Independent of heartbeat so missed realtime events are picked up within ~1s.
+        _captureTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+        _captureTimer.Tick += async (_, _) =>
+        {
+            try
+            {
+                await PollPendingCapturesAsync();
+            }
+            catch (DeviceUnpairedException ex)
+            {
+                MessageBox.Show(
+                    ex.Message,
+                    "Warden",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information
+                );
+                ShutdownWarden();
+            }
+        };
+        _captureTimer.Start();
 
         _mainWindow = new MainWindow(
             _engine,
@@ -282,6 +303,25 @@ static class Program
             _mainWindow?.Dispatcher.Invoke(() => _mainWindow.ShowFromTray());
     }
 
+    private static async Task PollPendingCapturesAsync()
+    {
+        if (_engine == null || _capturePollInFlight)
+        {
+            return;
+        }
+
+        _capturePollInFlight = true;
+        try
+        {
+            // BitBlt must run on this STA/UI thread; upload continues off-thread inside the engine.
+            await _engine.ProcessPendingCapturesAsync();
+        }
+        finally
+        {
+            _capturePollInFlight = false;
+        }
+    }
+
     private static void UpdateTrayStatusText()
     {
         if (_trayIcon == null || _engine == null)
@@ -322,9 +362,30 @@ static class Program
 
             try
             {
+                _captureTimer?.Stop();
+                _captureTimer?.Dispose();
+                _captureTimer = null;
+            }
+            catch
+            {
+                // Ignore.
+            }
+
+            try
+            {
                 _tickTimer?.Stop();
                 _tickTimer?.Dispose();
                 _tickTimer = null;
+            }
+            catch
+            {
+                // Ignore.
+            }
+
+            try
+            {
+                _realtime?.Dispose();
+                _realtime = null;
             }
             catch
             {

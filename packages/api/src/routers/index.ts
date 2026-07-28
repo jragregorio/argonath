@@ -572,6 +572,30 @@ export const snapshotRouter = router({
       return withUrls;
     }),
 
+  getStatus: protectedProcedure
+    .input(z.object({ snapshotId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const snapshot = await prisma.snapshot.findFirst({
+        where: {
+          id: input.snapshotId,
+          child: { familyId: family.id },
+        },
+        select: {
+          id: true,
+          status: true,
+          deviceId: true,
+          type: true,
+        },
+      });
+
+      if (!snapshot) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      return snapshot;
+    }),
+
   requestCapture: parentProcedure
     .input(
       z.object({
@@ -662,23 +686,19 @@ export const snapshotRouter = router({
         });
       }
 
-      // Prefer awaiting broadcast so the agent gets the command promptly.
-      // Pending-capture polling remains as a reliable fallback.
-      try {
-        await broadcastToDevice(device.id, {
-          type: input.type === "screen" ? "capture:screen" : "capture:webcam",
-          deviceId: device.id,
-          payload: {
-            snapshotId: snapshot.id,
-            uploadUrl: uploadData.signedUrl,
-            token: uploadData.token,
-            storageKey,
-          },
-          timestamp: new Date().toISOString(),
-        });
-      } catch {
-        // Agent will pick this up via pendingCaptures polling.
-      }
+      // Fire-and-forget: parent mutation returns as soon as the pending row + upload URL exist.
+      // Tray also polls pendingCaptures every 1s as a reliable fallback.
+      void broadcastToDevice(device.id, {
+        type: input.type === "screen" ? "capture:screen" : "capture:webcam",
+        deviceId: device.id,
+        payload: {
+          snapshotId: snapshot.id,
+          uploadUrl: uploadData.signedUrl,
+          token: uploadData.token,
+          storageKey,
+        },
+        timestamp: new Date().toISOString(),
+      }).catch(() => {});
 
       await logAudit(family.id, ctx.userId, "capture_requested", {
         deviceId: device.id,
@@ -924,6 +944,17 @@ export const agentRouter = router({
           where: { id: snapshot.id },
           data: { status: "failed" },
         });
+
+        void broadcastToDevice(ctx.device.id, {
+          type: "snapshot:failed",
+          deviceId: ctx.device.id,
+          payload: {
+            snapshotId: snapshot.id,
+            errorMessage: input.errorMessage ?? "Capture failed",
+          },
+          timestamp: new Date().toISOString(),
+        }).catch(() => {});
+
         return { ok: false, error: input.errorMessage };
       }
 
@@ -932,12 +963,12 @@ export const agentRouter = router({
         data: { status: "ready" },
       });
 
-      await broadcastToDevice(ctx.device.id, {
+      void broadcastToDevice(ctx.device.id, {
         type: "snapshot:ready",
         deviceId: ctx.device.id,
         payload: { snapshotId: snapshot.id },
         timestamp: new Date().toISOString(),
-      });
+      }).catch(() => {});
 
       return { ok: true };
     }),

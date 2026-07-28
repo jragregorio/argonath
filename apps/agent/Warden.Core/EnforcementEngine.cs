@@ -247,6 +247,7 @@ public class EnforcementEngine
             {
                 if (type == "capture:screen" || type == "screen")
                 {
+                    // BitBlt must run on the calling STA/UI thread.
                     imageData = CaptureService.CaptureScreen();
                     if (imageData == null) error = "Screen capture failed";
                 }
@@ -260,23 +261,29 @@ public class EnforcementEngine
                 error = ex.Message;
             }
 
-            if (imageData != null)
+            // Upload + confirm off the UI thread so the tray stays responsive.
+            await Task.Run(async () =>
             {
-                var (uploaded, uploadError) = await CaptureService.UploadCaptureAsync(
-                    payload.UploadUrl,
-                    imageData,
-                    payload.Token
-                );
-                await _api.ConfirmSnapshotAsync(
-                    payload.SnapshotId,
-                    uploaded,
-                    uploaded ? null : uploadError ?? "Upload failed"
-                );
-            }
-            else
-            {
-                await _api.ConfirmSnapshotAsync(payload.SnapshotId, false, error);
-            }
+                if (imageData != null)
+                {
+                    var (uploaded, uploadError) = await CaptureService
+                        .UploadCaptureAsync(payload.UploadUrl, imageData, payload.Token)
+                        .ConfigureAwait(false);
+                    await _api
+                        .ConfirmSnapshotAsync(
+                            payload.SnapshotId,
+                            uploaded,
+                            uploaded ? null : uploadError ?? "Upload failed"
+                        )
+                        .ConfigureAwait(false);
+                }
+                else
+                {
+                    await _api
+                        .ConfirmSnapshotAsync(payload.SnapshotId, false, error)
+                        .ConfigureAwait(false);
+                }
+            }).ConfigureAwait(false);
         }
         finally
         {

@@ -1,6 +1,8 @@
 using System.Text.Json;
+using System.Timers;
 using Warden.Core.Models;
 using Websocket.Client;
+using Timer = System.Timers.Timer;
 
 namespace Warden.Core.Services;
 
@@ -9,6 +11,9 @@ public class RealtimeService : IDisposable
     private WebsocketClient? _client;
     private readonly ConfigStore _configStore;
     private readonly Action<RealtimeEvent> _onEvent;
+    private Timer? _heartbeatTimer;
+    private string? _deviceId;
+    private int _joinRef;
 
     public RealtimeService(ConfigStore configStore, Action<RealtimeEvent> onEvent)
     {
@@ -22,6 +27,8 @@ public class RealtimeService : IDisposable
         if (string.IsNullOrEmpty(config.DeviceId) || string.IsNullOrEmpty(config.SupabaseUrl))
             return;
 
+        _deviceId = config.DeviceId;
+
         var wsUrl = config.SupabaseUrl
             .Replace("https://", "wss://")
             .Replace("http://", "ws://");
@@ -30,11 +37,25 @@ public class RealtimeService : IDisposable
             $"{wsUrl}/realtime/v1/websocket?apikey={config.SupabaseAnonKey}&vsn=1.0.0"
         );
 
+        _heartbeatTimer?.Stop();
+        _heartbeatTimer?.Dispose();
         _client?.Dispose();
         _client = new WebsocketClient(uri)
         {
             ReconnectTimeout = TimeSpan.FromSeconds(30)
         };
+
+        _client.ReconnectionHappened.Subscribe(_ =>
+        {
+            try
+            {
+                JoinDeviceChannel();
+            }
+            catch
+            {
+                // Next reconnect attempt will retry.
+            }
+        });
 
         _client.MessageReceived.Subscribe(msg =>
         {
@@ -67,20 +88,61 @@ public class RealtimeService : IDisposable
         });
 
         await _client.StartOrFail();
+        JoinDeviceChannel();
 
+        _heartbeatTimer = new Timer(20_000) { AutoReset = true };
+        _heartbeatTimer.Elapsed += (_, _) =>
+        {
+            try
+            {
+                SendPhoenixHeartbeat();
+            }
+            catch
+            {
+                // Socket may be reconnecting.
+            }
+        };
+        _heartbeatTimer.Start();
+    }
+
+    private void JoinDeviceChannel()
+    {
+        if (_client == null || string.IsNullOrEmpty(_deviceId))
+            return;
+
+        _joinRef++;
         var channelJoin = JsonSerializer.Serialize(new
         {
-            topic = $"realtime:device:{config.DeviceId}",
+            topic = $"realtime:device:{_deviceId}",
             @event = "phx_join",
             payload = new { config = new { broadcast = new { self = false } } },
-            @ref = "1"
+            @ref = _joinRef.ToString()
         });
 
         _client.Send(channelJoin);
     }
 
+    private void SendPhoenixHeartbeat()
+    {
+        if (_client == null || !_client.IsRunning)
+            return;
+
+        var heartbeat = JsonSerializer.Serialize(new
+        {
+            topic = "phoenix",
+            @event = "heartbeat",
+            payload = new { },
+            @ref = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString()
+        });
+
+        _client.Send(heartbeat);
+    }
+
     public void Dispose()
     {
+        _heartbeatTimer?.Stop();
+        _heartbeatTimer?.Dispose();
+        _heartbeatTimer = null;
         _client?.Dispose();
     }
 }

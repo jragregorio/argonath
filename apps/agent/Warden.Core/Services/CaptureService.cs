@@ -10,6 +10,11 @@ public class CaptureService
     private const int SRCCOPY = 0x00CC0020;
     private const int CAPTUREBLT = 0x40000000;
 
+    private static readonly HttpClient UploadClient = new()
+    {
+        Timeout = TimeSpan.FromSeconds(15)
+    };
+
     [DllImport("user32.dll")]
     private static extern IntPtr GetDC(IntPtr hWnd);
 
@@ -132,7 +137,6 @@ public class CaptureService
     {
         try
         {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
             using var content = new ByteArrayContent(imageData);
             content.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
 
@@ -146,13 +150,13 @@ public class CaptureService
                 request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
             }
 
-            var response = await client.SendAsync(request);
+            var response = await UploadClient.SendAsync(request).ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
                 return (true, null);
             }
 
-            var body = await response.Content.ReadAsStringAsync();
+            var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             return (
                 false,
                 $"Upload failed ({(int)response.StatusCode}): {Truncate(body, 200)}"

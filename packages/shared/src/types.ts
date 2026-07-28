@@ -37,6 +37,7 @@ export type RealtimeEventType =
   | "extension:approved"
   | "extension:denied"
   | "snapshot:ready"
+  | "snapshot:failed"
   | "policy:updated";
 
 export type RealtimeEvent<T = unknown> = {

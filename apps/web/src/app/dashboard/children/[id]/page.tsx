@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useFamilyRealtime } from "@/lib/realtime";
@@ -115,6 +115,84 @@ export default function ChildDetailPage() {
   const [captureFeedback, setCaptureFeedback] = useState<
     Record<string, string>
   >({});
+  const capturePollersRef = useRef<Record<string, number>>({});
+
+  const clearCaptureFeedbackSoon = (deviceId: string, delayMs = 3000) => {
+    window.setTimeout(() => {
+      setCaptureFeedback((prev) => {
+        const next = { ...prev };
+        delete next[deviceId];
+        return next;
+      });
+    }, delayMs);
+  };
+
+  const stopCapturePoll = (deviceId: string) => {
+    const timer = capturePollersRef.current[deviceId];
+    if (timer) {
+      window.clearInterval(timer);
+      delete capturePollersRef.current[deviceId];
+    }
+  };
+
+  const finishCaptureSuccess = (deviceId: string) => {
+    stopCapturePoll(deviceId);
+    setCaptureFeedback((prev) => ({
+      ...prev,
+      [deviceId]: "Capture received",
+    }));
+    void utils.snapshot.list.invalidate();
+    clearCaptureFeedbackSoon(deviceId, 3000);
+  };
+
+  const finishCaptureFailure = (deviceId: string, message: string) => {
+    stopCapturePoll(deviceId);
+    setCaptureFeedback((prev) => ({
+      ...prev,
+      [deviceId]: message,
+    }));
+    clearCaptureFeedbackSoon(deviceId, 5000);
+  };
+
+  const watchCaptureStatus = (deviceId: string, snapshotId: string) => {
+    stopCapturePoll(deviceId);
+
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      void (async () => {
+        try {
+          const status = await utils.snapshot.getStatus.fetch({ snapshotId });
+          if (status.status === "ready") {
+            finishCaptureSuccess(deviceId);
+            return;
+          }
+          if (status.status === "failed") {
+            finishCaptureFailure(deviceId, "Capture failed");
+            return;
+          }
+          if (Date.now() - startedAt > 20_000) {
+            finishCaptureFailure(deviceId, "Timed out — try again");
+          }
+        } catch {
+          if (Date.now() - startedAt > 20_000) {
+            finishCaptureFailure(deviceId, "Timed out — try again");
+          }
+        }
+      })();
+    }, 1000);
+
+    capturePollersRef.current[deviceId] = timer;
+  };
+
+  useEffect(() => {
+    return () => {
+      Object.values(capturePollersRef.current).forEach((timer) =>
+        window.clearInterval(timer)
+      );
+      capturePollersRef.current = {};
+    };
+  }, []);
+
   const requestCapture = trpc.snapshot.requestCapture.useMutation({
     onMutate: ({ deviceId, type }) => {
       setCaptureFeedback((prev) => ({
@@ -125,7 +203,7 @@ export default function ChildDetailPage() {
             : "Requesting webcam capture…",
       }));
     },
-    onSuccess: (_data, { deviceId, type }) => {
+    onSuccess: (data, { deviceId, type }) => {
       setCaptureFeedback((prev) => ({
         ...prev,
         [deviceId]:
@@ -133,20 +211,11 @@ export default function ChildDetailPage() {
             ? "Screenshot requested — waiting for device"
             : "Webcam capture requested — waiting for device",
       }));
+      watchCaptureStatus(deviceId, data.id);
       void utils.snapshot.list.invalidate();
     },
     onError: (err, { deviceId }) => {
-      setCaptureFeedback((prev) => ({
-        ...prev,
-        [deviceId]: err.message || "Capture failed",
-      }));
-      window.setTimeout(() => {
-        setCaptureFeedback((prev) => {
-          const next = { ...prev };
-          delete next[deviceId];
-          return next;
-        });
-      }, 5000);
+      finishCaptureFailure(deviceId, err.message || "Capture failed");
     },
   });
 
@@ -199,18 +268,14 @@ export default function ChildDetailPage() {
   const deviceIds = child?.devices.map((d) => d.id) ?? [];
   useFamilyRealtime(deviceIds, (event) => {
     if (event.type === "snapshot:ready") {
-      setCaptureFeedback((prev) => ({
-        ...prev,
-        [event.deviceId]: "Capture received",
-      }));
-      void utils.snapshot.list.invalidate();
-      window.setTimeout(() => {
-        setCaptureFeedback((prev) => {
-          const next = { ...prev };
-          delete next[event.deviceId];
-          return next;
-        });
-      }, 3000);
+      finishCaptureSuccess(event.deviceId);
+    }
+    if (event.type === "snapshot:failed") {
+      const payload = event.payload as { errorMessage?: string } | undefined;
+      finishCaptureFailure(
+        event.deviceId,
+        payload?.errorMessage || "Capture failed"
+      );
     }
     void utils.children.get.invalidate({ childId });
     void utils.policy.getEvaluation.invalidate({ childId });
