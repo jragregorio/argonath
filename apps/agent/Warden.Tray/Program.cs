@@ -90,9 +90,22 @@ static class Program
             UpdateTrayStatusText();
         };
 
-        _engine.CaptureRequested += async (payload, type) =>
+        // Screen capture must run on the WPF UI (STA) thread. Realtime events arrive on a
+        // background thread; capturing there often fails or returns a blank image when the
+        // status window is minimized to the tray.
+        _engine.CaptureRequested += (payload, type) =>
         {
-            await _engine.HandleCaptureAsync(payload, type);
+            _ = app.Dispatcher.InvokeAsync(async () =>
+            {
+                try
+                {
+                    await _engine.HandleCaptureAsync(payload, type);
+                }
+                catch
+                {
+                    // Best-effort; failures are reported via confirmSnapshot.
+                }
+            });
         };
 
         _realtime = new RealtimeService(_configStore, evt => _engine!.HandleRealtimeEvent(evt));
