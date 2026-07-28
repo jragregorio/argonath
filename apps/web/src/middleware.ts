@@ -50,7 +50,7 @@ async function hasValidAccess(req: NextRequest): Promise<boolean> {
 }
 
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const { pathname, search } = req.nextUrl;
 
   if (devAuthBypassEnabled || isPublicPath(pathname)) {
     return NextResponse.next();
@@ -65,8 +65,15 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Access expired but refresh present — allow request; clients/API refresh as needed
+  // For page navigations, refresh before rendering so the dashboard does not sit
+  // in client-side skeletons waiting for a 401 -> refresh -> retry cycle.
   if (req.cookies.get(REFRESH_COOKIE)?.value) {
+    if (!pathname.startsWith("/api/")) {
+      const refreshUrl = new URL("/api/auth/refresh", req.url);
+      refreshUrl.searchParams.set("next", `${pathname}${search}`);
+      return NextResponse.redirect(refreshUrl);
+    }
+
     return NextResponse.next();
   }
 
