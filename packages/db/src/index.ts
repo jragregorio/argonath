@@ -13,8 +13,7 @@ export const prisma =
         : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+// Always reuse one client (required on Vercel/serverless + Supabase PgBouncer).
+globalForPrisma.prisma = prisma;
 
 export * from "@prisma/client";
