@@ -51,7 +51,15 @@ Published binary:
 
 `Warden.Tray/bin/Release/net8.0-windows/win-x64/publish/Warden.Tray.exe`
 
-Copy that folder to the child machine (for example `C:\Program Files\Warden\`), run it once to pair, then enable **Start with Windows** from the tray menu.
+Before copying to a child machine, edit `warden.json` in the publish folder and set your live dashboard URL:
+
+```json
+{
+  "apiBaseUrl": "https://your-app.vercel.app"
+}
+```
+
+Copy the whole publish folder to the child PC (for example `C:\Program Files\Warden\`), run `Warden.Tray.exe` once to pair, then enable **Start with Windows** from the tray menu.
 
 ## Pairing
 

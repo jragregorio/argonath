@@ -2,9 +2,7 @@ namespace Warden.Core.Models;
 
 public class AgentConfig
 {
-    public string ApiBaseUrl { get; set; } =
-        (Environment.GetEnvironmentVariable("WARDEN_API_BASE_URL") ?? "http://localhost:3000")
-            .TrimEnd('/');
+    public string ApiBaseUrl { get; set; } = "";
     public string? SupabaseUrl { get; set; }
     public string? SupabaseAnonKey { get; set; }
     public string? DeviceToken { get; set; }

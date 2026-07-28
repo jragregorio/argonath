@@ -9,13 +9,15 @@ namespace Warden.Tray;
 public class PairingWindow : Window
 {
     private readonly WardenApiClient _api;
+    private readonly ConfigStore _configStore;
     private readonly TextBox _codeInput;
     private readonly TextBlock _statusLabel;
     private readonly Button _pairButton;
 
-    public PairingWindow(WardenApiClient api)
+    public PairingWindow(WardenApiClient api, ConfigStore configStore)
     {
         _api = api;
+        _configStore = configStore;
 
         Title = "Warden — Device Pairing";
         Width = 440;
@@ -103,7 +105,12 @@ public class PairingWindow : Window
         catch (Exception ex)
         {
             _statusLabel.Foreground = UiTheme.DangerBrush;
-            _statusLabel.Text = $"Pairing failed: {ex.Message}";
+            var config = _configStore.Load();
+            var message = ex.Message.Contains("actively refused", StringComparison.OrdinalIgnoreCase)
+                || ex.Message.Contains("No connection could be made", StringComparison.OrdinalIgnoreCase)
+                ? AgentBootstrap.GetPairingHelpText(config.ApiBaseUrl)
+                : $"Pairing failed: {ex.Message}";
+            _statusLabel.Text = message;
             _pairButton.IsEnabled = true;
         }
     }

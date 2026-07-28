@@ -28,11 +28,20 @@ public class ConfigStore
 
     public AgentConfig Load()
     {
-        if (!File.Exists(_configPath))
-            return new AgentConfig();
+        AgentConfig config;
 
-        var json = File.ReadAllText(_configPath);
-        return JsonSerializer.Deserialize<AgentConfig>(json) ?? new AgentConfig();
+        if (!File.Exists(_configPath))
+        {
+            config = new AgentConfig();
+        }
+        else
+        {
+            var json = File.ReadAllText(_configPath);
+            config = JsonSerializer.Deserialize<AgentConfig>(json) ?? new AgentConfig();
+        }
+
+        config.ApiBaseUrl = AgentBootstrap.ResolveApiBaseUrl(config);
+        return config;
     }
 
     public void Save(AgentConfig config)
