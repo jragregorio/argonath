@@ -8,7 +8,7 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
-const DEV_ORG_ID = process.env.DEV_BYPASS_ORG_ID ?? "dev-family";
+const DEV_FAMILY_ID = process.env.DEV_BYPASS_FAMILY_ID ?? "dev-family";
 
 async function agentPost(body, deviceToken) {
   const headers = { "Content-Type": "application/json" };
@@ -37,11 +37,11 @@ async function main() {
   console.log("Warden core flow verification\n");
 
   let family = await prisma.family.findUnique({
-    where: { clerkOrgId: DEV_ORG_ID },
+    where: { id: DEV_FAMILY_ID },
   });
   if (!family) {
     family = await prisma.family.create({
-      data: { clerkOrgId: DEV_ORG_ID, name: "Dev Family" },
+      data: { id: DEV_FAMILY_ID, name: "Dev Family" },
     });
     console.log("Created dev family");
   }

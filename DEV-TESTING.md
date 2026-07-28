@@ -1,6 +1,6 @@
-# Local core mechanics testing (no Supabase / Clerk)
+# Local core mechanics testing (no Supabase)
 
-Test time limits, lockout, and extension approval with only local Postgres and the dev auth bypass.
+Test time limits, lockout, and extension approval with only Postgres and optional auth bypass.
 
 ## Prerequisites
 
@@ -30,15 +30,18 @@ npm run db:push
 npm run dev
 ```
 
-Open [http://localhost:3000/dashboard](http://localhost:3000/dashboard) — dev auth bypass skips Clerk sign-in.
+Open [http://localhost:3000/dashboard](http://localhost:3000/dashboard) — with auth bypass, sign-in is skipped.
 
 Required env in [`apps/web/.env.local`](apps/web/.env.local):
 
 ```
 NEXT_PUBLIC_DEV_AUTH_BYPASS=true
 DEV_BYPASS_USER_ID=dev-parent
-DEV_BYPASS_ORG_ID=dev-family
+DEV_BYPASS_FAMILY_ID=dev-family
+AUTH_JWT_SECRET=local-dev-jwt-secret-change-me-32chars-min
 ```
+
+Without bypass, create an account at `/sign-up` (requires `AUTH_JWT_SECRET`).
 
 ## 4. Create a child and set a short limit
 
@@ -96,7 +99,6 @@ No Supabase Realtime required for this flow.
 ## Ignore during this phase
 
 - **Snapshots** page and capture buttons (require Supabase Storage)
-- Clerk sign-in
 - `Warden.Agent` Windows Service — use `Warden.Tray` for dev
 
 ## Troubleshooting
@@ -108,3 +110,4 @@ No Supabase Realtime required for this flow.
 | Dashboard errors on load | Check `DATABASE_URL` in `apps/web/.env.local` matches Postgres |
 | Agent won't pair | Confirm web app is running; code expires in 15 minutes |
 | Unlock slow after approve | Normal — agent polls every ~10s while locked |
+| `AUTH_JWT_SECRET` errors | Set a 32+ character secret in `.env.local` |

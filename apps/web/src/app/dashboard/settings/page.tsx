@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/page-header";
 
 export default function SettingsPage() {
   const [pin, setPin] = useState("");
-  const { data: family } = trpc.family.getOrCreate.useQuery();
+  const { data: family } = trpc.family.get.useQuery();
   const updatePin = trpc.family.updatePin.useMutation({
     onSuccess: () => setPin(""),
   });

@@ -1,6 +1,7 @@
-import { appRouter, createContext } from "@warden/api";
-import { auth } from "@clerk/nextjs/server";
+import { createContext } from "@warden/api";
+import { appRouter } from "@warden/api";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import { ACCESS_COOKIE } from "@warden/api";
 
 const devAuthBypassEnabled =
   process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
@@ -11,20 +12,27 @@ const handler = (req: Request) =>
     req,
     router: appRouter,
     createContext: async () => {
-      const authState = devAuthBypassEnabled
-        ? {
-            userId: process.env.DEV_BYPASS_USER_ID ?? "dev-parent",
-            orgId: process.env.DEV_BYPASS_ORG_ID ?? "dev-family",
-          }
-        : await auth();
-      // Clerk orgId is only set with an active Organization. For solo parents,
-      // fall back to a stable per-user family key so the dashboard works without orgs.
-      const userId = authState.userId ?? null;
-      const orgId = authState.orgId ?? (userId ? `user_${userId}` : null);
       const deviceToken = req.headers.get("x-device-token");
+
+      if (devAuthBypassEnabled) {
+        return createContext({
+          devBypass: true,
+          userId: process.env.DEV_BYPASS_USER_ID ?? "dev-parent",
+          familyId: process.env.DEV_BYPASS_FAMILY_ID ?? "dev-family",
+          deviceToken,
+        });
+      }
+
+      const cookieHeader = req.headers.get("cookie") ?? "";
+      const accessToken =
+        cookieHeader
+          .split(";")
+          .map((c) => c.trim())
+          .find((c) => c.startsWith(`${ACCESS_COOKIE}=`))
+          ?.slice(ACCESS_COOKIE.length + 1) ?? null;
+
       return createContext({
-        userId,
-        orgId,
+        accessToken: accessToken ? decodeURIComponent(accessToken) : null,
         deviceToken,
       });
     },

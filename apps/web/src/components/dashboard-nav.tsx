@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { UserButton, OrganizationSwitcher } from "@clerk/nextjs";
 import {
   Shield,
   LayoutDashboard,
@@ -11,10 +10,13 @@ import {
   Settings,
   Menu,
   X,
+  LogOut,
+  ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/dev-config";
+import { trpc } from "@/lib/trpc";
 
 const devAuthBypassEnabled =
   process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
@@ -64,22 +66,98 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function NavFooter() {
-  return (
-    <div className="pt-4 border-t border-border space-y-3">
-      {devAuthBypassEnabled ? (
+  const router = useRouter();
+  const utils = trpc.useUtils();
+  const meQuery = trpc.auth.me.useQuery(undefined, {
+    enabled: !devAuthBypassEnabled,
+    retry: false,
+  });
+  const [switching, setSwitching] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function switchFamily(familyId: string) {
+    if (familyId === meQuery.data?.familyId) return;
+    setSwitching(true);
+    try {
+      const res = await fetch("/api/auth/switch-family", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ familyId }),
+      });
+      if (!res.ok) return;
+      await utils.invalidate();
+      router.refresh();
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  async function logout() {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      router.push("/");
+      router.refresh();
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+
+  if (devAuthBypassEnabled) {
+    return (
+      <div className="pt-4 border-t border-border space-y-3">
         <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
           Dev auth bypass enabled
         </div>
+      </div>
+    );
+  }
+
+  const memberships = meQuery.data?.memberships ?? [];
+  const activeFamily =
+    memberships.find((m) => m.familyId === meQuery.data?.familyId)?.family
+      .name ?? "Family";
+
+  return (
+    <div className="pt-4 border-t border-border space-y-3">
+      {memberships.length > 1 ? (
+        <label className="block space-y-1">
+          <span className="text-xs text-muted-foreground px-1">Family</span>
+          <div className="relative">
+            <select
+              className="w-full appearance-none rounded-lg border border-border bg-secondary px-3 py-2 pr-8 text-sm"
+              value={meQuery.data?.familyId ?? ""}
+              disabled={switching || meQuery.isLoading}
+              onChange={(e) => switchFamily(e.target.value)}
+            >
+              {memberships.map((m) => (
+                <option key={m.familyId} value={m.familyId}>
+                  {m.family.name} ({m.role})
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          </div>
+        </label>
       ) : (
-        <>
-          <OrganizationSwitcher
-            afterCreateOrganizationUrl="/dashboard"
-            afterLeaveOrganizationUrl="/dashboard"
-            afterSelectOrganizationUrl="/dashboard"
-          />
-          <UserButton afterSignOutUrl="/" />
-        </>
+        <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm">
+          <div className="font-medium truncate">{activeFamily}</div>
+          <div className="text-xs text-muted-foreground">
+            {meQuery.data?.role ?? "…"}
+            {meQuery.data?.user.email ? ` · ${meQuery.data.user.email}` : ""}
+          </div>
+        </div>
       )}
+
+      <button
+        type="button"
+        onClick={logout}
+        disabled={loggingOut}
+        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground ${focusRing}`}
+      >
+        <LogOut className="w-4 h-4" />
+        {loggingOut ? "Signing out…" : "Sign out"}
+      </button>
     </div>
   );
 }

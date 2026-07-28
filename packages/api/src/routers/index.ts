@@ -16,23 +16,18 @@ import {
   broadcastToDevice,
   isSupabaseConfigured,
 } from "../lib/supabase";
-import { protectedProcedure, agentProcedure, publicProcedure, router } from "../trpc";
+import {
+  protectedProcedure,
+  parentProcedure,
+  adminProcedure,
+  agentProcedure,
+  publicProcedure,
+  router,
+} from "../trpc";
+import { requireFamilyAccess } from "../auth/session";
 
-async function getFamilyForOrg(orgId: string) {
-  let family = await prisma.family.findUnique({
-    where: { clerkOrgId: orgId },
-  });
-
-  if (!family) {
-    family = await prisma.family.create({
-      data: {
-        clerkOrgId: orgId,
-        name: "My Family",
-      },
-    });
-  }
-
-  return family;
+async function getFamilyForUser(ctx: { userId: string; familyId: string }) {
+  return requireFamilyAccess(ctx.userId, ctx.familyId);
 }
 
 async function getChildForFamily(childId: string, familyId: string) {
@@ -72,14 +67,19 @@ const allowedWindowSchema = z.object({
 });
 
 export const familyRouter = router({
-  getOrCreate: protectedProcedure.query(async ({ ctx }) => {
-    return getFamilyForOrg(ctx.orgId);
+  get: protectedProcedure.query(async ({ ctx }) => {
+    return getFamilyForUser(ctx);
   }),
 
-  updatePin: protectedProcedure
+  /** @deprecated Use `get` — kept for existing clients during the auth migration */
+  getOrCreate: protectedProcedure.query(async ({ ctx }) => {
+    return getFamilyForUser(ctx);
+  }),
+
+  updatePin: adminProcedure
     .input(z.object({ pin: z.string().min(4).max(8) }))
     .mutation(async ({ ctx, input }) => {
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       await logAudit(family.id, ctx.userId, "pin_updated");
       return prisma.family.update({
         where: { id: family.id },
@@ -88,9 +88,38 @@ export const familyRouter = router({
     }),
 });
 
+export const authRouter = router({
+  me: protectedProcedure.query(async ({ ctx }) => {
+    const user = await prisma.user.findUnique({
+      where: { id: ctx.userId },
+      select: { id: true, email: true, name: true, createdAt: true },
+    });
+    if (!user) {
+      throw new TRPCError({ code: "UNAUTHORIZED" });
+    }
+
+    const memberships = await prisma.familyMember.findMany({
+      where: { userId: ctx.userId },
+      include: { family: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return {
+      user,
+      role: ctx.role,
+      familyId: ctx.familyId,
+      memberships: memberships.map((m) => ({
+        familyId: m.familyId,
+        role: m.role,
+        family: m.family,
+      })),
+    };
+  }),
+});
+
 export const childrenRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
-    const family = await getFamilyForOrg(ctx.orgId);
+    const family = await getFamilyForUser(ctx);
     return prisma.child.findMany({
       where: { familyId: family.id },
       include: {
@@ -101,10 +130,10 @@ export const childrenRouter = router({
     });
   }),
 
-  create: protectedProcedure
+  create: parentProcedure
     .input(z.object({ displayName: z.string().min(1).max(50) }))
     .mutation(async ({ ctx, input }) => {
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       const child = await prisma.child.create({
         data: {
           familyId: family.id,
@@ -128,11 +157,11 @@ export const childrenRouter = router({
   get: protectedProcedure
     .input(z.object({ childId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       return getChildForFamily(input.childId, family.id);
     }),
 
-  rename: protectedProcedure
+  rename: parentProcedure
     .input(
       z.object({
         childId: z.string(),
@@ -140,7 +169,7 @@ export const childrenRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       await getChildForFamily(input.childId, family.id);
 
       const updated = await prisma.child.update({
@@ -156,10 +185,10 @@ export const childrenRouter = router({
       return updated;
     }),
 
-  delete: protectedProcedure
+  delete: adminProcedure
     .input(z.object({ childId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       await getChildForFamily(input.childId, family.id);
       await logAudit(family.id, ctx.userId, "child_deleted", {
         childId: input.childId,
@@ -169,7 +198,7 @@ export const childrenRouter = router({
 });
 
 export const policyRouter = router({
-  update: protectedProcedure
+  update: parentProcedure
     .input(
       z.object({
         childId: z.string(),
@@ -179,7 +208,7 @@ export const policyRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       const child = await getChildForFamily(input.childId, family.id);
 
       const existing = child.policies[0];
@@ -220,7 +249,7 @@ export const policyRouter = router({
   getEvaluation: protectedProcedure
     .input(z.object({ childId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       const child = await getChildForFamily(input.childId, family.id);
       const policy = child.policies[0];
 
@@ -263,10 +292,10 @@ export const policyRouter = router({
 });
 
 export const deviceRouter = router({
-  generatePairingCode: protectedProcedure
+  generatePairingCode: parentProcedure
     .input(z.object({ childId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       const child = await getChildForFamily(input.childId, family.id);
 
       const code = generatePairingCode();
@@ -292,7 +321,7 @@ export const deviceRouter = router({
     }),
 
   list: protectedProcedure.query(async ({ ctx }) => {
-    const family = await getFamilyForOrg(ctx.orgId);
+    const family = await getFamilyForUser(ctx);
     return prisma.device.findMany({
       where: { child: { familyId: family.id } },
       include: { child: { select: { id: true, displayName: true } } },
@@ -300,7 +329,7 @@ export const deviceRouter = router({
     });
   }),
 
-  rename: protectedProcedure
+  rename: parentProcedure
     .input(
       z.object({
         deviceId: z.string(),
@@ -308,7 +337,7 @@ export const deviceRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       const device = await prisma.device.findFirst({
         where: {
           id: input.deviceId,
@@ -333,10 +362,10 @@ export const deviceRouter = router({
       return updated;
     }),
 
-  delete: protectedProcedure
+  delete: adminProcedure
     .input(z.object({ deviceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       const device = await prisma.device.findFirst({
         where: {
           id: input.deviceId,
@@ -356,7 +385,7 @@ export const deviceRouter = router({
       return prisma.device.delete({ where: { id: device.id } });
     }),
 
-  setAdminLock: protectedProcedure
+  setAdminLock: parentProcedure
     .input(
       z.object({
         deviceId: z.string(),
@@ -364,7 +393,7 @@ export const deviceRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       const device = await prisma.device.findFirst({
         where: {
           id: input.deviceId,
@@ -401,7 +430,7 @@ export const deviceRouter = router({
 
 export const extensionRouter = router({
   listPending: protectedProcedure.query(async ({ ctx }) => {
-    const family = await getFamilyForOrg(ctx.orgId);
+    const family = await getFamilyForUser(ctx);
     return prisma.extensionRequest.findMany({
       where: {
         child: { familyId: family.id },
@@ -415,7 +444,7 @@ export const extensionRouter = router({
     });
   }),
 
-  resolve: protectedProcedure
+  resolve: parentProcedure
     .input(
       z.object({
         requestId: z.string(),
@@ -423,7 +452,7 @@ export const extensionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       const request = await prisma.extensionRequest.findFirst({
         where: {
           id: input.requestId,
@@ -493,7 +522,7 @@ export const snapshotRouter = router({
   list: protectedProcedure
     .input(z.object({ childId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       const snapshots = await prisma.snapshot.findMany({
         where: {
           child: { familyId: family.id },
@@ -525,7 +554,7 @@ export const snapshotRouter = router({
       return withUrls;
     }),
 
-  requestCapture: protectedProcedure
+  requestCapture: parentProcedure
     .input(
       z.object({
         deviceId: z.string(),
@@ -541,7 +570,7 @@ export const snapshotRouter = router({
         });
       }
 
-      const family = await getFamilyForOrg(ctx.orgId);
+      const family = await getFamilyForUser(ctx);
       const device = await prisma.device.findFirst({
         where: {
           id: input.deviceId,
@@ -924,6 +953,7 @@ export const agentRouter = router({
 });
 
 export const appRouter = router({
+  auth: authRouter,
   family: familyRouter,
   children: childrenRouter,
   policy: policyRouter,

@@ -6,7 +6,7 @@ Parental screen time control SaaS with a parent web dashboard and a Windows agen
 
 - **Parent dashboard** (`apps/web`) — Next.js 15 web app for tracking, policies, extension approvals, and on-demand captures
 - **Windows agent** (`apps/agent`) — .NET 8 service for system-wide time tracking, machine lock, and capture execution
-- **API** (`packages/api`) — tRPC routers + Supabase Realtime/Storage integration
+- **API** (`packages/api`) — tRPC routers + custom JWT auth + Supabase Realtime/Storage integration
 - **Database** (`packages/db`) — Prisma + Supabase PostgreSQL
 
 ## Prerequisites
@@ -14,11 +14,10 @@ Parental screen time control SaaS with a parent web dashboard and a Windows agen
 - Node.js 20+
 - .NET 8 SDK (for Windows agent)
 - Supabase project (Postgres + Realtime + Storage)
-- Clerk account (parent auth)
 
 ## Local core testing (no Supabase)
 
-See [DEV-TESTING.md](DEV-TESTING.md) for time limits, lockout, and extension approval without Clerk or Supabase.
+See [DEV-TESTING.md](DEV-TESTING.md) for time limits, lockout, and extension approval without Supabase (optional auth bypass).
 
 Quick start:
 
@@ -43,7 +42,7 @@ cp apps/web/.env.example apps/web/.env.local
 cp packages/db/.env.example packages/db/.env
 ```
 
-3. Fill in your Clerk, Supabase, and database credentials in `apps/web/.env.local` and `packages/db/.env`.
+3. Fill in `AUTH_JWT_SECRET` (32+ characters), Supabase, and database credentials in `apps/web/.env.local` and `packages/db/.env`.
 
 4. Create a `snapshots` bucket in Supabase Storage (private).
 
@@ -59,7 +58,9 @@ npm run db:push
 npm run dev
 ```
 
-7. Build and run the Windows agent (requires .NET 8 SDK):
+7. Create an account at `/sign-up`, or set `NEXT_PUBLIC_DEV_AUTH_BYPASS=true` for local testing without sign-in.
+
+8. Build and run the Windows agent (requires .NET 8 SDK):
 
 ```bash
 cd apps/agent
@@ -75,11 +76,16 @@ See `apps/web/.env.example` for the full list. Key variables:
 |----------|-------------|
 | `DATABASE_URL` | Supabase Postgres connection (pooled) |
 | `DIRECT_URL` | Supabase Postgres direct connection |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk publishable key |
-| `CLERK_SECRET_KEY` | Clerk secret key |
+| `AUTH_JWT_SECRET` | HMAC secret for access JWTs (32+ chars) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
 | `CRON_SECRET` | Secret for snapshot cleanup cron job |
+
+## Auth overview
+
+- Parent dashboard: email/password (argon2), 15-minute JWT access cookies + rotating refresh-token families
+- Roles: `Admin`, `Parent`, `Child` (family memberships)
+- Windows agent: pairing code → long-lived `deviceToken` (unchanged; separate from parent auth)
 
 ## Device pairing
 
