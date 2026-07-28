@@ -17,6 +17,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/dev-config";
 import { trpc } from "@/lib/trpc";
+import { APP_VERSION } from "@warden/shared";
 
 const devAuthBypassEnabled =
   process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
@@ -167,6 +168,9 @@ function Brand() {
     <div className="flex items-center gap-2 px-2">
       <Shield className="w-7 h-7 text-primary" />
       <span className="text-lg font-bold">Warden</span>
+      <span className="text-sm font-medium text-muted-foreground">
+        v{APP_VERSION}
+      </span>
     </div>
   );
 }

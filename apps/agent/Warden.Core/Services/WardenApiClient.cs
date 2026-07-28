@@ -66,7 +66,7 @@ public class WardenApiClient
             action = "pair",
             code,
             machineName = Environment.MachineName,
-            agentVersion = "1.0.0"
+            agentVersion = AgentVersionInfo.Current
         };
 
         var response = await _http.PostAsJsonAsync($"{config.ApiBaseUrl}/api/agent", request);
@@ -100,7 +100,7 @@ public class WardenApiClient
             IdleMinutesToday = idleMinutes,
             IsLocked = isLocked,
             MachineName = Environment.MachineName,
-            AgentVersion = "1.0.0"
+            AgentVersion = AgentVersionInfo.Current
         };
 
         var response = await _http.PostAsJsonAsync(

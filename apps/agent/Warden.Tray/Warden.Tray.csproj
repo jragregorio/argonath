@@ -8,7 +8,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
     <RootNamespace>Warden.Tray</RootNamespace>
-    <Version>0.0.1</Version>
+    <Version>0.0.7</Version>
     <ApplicationIcon />
     <StartupObject>Warden.Tray.Program</StartupObject>
   </PropertyGroup>

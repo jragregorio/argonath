@@ -663,7 +663,7 @@ export default function ChildDetailPage() {
                         device.machineName !== device.displayName
                           ? `${device.machineName} · `
                           : ""}
-                        v{device.agentVersion ?? "?"} ·{" "}
+                        Agent v{device.agentVersion ?? "?"} ·{" "}
                         {device.lastSeenAt
                           ? `Last seen ${new Date(device.lastSeenAt).toLocaleString()}`
                           : "Never connected"}

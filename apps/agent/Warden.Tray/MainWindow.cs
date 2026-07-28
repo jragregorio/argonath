@@ -196,14 +196,9 @@ public class MainWindow : Window
         exitBtn.Click += (_, _) => RequestExit();
         root.Children.Add(exitBtn);
 
-        var assemblyVersion = typeof(MainWindow).Assembly.GetName().Version;
-        var versionText =
-            assemblyVersion == null
-                ? "0.0.1"
-                : $"{assemblyVersion.Major}.{assemblyVersion.Minor}.{assemblyVersion.Build}";
         var versionLabel = new TextBlock
         {
-            Text = $"Made by JRAG v{versionText}",
+            Text = $"Made by JRAG v{AgentVersionInfo.Current}",
             FontSize = 11,
             Foreground = UiTheme.MutedBrush,
             HorizontalAlignment = HorizontalAlignment.Center,

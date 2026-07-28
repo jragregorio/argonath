@@ -178,9 +178,17 @@ export default function ChildrenPage() {
                     <Badge
                       key={device.id}
                       variant={device.isOnline ? "success" : "secondary"}
-                      title={device.isOnline ? "Online" : "Offline"}
+                      title={[
+                        device.isOnline ? "Online" : "Offline",
+                        device.agentVersion
+                          ? `Agent v${device.agentVersion}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     >
                       {getDeviceDisplayName(device)}
+                      {device.agentVersion ? ` · v${device.agentVersion}` : ""}
                     </Badge>
                   ))}
                 </div>

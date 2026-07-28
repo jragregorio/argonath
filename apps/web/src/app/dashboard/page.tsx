@@ -204,6 +204,9 @@ export default function DashboardPage() {
                   </div>
                   <CardDescription className="flex flex-wrap items-center gap-2">
                     <span>{device.child.displayName}</span>
+                    <span className="text-muted-foreground">
+                      · Agent v{device.agentVersion ?? "?"}
+                    </span>
                     {device.isLocked && <Badge variant="secondary">Locked</Badge>}
                     {effectiveAdminLock && (
                       <Badge variant="destructive">Locked down</Badge>
