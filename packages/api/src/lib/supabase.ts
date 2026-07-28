@@ -58,13 +58,37 @@ export async function broadcastToDevice(
   }
 
   const supabase = getSupabaseAdmin();
-  const channel = supabase.channel(`device:${deviceId}`);
-  await channel.send({
-    type: "broadcast",
-    event: "warden",
-    payload: event,
-  });
-  await supabase.removeChannel(channel);
+  const channel = supabase.channel(getDeviceChannelName(deviceId));
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`Timed out subscribing to ${getDeviceChannelName(deviceId)}`));
+      }, 5000);
+
+      channel.subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          clearTimeout(timeout);
+          resolve();
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          clearTimeout(timeout);
+          reject(new Error(`Failed subscribing to ${getDeviceChannelName(deviceId)}: ${status}`));
+        }
+      });
+    });
+
+    await channel.send({
+      type: "broadcast",
+      event: "warden",
+      payload: event,
+    });
+  } finally {
+    await supabase.removeChannel(channel);
+  }
 }
 
 export async function cleanupExpiredSnapshots(): Promise<number> {

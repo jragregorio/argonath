@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useFamilyRealtime } from "@/lib/realtime";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
@@ -22,15 +23,49 @@ export default function DashboardPage() {
     refetchInterval: 5000,
   });
   const { data: pendingRequests } = trpc.extension.listPending.useQuery();
+  const [pendingLocks, setPendingLocks] = useState<Record<string, boolean | undefined>>({});
   const setAdminLock = trpc.device.setAdminLock.useMutation({
-    onMutate: async ({ deviceId, locked }) =>
-      optimisticAdminLock(utils, deviceId, locked),
-    onError: (_err, _vars, context) => rollbackAdminLock(utils, context),
+    onMutate: async ({ deviceId, locked }) => {
+      setPendingLocks((prev) => ({ ...prev, [deviceId]: locked }));
+      return optimisticAdminLock(utils, deviceId, locked);
+    },
+    onError: (_err, vars, context) => {
+      rollbackAdminLock(utils, context);
+      setPendingLocks((prev) => {
+        const next = { ...prev };
+        delete next[vars.deviceId];
+        return next;
+      });
+    },
     onSettled: () => {
       void utils.device.list.invalidate();
       void utils.children.list.invalidate();
     },
   });
+
+  useEffect(() => {
+    if (!devices?.length) return;
+    setPendingLocks((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      for (const device of devices) {
+        const pending = prev[device.id];
+        if (pending === undefined) continue;
+
+        const confirmed = pending
+          ? device.adminLock && device.isLocked
+          : !device.adminLock && !device.isLocked;
+
+        if (confirmed) {
+          delete next[device.id];
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [devices]);
 
   const deviceIds = devices?.map((d) => d.id) ?? [];
 
@@ -150,7 +185,12 @@ export default function DashboardPage() {
         <h2 className="text-xl font-semibold mb-4">Devices</h2>
         {devices && devices.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {devices.map((device) => (
+            {devices.map((device) => {
+              const pendingLock = pendingLocks[device.id];
+              const effectiveAdminLock =
+                pendingLock !== undefined ? pendingLock : device.adminLock;
+
+              return (
               <Card key={device.id}>
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -165,13 +205,18 @@ export default function DashboardPage() {
                   <CardDescription className="flex flex-wrap items-center gap-2">
                     <span>{device.child.displayName}</span>
                     {device.isLocked && <Badge variant="secondary">Locked</Badge>}
-                    {device.adminLock && (
+                    {effectiveAdminLock && (
                       <Badge variant="destructive">Locked down</Badge>
+                    )}
+                    {pendingLock !== undefined && (
+                      <Badge variant="secondary">
+                        {pendingLock ? "Sending lock..." : "Waiting for unlock..."}
+                      </Badge>
                     )}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-wrap items-center gap-3">
-                  {device.adminLock ? (
+                  {effectiveAdminLock ? (
                     <Button
                       variant="outline"
                       size="sm"
@@ -214,7 +259,8 @@ export default function DashboardPage() {
                   </Link>
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <Card>

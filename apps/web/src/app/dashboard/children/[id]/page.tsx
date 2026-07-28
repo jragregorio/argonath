@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useFamilyRealtime } from "@/lib/realtime";
@@ -92,14 +92,26 @@ export default function ChildDetailPage() {
     },
   });
   const setAdminLock = trpc.device.setAdminLock.useMutation({
-    onMutate: async ({ deviceId, locked }) =>
-      optimisticAdminLock(utils, deviceId, locked, childId),
-    onError: (_err, _vars, context) => rollbackAdminLock(utils, context),
+    onMutate: async ({ deviceId, locked }) => {
+      setPendingLocks((prev) => ({ ...prev, [deviceId]: locked }));
+      return optimisticAdminLock(utils, deviceId, locked, childId);
+    },
+    onError: (_err, vars, context) => {
+      rollbackAdminLock(utils, context);
+      setPendingLocks((prev) => {
+        const next = { ...prev };
+        delete next[vars.deviceId];
+        return next;
+      });
+    },
     onSettled: () => {
       void utils.children.get.invalidate({ childId });
       void utils.device.list.invalidate();
     },
   });
+  const [pendingLocks, setPendingLocks] = useState<
+    Record<string, boolean | undefined>
+  >({});
   const [captureFeedback, setCaptureFeedback] = useState<
     Record<string, string>
   >({});
@@ -159,6 +171,30 @@ export default function ChildDetailPage() {
   const currentWindows =
     allowedWindows ?? (policy?.allowedWindows as AllowedWindow[]) ?? [];
   const currentActive = isActive ?? policy?.isActive ?? true;
+
+  useEffect(() => {
+    if (!child?.devices.length) return;
+    setPendingLocks((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      for (const device of child.devices) {
+        const pending = prev[device.id];
+        if (pending === undefined) continue;
+
+        const confirmed = pending
+          ? device.adminLock && device.isLocked
+          : !device.adminLock && !device.isLocked;
+
+        if (confirmed) {
+          delete next[device.id];
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [child?.devices]);
 
   const deviceIds = child?.devices.map((d) => d.id) ?? [];
   useFamilyRealtime(deviceIds, (event) => {
@@ -495,7 +531,12 @@ export default function ChildDetailPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {child.devices.map((device) => (
+            {child.devices.map((device) => {
+              const pendingLock = pendingLocks[device.id];
+              const effectiveAdminLock =
+                pendingLock !== undefined ? pendingLock : device.adminLock;
+
+              return (
               <div
                 key={device.id}
                 className="flex flex-col gap-3 p-3 rounded-lg border border-border"
@@ -568,14 +609,19 @@ export default function ChildDetailPage() {
                     <Badge variant={device.isOnline ? "success" : "secondary"}>
                       {device.isOnline ? "Online" : "Offline"}
                     </Badge>
-                    {device.adminLock && (
+                    {effectiveAdminLock && (
                       <Badge variant="destructive">Locked down</Badge>
+                    )}
+                    {pendingLock !== undefined && (
+                      <Badge variant="secondary">
+                        {pendingLock ? "Sending lock..." : "Waiting for unlock..."}
+                      </Badge>
                     )}
                   </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {device.adminLock ? (
+                  {effectiveAdminLock ? (
                     <Button
                       variant="outline"
                       size="sm"
@@ -661,7 +707,8 @@ export default function ChildDetailPage() {
                   </p>
                 )}
               </div>
-            ))}
+              );
+            })}
 
             {pairingCode ? (
               <div className="p-4 rounded-lg bg-primary/10 border border-primary/30 text-center">
