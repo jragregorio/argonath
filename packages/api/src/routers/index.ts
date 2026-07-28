@@ -109,6 +109,14 @@ function getAgentBootstrapConfig() {
   };
 }
 
+function toFamilyClientView<T extends { parentPin?: string | null }>(family: T) {
+  const { parentPin, ...rest } = family;
+  return {
+    ...rest,
+    hasParentPin: Boolean(parentPin && parentPin.length > 0),
+  };
+}
+
 const allowedWindowSchema = z.object({
   day: z.number().min(1).max(7),
   start: z.string().regex(/^\d{2}:\d{2}$/),
@@ -117,12 +125,12 @@ const allowedWindowSchema = z.object({
 
 export const familyRouter = router({
   get: protectedProcedure.query(async ({ ctx }) => {
-    return getFamilyForUser(ctx);
+    return toFamilyClientView(await getFamilyForUser(ctx));
   }),
 
   /** @deprecated Use `get` — kept for existing clients during the auth migration */
   getOrCreate: protectedProcedure.query(async ({ ctx }) => {
-    return getFamilyForUser(ctx);
+    return toFamilyClientView(await getFamilyForUser(ctx));
   }),
 
   rename: adminProcedure
@@ -136,7 +144,7 @@ export const familyRouter = router({
       await logAudit(family.id, ctx.userId, "family_renamed", {
         name: input.name,
       });
-      return updated;
+      return toFamilyClientView(updated);
     }),
 
   updatePin: adminProcedure
@@ -144,10 +152,11 @@ export const familyRouter = router({
     .mutation(async ({ ctx, input }) => {
       const family = await getFamilyForUser(ctx);
       await logAudit(family.id, ctx.userId, "pin_updated");
-      return prisma.family.update({
+      const updated = await prisma.family.update({
         where: { id: family.id },
         data: { parentPin: input.pin },
       });
+      return toFamilyClientView(updated);
     }),
 });
 

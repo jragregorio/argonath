@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Check } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,7 +69,10 @@ export default function SettingsPage() {
     },
   });
   const updatePin = trpc.family.updatePin.useMutation({
-    onSuccess: () => setPin(""),
+    onSuccess: () => {
+      setPin("");
+      utils.family.get.invalidate();
+    },
   });
 
   const isAdmin = me?.role === "Admin";
@@ -331,10 +335,28 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Parent PIN</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            Parent PIN
+            {family?.hasParentPin ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400"
+                title="PIN is set"
+              >
+                <Check className="w-3.5 h-3.5" />
+                Set
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                Not set
+              </span>
+            )}
+          </CardTitle>
           <CardDescription>
             Required to exit the Windows agent from the tray menu or lock screen
             (&quot;Shut down Warden&quot;). Synced to agents on the next heartbeat.
+            {family?.hasParentPin
+              ? " A PIN is active on paired devices — enter a new one below to change it."
+              : " No PIN yet — set one so parents can shut down Warden on the device."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -352,17 +374,24 @@ export default function SettingsPage() {
                 type="password"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
-                placeholder={family?.parentPin ? "••••" : "Set a PIN"}
+                placeholder={
+                  family?.hasParentPin ? "Enter a new PIN to change it" : "Enter a PIN"
+                }
                 className="mt-1"
                 minLength={4}
                 maxLength={8}
+                autoComplete="new-password"
               />
             </div>
             <Button type="submit" disabled={updatePin.isPending || pin.length < 4}>
-              {updatePin.isPending ? "Saving..." : "Save PIN"}
+              {updatePin.isPending
+                ? "Saving..."
+                : family?.hasParentPin
+                  ? "Update PIN"
+                  : "Set PIN"}
             </Button>
             {updatePin.isSuccess && (
-              <p className="text-sm text-green-400">PIN updated successfully</p>
+              <p className="text-sm text-green-400">PIN saved successfully</p>
             )}
             {updatePin.isError && (
               <p className="text-sm text-destructive">
