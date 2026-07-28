@@ -10,7 +10,10 @@ import { Camera, Video } from "lucide-react";
 
 export default function SnapshotsPage() {
   const utils = trpc.useUtils();
-  const { data: snapshots, isLoading } = trpc.snapshot.list.useQuery({});
+  const { data: snapshots, isLoading } = trpc.snapshot.list.useQuery(
+    {},
+    { refetchInterval: 5000 }
+  );
   const { data: devices } = trpc.device.list.useQuery();
 
   const deviceIds = devices?.map((d) => d.id) ?? [];

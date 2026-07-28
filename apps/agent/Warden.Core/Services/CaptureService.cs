@@ -1,11 +1,34 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
 
 namespace Warden.Core.Services;
 
 public class CaptureService
 {
+    private const int SRCCOPY = 0x00CC0020;
+    private const int CAPTUREBLT = 0x40000000;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetDC(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDc);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool BitBlt(
+        IntPtr hdcDest,
+        int xDest,
+        int yDest,
+        int width,
+        int height,
+        IntPtr hdcSrc,
+        int xSrc,
+        int ySrc,
+        int rop
+    );
+
     public static byte[]? CaptureScreen()
     {
         try
@@ -16,7 +39,6 @@ public class CaptureService
                 return null;
             }
 
-            // Capture the full virtual desktop (all monitors), not just the primary.
             var left = screens.Min(s => s.Bounds.Left);
             var top = screens.Min(s => s.Bounds.Top);
             var right = screens.Max(s => s.Bounds.Right);
@@ -30,44 +52,30 @@ public class CaptureService
             }
 
             using var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
-            using (var graphics = Graphics.FromImage(bitmap))
+            var captured = TryBitBltCapture(bitmap, left, top, width, height);
+            if (!captured)
             {
+                using var graphics = Graphics.FromImage(bitmap);
                 graphics.Clear(Color.Black);
-
-                // Copy each monitor into the virtual canvas. This is more reliable than
-                // one big CopyFromScreen across mixed-DPI / multi-monitor layouts.
                 foreach (var screen in screens)
                 {
                     var bounds = screen.Bounds;
-                    using var screenBitmap = new Bitmap(
-                        bounds.Width,
-                        bounds.Height,
-                        PixelFormat.Format32bppArgb
-                    );
-                    using (var screenGraphics = Graphics.FromImage(screenBitmap))
-                    {
-                        screenGraphics.CopyFromScreen(
-                            bounds.Left,
-                            bounds.Top,
-                            0,
-                            0,
-                            bounds.Size,
-                            CopyPixelOperation.SourceCopy
-                        );
-                    }
-
-                    graphics.DrawImage(
-                        screenBitmap,
+                    graphics.CopyFromScreen(
+                        bounds.Left,
+                        bounds.Top,
                         bounds.Left - left,
                         bounds.Top - top,
-                        bounds.Width,
-                        bounds.Height
+                        bounds.Size,
+                        CopyPixelOperation.SourceCopy
                     );
                 }
             }
 
             using var stream = new MemoryStream();
-            var encoder = GetJpegEncoder();
+            var encoder = ImageCodecInfo
+                .GetImageEncoders()
+                .FirstOrDefault(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
+
             if (encoder != null)
             {
                 using var encoderParams = new EncoderParameters(1);
@@ -80,7 +88,7 @@ public class CaptureService
             }
 
             var bytes = stream.ToArray();
-            return bytes.Length > 0 ? bytes : null;
+            return bytes.Length > 1024 ? bytes : null;
         }
         catch
         {
@@ -88,20 +96,74 @@ public class CaptureService
         }
     }
 
-    public static async Task<bool> UploadCaptureAsync(string uploadUrl, byte[] imageData)
+    private static bool TryBitBltCapture(Bitmap bitmap, int left, int top, int width, int height)
     {
-        using var client = new HttpClient();
-        using var content = new ByteArrayContent(imageData);
-        content.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.Clear(Color.Black);
+        var hdcDest = graphics.GetHdc();
+        var hdcSrc = GetDC(IntPtr.Zero);
 
-        var response = await client.PutAsync(uploadUrl, content);
-        return response.IsSuccessStatusCode;
+        try
+        {
+            return BitBlt(
+                hdcDest,
+                0,
+                0,
+                width,
+                height,
+                hdcSrc,
+                left,
+                top,
+                SRCCOPY | CAPTUREBLT
+            );
+        }
+        finally
+        {
+            graphics.ReleaseHdc(hdcDest);
+            ReleaseDC(IntPtr.Zero, hdcSrc);
+        }
     }
 
-    private static ImageCodecInfo? GetJpegEncoder()
+    public static async Task<(bool ok, string? error)> UploadCaptureAsync(
+        string uploadUrl,
+        byte[] imageData,
+        string? token = null
+    )
     {
-        return ImageCodecInfo
-            .GetImageEncoders()
-            .FirstOrDefault(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+            using var content = new ByteArrayContent(imageData);
+            content.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+
+            using var request = new HttpRequestMessage(HttpMethod.Put, uploadUrl)
+            {
+                Content = content
+            };
+            request.Headers.TryAddWithoutValidation("x-upsert", "true");
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+            }
+
+            var response = await client.SendAsync(request);
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, null);
+            }
+
+            var body = await response.Content.ReadAsStringAsync();
+            return (
+                false,
+                $"Upload failed ({(int)response.StatusCode}): {Truncate(body, 200)}"
+            );
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
     }
+
+    private static string Truncate(string value, int max) =>
+        value.Length <= max ? value : value[..max];
 }

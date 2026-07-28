@@ -90,9 +90,7 @@ static class Program
             UpdateTrayStatusText();
         };
 
-        // Screen capture must run on the WPF UI (STA) thread. Realtime events arrive on a
-        // background thread; capturing there often fails or returns a blank image when the
-        // status window is minimized to the tray.
+        // Screen capture must run on the WPF UI (STA) thread. Realtime arrives off-thread.
         _engine.CaptureRequested += (payload, type) =>
         {
             _ = app.Dispatcher.InvokeAsync(async () =>
@@ -148,6 +146,12 @@ static class Program
                     await _engine.SendHeartbeatAsync();
                     _lastHeartbeatAt = DateTime.UtcNow;
                     UpdateTrayStatusText();
+
+                    // HTTP fallback when realtime capture events are missed.
+                    await app.Dispatcher.InvokeAsync(async () =>
+                    {
+                        await _engine.ProcessPendingCapturesAsync();
+                    });
                 }
                 catch (DeviceUnpairedException ex)
                 {

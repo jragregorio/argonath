@@ -182,7 +182,7 @@ public class WardenApiClient
         return response.IsSuccessStatusCode;
     }
 
-    public async Task<bool> ConfirmSnapshotAsync(string snapshotId, bool success, string? error = null)
+    public async Task ConfirmSnapshotAsync(string snapshotId, bool success, string? error = null)
     {
         SetDeviceTokenHeader();
         var config = _configStore.Load();
@@ -193,6 +193,24 @@ public class WardenApiClient
         );
 
         HandleUnpairedResponse(response);
-        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<List<PendingCapture>> GetPendingCapturesAsync()
+    {
+        SetDeviceTokenHeader();
+        var config = _configStore.Load();
+
+        var response = await _http.GetAsync(
+            $"{config.ApiBaseUrl}/api/agent?action=pendingCaptures"
+        );
+
+        HandleUnpairedResponse(response);
+        if (!response.IsSuccessStatusCode)
+        {
+            return [];
+        }
+
+        return await response.Content.ReadFromJsonAsync<List<PendingCapture>>(JsonOptions)
+            ?? [];
     }
 }

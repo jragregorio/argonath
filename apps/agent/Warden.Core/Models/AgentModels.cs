@@ -88,6 +88,16 @@ public class CapturePayload
 {
     public string SnapshotId { get; set; } = "";
     public string UploadUrl { get; set; } = "";
+    public string? Token { get; set; }
+    public string StorageKey { get; set; } = "";
+}
+
+public class PendingCapture
+{
+    public string SnapshotId { get; set; } = "";
+    public string Type { get; set; } = "";
+    public string UploadUrl { get; set; } = "";
+    public string? Token { get; set; }
     public string StorageKey { get; set; } = "";
 }
 

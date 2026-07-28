@@ -9,7 +9,8 @@ type AgentProcedure =
   | "parentUnlock"
   | "confirmSnapshot"
   | "setLocked"
-  | "clearAdminLock";
+  | "clearAdminLock"
+  | "pendingCaptures";
 
 async function callAgentProcedure(
   procedure: AgentProcedure,
@@ -26,6 +27,8 @@ async function callAgentProcedure(
       return caller.agent.heartbeat(input as Parameters<typeof caller.agent.heartbeat>[0]);
     case "getPolicy":
       return caller.agent.getPolicy();
+    case "pendingCaptures":
+      return caller.agent.pendingCaptures();
     case "requestExtension":
       return caller.agent.requestExtension(
         input as Parameters<typeof caller.agent.requestExtension>[0]
@@ -117,6 +120,11 @@ export async function GET(request: NextRequest) {
     const action = request.nextUrl.searchParams.get("action");
     if (action === "policy") {
       const result = await callAgentProcedure("getPolicy", {}, deviceToken);
+      return NextResponse.json(result);
+    }
+
+    if (action === "pendingCaptures") {
+      const result = await callAgentProcedure("pendingCaptures", {}, deviceToken);
       return NextResponse.json(result);
     }
 

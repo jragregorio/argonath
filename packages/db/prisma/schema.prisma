@@ -185,6 +185,8 @@ model Snapshot {
   deviceId    String
   type        String
   storageKey  String
+  /// pending | ready | failed
+  status      String   @default("ready")
   requestedBy String
   capturedAt  DateTime @default(now())
   expiresAt   DateTime?
@@ -194,6 +196,7 @@ model Snapshot {
 
   @@index([childId])
   @@index([deviceId])
+  @@index([deviceId, status])
   @@index([expiresAt])
 }
 

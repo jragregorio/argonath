@@ -544,6 +544,7 @@ export const snapshotRouter = router({
         where: {
           child: { familyId: family.id },
           ...(input.childId ? { childId: input.childId } : {}),
+          status: "ready",
           OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
         },
         include: {
@@ -640,6 +641,7 @@ export const snapshotRouter = router({
           deviceId: device.id,
           type: input.type,
           storageKey,
+          status: "pending",
           requestedBy: ctx.userId,
           expiresAt,
         },
@@ -650,22 +652,33 @@ export const snapshotRouter = router({
         .createSignedUploadUrl(storageKey);
 
       if (error || !uploadData) {
+        await prisma.snapshot.update({
+          where: { id: snapshot.id },
+          data: { status: "failed" },
+        });
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to create upload URL",
         });
       }
 
-      void broadcastToDevice(device.id, {
-        type: input.type === "screen" ? "capture:screen" : "capture:webcam",
-        deviceId: device.id,
-        payload: {
-          snapshotId: snapshot.id,
-          uploadUrl: uploadData.signedUrl,
-          storageKey,
-        },
-        timestamp: new Date().toISOString(),
-      }).catch(() => {});
+      // Prefer awaiting broadcast so the agent gets the command promptly.
+      // Pending-capture polling remains as a reliable fallback.
+      try {
+        await broadcastToDevice(device.id, {
+          type: input.type === "screen" ? "capture:screen" : "capture:webcam",
+          deviceId: device.id,
+          payload: {
+            snapshotId: snapshot.id,
+            uploadUrl: uploadData.signedUrl,
+            token: uploadData.token,
+            storageKey,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      } catch {
+        // Agent will pick this up via pendingCaptures polling.
+      }
 
       await logAudit(family.id, ctx.userId, "capture_requested", {
         deviceId: device.id,
@@ -907,9 +920,17 @@ export const agentRouter = router({
       }
 
       if (!input.success) {
-        await prisma.snapshot.delete({ where: { id: snapshot.id } });
+        await prisma.snapshot.update({
+          where: { id: snapshot.id },
+          data: { status: "failed" },
+        });
         return { ok: false, error: input.errorMessage };
       }
+
+      await prisma.snapshot.update({
+        where: { id: snapshot.id },
+        data: { status: "ready" },
+      });
 
       await broadcastToDevice(ctx.device.id, {
         type: "snapshot:ready",
@@ -920,6 +941,45 @@ export const agentRouter = router({
 
       return { ok: true };
     }),
+
+  pendingCaptures: agentProcedure.query(async ({ ctx }) => {
+    const pending = await prisma.snapshot.findMany({
+      where: {
+        deviceId: ctx.device.id,
+        status: "pending",
+        capturedAt: { gt: new Date(Date.now() - 15 * 60 * 1000) },
+      },
+      orderBy: { capturedAt: "asc" },
+      take: 5,
+    });
+
+    if (pending.length === 0 || !isSupabaseConfigured()) {
+      return [];
+    }
+
+    const supabase = getSupabaseAdmin();
+    const results = [];
+
+    for (const snapshot of pending) {
+      const { data: uploadData, error } = await supabase.storage
+        .from("snapshots")
+        .createSignedUploadUrl(snapshot.storageKey);
+
+      if (error || !uploadData) {
+        continue;
+      }
+
+      results.push({
+        snapshotId: snapshot.id,
+        type: snapshot.type === "webcam" ? "capture:webcam" : "capture:screen",
+        uploadUrl: uploadData.signedUrl,
+        token: uploadData.token,
+        storageKey: snapshot.storageKey,
+      });
+    }
+
+    return results;
+  }),
 
   setLocked: agentProcedure
     .input(z.object({ isLocked: z.boolean() }))

@@ -20,6 +20,9 @@ public class EnforcementEngine
         PropertyNameCaseInsensitive = true
     };
 
+    private readonly HashSet<string> _captureInFlight = new();
+    private readonly object _captureLock = new();
+
     public event Action<PolicyEvaluation>? PolicyChanged;
     public event Action? LockRequired;
     public event Action? UnlockRequired;
@@ -227,34 +230,78 @@ public class EnforcementEngine
 
     public async Task HandleCaptureAsync(CapturePayload payload, string type)
     {
-        byte[]? imageData = null;
-        string? error = null;
+        lock (_captureLock)
+        {
+            if (!_captureInFlight.Add(payload.SnapshotId))
+            {
+                return;
+            }
+        }
 
         try
         {
-            if (type == "capture:screen")
+            byte[]? imageData = null;
+            string? error = null;
+
+            try
             {
-                imageData = CaptureService.CaptureScreen();
-                if (imageData == null) error = "Screen capture failed";
+                if (type == "capture:screen" || type == "screen")
+                {
+                    imageData = CaptureService.CaptureScreen();
+                    if (imageData == null) error = "Screen capture failed";
+                }
+                else
+                {
+                    error = "Webcam capture not available";
+                }
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+            }
+
+            if (imageData != null)
+            {
+                var (uploaded, uploadError) = await CaptureService.UploadCaptureAsync(
+                    payload.UploadUrl,
+                    imageData,
+                    payload.Token
+                );
+                await _api.ConfirmSnapshotAsync(
+                    payload.SnapshotId,
+                    uploaded,
+                    uploaded ? null : uploadError ?? "Upload failed"
+                );
             }
             else
             {
-                error = "Webcam capture not available";
+                await _api.ConfirmSnapshotAsync(payload.SnapshotId, false, error);
             }
         }
-        catch (Exception ex)
+        finally
         {
-            error = ex.Message;
+            lock (_captureLock)
+            {
+                _captureInFlight.Remove(payload.SnapshotId);
+            }
         }
+    }
 
-        if (imageData != null)
+    public async Task ProcessPendingCapturesAsync()
+    {
+        var pending = await _api.GetPendingCapturesAsync();
+        foreach (var item in pending)
         {
-            var uploaded = await CaptureService.UploadCaptureAsync(payload.UploadUrl, imageData);
-            await _api.ConfirmSnapshotAsync(payload.SnapshotId, uploaded, uploaded ? null : "Upload failed");
-        }
-        else
-        {
-            await _api.ConfirmSnapshotAsync(payload.SnapshotId, false, error);
+            await HandleCaptureAsync(
+                new CapturePayload
+                {
+                    SnapshotId = item.SnapshotId,
+                    UploadUrl = item.UploadUrl,
+                    Token = item.Token,
+                    StorageKey = item.StorageKey
+                },
+                item.Type
+            );
         }
     }
 }
