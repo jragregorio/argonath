@@ -17,9 +17,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/dev-config";
 import { trpc } from "@/lib/trpc";
-import { useFamilyRealtime } from "@/lib/realtime";
+import { useNavBadges } from "@/lib/family-realtime";
 import { APP_VERSION } from "@warden/shared";
-import { POLL_BACKGROUND_MS, POLL_LIVE_MS } from "@/lib/query-defaults";
 
 const devAuthBypassEnabled =
   process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
@@ -42,35 +41,6 @@ const primaryTabs = navItems.filter(
 
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
-function useNavBadges() {
-  const utils = trpc.useUtils();
-  const { data: badges } = trpc.dashboard.navBadges.useQuery(undefined, {
-    refetchInterval: POLL_LIVE_MS,
-  });
-  const { data: devices } = trpc.device.list.useQuery(undefined, {
-    refetchInterval: POLL_BACKGROUND_MS,
-  });
-  const deviceIds = devices?.map((d) => d.id) ?? [];
-
-  useFamilyRealtime(deviceIds, (event) => {
-    if (
-      event.type === "snapshot:ready" ||
-      event.type === "snapshot:failed" ||
-      event.type.startsWith("extension:")
-    ) {
-      utils.dashboard.navBadges.invalidate();
-    }
-  });
-
-  const badgeFor = (href: string): number => {
-    if (href === "/dashboard/extensions") return badges?.pendingRequests ?? 0;
-    if (href === "/dashboard/snapshots") return badges?.unviewedSnapshots ?? 0;
-    return 0;
-  };
-
-  return { badgeFor };
-}
 
 function isNavActive(pathname: string, href: string) {
   return (

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useFamilyRealtime } from "@/lib/realtime";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -193,15 +192,6 @@ export default function DashboardPage() {
       return changed ? next : prev;
     });
   }, [overview]);
-
-  const deviceIds = devices.map((d) => d.id);
-
-  useFamilyRealtime(deviceIds, () => {
-    utils.dashboard.overview.invalidate();
-    utils.dashboard.activity.invalidate();
-    utils.extension.listPending.invalidate();
-    utils.dashboard.navBadges.invalidate();
-  });
 
   if (isLoading) {
     return (

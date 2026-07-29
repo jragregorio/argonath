@@ -1,7 +1,6 @@
 "use client";
 
 import { trpc } from "@/lib/trpc";
-import { useFamilyRealtime } from "@/lib/realtime";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,9 +31,6 @@ export default function ExtensionsPage() {
       { limit: 50 },
       { refetchInterval: POLL_BACKGROUND_MS }
     );
-  const { data: devices } = trpc.device.list.useQuery(undefined, {
-    refetchInterval: POLL_BACKGROUND_MS,
-  });
 
   const resolve = trpc.extension.resolve.useMutation({
     onSuccess: () => {
@@ -45,14 +41,6 @@ export default function ExtensionsPage() {
       utils.dashboard.overview.invalidate();
       utils.dashboard.activity.invalidate();
     },
-  });
-
-  const deviceIds = devices?.map((d) => d.id) ?? [];
-  useFamilyRealtime(deviceIds, () => {
-    utils.extension.listPending.invalidate();
-    utils.extension.listHistory.invalidate();
-    utils.dashboard.navBadges.invalidate();
-    utils.dashboard.overview.invalidate();
   });
 
   const isLoading = pendingLoading || historyLoading;

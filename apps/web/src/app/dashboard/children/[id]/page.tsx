@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useFamilyRealtimeEvent } from "@/lib/family-realtime";
 import { trpc } from "@/lib/trpc";
-import { useFamilyRealtime } from "@/lib/realtime";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -526,7 +526,9 @@ export default function ChildDetailPage() {
   }, [child?.devices]);
 
   const deviceIds = child?.devices.map((d) => d.id) ?? [];
-  useFamilyRealtime(deviceIds, (event) => {
+  useFamilyRealtimeEvent((event) => {
+    if (!deviceIds.includes(event.deviceId)) return;
+
     if (event.type === "snapshot:ready") {
       finishCaptureSuccess(event.deviceId);
     }
@@ -537,8 +539,6 @@ export default function ChildDetailPage() {
         payload?.errorMessage || "Capture failed"
       );
     }
-    void utils.children.get.invalidate({ childId });
-    void utils.policy.getEvaluation.invalidate({ childId });
   });
 
   if (isLoading) {

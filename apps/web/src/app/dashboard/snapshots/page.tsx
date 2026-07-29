@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { useFamilyRealtime } from "@/lib/realtime";
+import { useFamilyRealtimeEvent } from "@/lib/family-realtime";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -70,7 +70,6 @@ export default function SnapshotsPage() {
   const { data: snapshots, isLoading } = trpc.snapshot.list.useQuery(listInput, {
     refetchInterval: POLL_LIVE_MS,
   });
-  const { data: devices } = trpc.device.list.useQuery();
   const markAllViewed = trpc.snapshot.markAllViewed.useMutation({
     onSuccess: () => {
       utils.dashboard.navBadges.invalidate();
@@ -95,13 +94,11 @@ export default function SnapshotsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount-only
   }, []);
 
-  const deviceIds = devices?.map((d) => d.id) ?? [];
-  useFamilyRealtime(deviceIds, (event) => {
+  useFamilyRealtimeEvent((event) => {
     if (
       event.type === "snapshot:ready" ||
       event.type === "snapshot:failed"
     ) {
-      utils.snapshot.list.invalidate();
       markAllViewed.mutate();
     }
   });
