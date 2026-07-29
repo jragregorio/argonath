@@ -1,11 +1,17 @@
+import { HydrationBoundary } from "@tanstack/react-query";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { prefetchDashboardShell } from "@/lib/trpc-server";
 
-export const dynamic = "force-dynamic";
-
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <DashboardShell>{children}</DashboardShell>;
+  const state = await prefetchDashboardShell();
+
+  return (
+    <HydrationBoundary state={state ?? undefined}>
+      <DashboardShell>{children}</DashboardShell>
+    </HydrationBoundary>
+  );
 }

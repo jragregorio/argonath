@@ -63,6 +63,12 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
             // Realtime + explicit intervals handle freshness; avoid refetch storms on focus.
             refetchOnWindowFocus: false,
           },
+          dehydrate: {
+            serializeData: superjson.serialize,
+          },
+          hydrate: {
+            deserializeData: superjson.deserialize,
+          },
         },
       })
   );
