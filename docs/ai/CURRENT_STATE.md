@@ -1,38 +1,41 @@
 # Current state
 
-**Last updated:** 2026-07-29 (repository restructure in progress)
+**Last updated:** 2026-07-29 (repository restructure complete)
 
 ## Branch / git
 
-- Branch: `main`
-- Pre-restructure tip: `5f75181` (v0.4.0 attention overlays)
+- Branch: `main` (ahead of origin; not pushed unless requested)
+- Checkpoint commits from this work: see archive task record
 
-## Baseline validation (Phase 0 reconfirm)
+## Post-restructure validation (Phase 6)
 
-| Command | Result |
-|---------|--------|
-| `npx turbo typecheck` | PASS |
-| `npm test --workspace @warden/shared` | PASS (4 tests) |
-| `dotnet build apps/agent/Warden.sln` | PASS |
-| `docker compose config --quiet` | PASS |
-| `git diff --check` | PASS |
-| `npx turbo build` | PASS (recorded in audit) |
-| `npx turbo lint` | FAIL pre-existing — no ESLint config (fix in Phase 4) |
-| `prisma validate` from repo root | FAIL environmental — needs `packages/db/.env` cwd (script in Phase 4) |
+| Command | Result | Classification |
+|---------|--------|----------------|
+| `npm run typecheck` | PASS | OK |
+| `npm run lint` | PASS (exit 0; existing `<img>` / hooks warnings) | Improved vs baseline FAIL |
+| `npm run test` | PASS | OK (now wired via turbo) |
+| `npm run build` | PASS | OK |
+| `npm run check:boundaries` | PASS | New |
+| `npm run db:validate` | PASS | Fixed environmental root validate via package script |
+| `dotnet build apps/agent/Warden.sln` | PASS | OK |
+| `docker compose config --quiet` | PASS | OK |
+| `git diff --check` | PASS | OK |
 
-## Structure decision
+## Structure
 
-No app/package directory moves. Boundaries already correct. Work focuses on AI guardrails, docs, hygiene, config normalization, and `scripts/check-boundaries.mjs`.
+Application and package directories **unchanged** (ADR-0001). Added AI guardrails, docs, ignore rules, ESLint config, turbo/test/verify scripts, and `scripts/check-boundaries.mjs`. One doc move: `DEV-TESTING.md` → `docs/development/local-testing.md`.
 
-## Active work
+## Remaining non-blocking issues
 
-See [docs/work/active/repository-restructure.md](../work/active/repository-restructure.md).
-
-## Known non-blocking issues (documented, not necessarily fixed this task)
-
-- Product naming Guardian vs warden vs guardian DB
-- `@warden/db` declared on web but unused in `src/`
+- Product naming: Guardian folder vs `warden` npm vs `guardian` DB name
+- `@warden/db` declared on web for `serverExternalPackages` but unused in `src/`
 - `class-variance-authority` unused in `packages/ui` source
 - Root `scripts/*.mjs` import hoisted `@prisma/client`
 - No CI workflows yet
 - No .NET test projects
+- `next lint` deprecated toward Next 16 ESLint CLI migration
+- Lint warnings in snapshots page (`no-img-element`) and `realtime.ts` (`exhaustive-deps`) — pre-existing, not introduced
+
+## Active work
+
+None. Completed task: [docs/work/archive/repository-restructure.md](../work/archive/repository-restructure.md).
