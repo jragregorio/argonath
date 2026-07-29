@@ -19,20 +19,21 @@ public readonly record struct MonitorBounds(
 
 public class LockWindow : Window
 {
-    private static readonly SolidColorBrush BgBrush = Freeze(Color.FromRgb(15, 23, 42));
-    private static readonly SolidColorBrush TextBrush = Freeze(Colors.White);
-    private static readonly SolidColorBrush MutedBrush = Freeze(Color.FromRgb(148, 163, 184));
-    private static readonly SolidColorBrush AccentBrush = Freeze(Color.FromRgb(59, 130, 246));
-    private static readonly SolidColorBrush PanelBorderBrush = Freeze(Color.FromRgb(51, 65, 85));
-    private static readonly SolidColorBrush CardBrush = Freeze(Color.FromRgb(30, 41, 59));
-    private static readonly SolidColorBrush DangerBrush = Freeze(Color.FromRgb(220, 38, 38));
-    private static readonly SolidColorBrush SuccessBrush = Freeze(Color.FromRgb(34, 197, 94));
-    private static readonly SolidColorBrush ShieldRingBrush = Freeze(Color.FromArgb(77, 56, 189, 248));
-    private static readonly SolidColorBrush ShieldFillBrush = Freeze(Color.FromArgb(38, 14, 165, 233));
-    private static readonly SolidColorBrush ShieldStrokeBrush = Freeze(Color.FromRgb(56, 189, 248));
-    private static readonly SolidColorBrush FooterBrush = Freeze(Color.FromRgb(71, 85, 105));
-    private static readonly SolidColorBrush OutlineFgBrush = Freeze(Color.FromRgb(203, 213, 225));
-    private static readonly SolidColorBrush OutlineBorderBrush = Freeze(Color.FromArgb(40, 255, 255, 255));
+    private static readonly SolidColorBrush BgBrush = Freeze(Color.FromRgb(0x1a, 0x24, 0x20));
+    private static readonly SolidColorBrush TextBrush = Freeze(Color.FromRgb(0xe0, 0xe0, 0xe0));
+    private static readonly SolidColorBrush MutedBrush = Freeze(Color.FromRgb(0xa8, 0xb0, 0xb0));
+    private static readonly SolidColorBrush AccentBrush = Freeze(Color.FromRgb(0x50, 0xc8, 0x78));
+    private static readonly SolidColorBrush AccentOnBrush = Freeze(Color.FromRgb(0x0f, 0x1a, 0x12));
+    private static readonly SolidColorBrush PanelBorderBrush = Freeze(Color.FromRgb(0x36, 0x45, 0x4f));
+    private static readonly SolidColorBrush CardBrush = Freeze(Color.FromRgb(0x24, 0x30, 0x2c));
+    private static readonly SolidColorBrush DangerBrush = Freeze(Color.FromRgb(0xb5, 0x4a, 0x3f));
+    private static readonly SolidColorBrush SuccessBrush = Freeze(Color.FromRgb(0x50, 0xc8, 0x78));
+    private static readonly SolidColorBrush ShieldRingBrush = Freeze(Color.FromArgb(102, 0xc5, 0xa0, 0x59));
+    private static readonly SolidColorBrush ShieldFillBrush = Freeze(Color.FromArgb(38, 0x50, 0xc8, 0x78));
+    private static readonly SolidColorBrush ShieldStrokeBrush = Freeze(Color.FromRgb(0xc5, 0xa0, 0x59));
+    private static readonly SolidColorBrush FooterBrush = Freeze(Color.FromRgb(0x6e, 0x78, 0x72));
+    private static readonly SolidColorBrush OutlineFgBrush = Freeze(Color.FromRgb(0xe0, 0xe0, 0xe0));
+    private static readonly SolidColorBrush OutlineBorderBrush = Freeze(Color.FromArgb(64, 0x36, 0x45, 0x4f));
 
     private readonly TextBlock? _statusText;
     private readonly TextBlock? _timeText;
@@ -402,7 +403,7 @@ public class LockWindow : Window
             FontSize = 14,
             FontWeight = FontWeights.SemiBold,
             Background = background,
-            Foreground = TextBrush,
+            Foreground = ReferenceEquals(background, AccentBrush) ? AccentOnBrush : TextBrush,
             BorderThickness = new Thickness(0),
             Cursor = Cursors.Hand,
             Template = CreateRoundedButtonTemplate()

@@ -255,7 +255,7 @@ public sealed class AttentionWindow : Window
             if (primary)
             {
                 btn.Background = UiTheme.AccentBrush;
-                btn.Foreground = UiTheme.TextBrush;
+                btn.Foreground = UiTheme.AccentOnBrush;
                 btn.BorderBrush = System.Windows.Media.Brushes.Transparent;
                 btn.BorderThickness = new Thickness(0);
             }

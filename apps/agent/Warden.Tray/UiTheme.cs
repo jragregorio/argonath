@@ -16,14 +16,17 @@ namespace Warden.Tray;
 
 internal static class UiTheme
 {
-    public static readonly WpfColor Bg = WpfColor.FromRgb(15, 23, 42);
-    public static readonly WpfColor Card = WpfColor.FromRgb(30, 41, 59);
-    public static readonly WpfColor BorderColor = WpfColor.FromRgb(51, 65, 85);
-    public static readonly WpfColor TextPrimary = Colors.White;
-    public static readonly WpfColor TextMuted = WpfColor.FromRgb(148, 163, 184);
-    public static readonly WpfColor Accent = WpfColor.FromRgb(59, 130, 246);
-    public static readonly WpfColor Danger = WpfColor.FromRgb(239, 68, 68);
-    public static readonly WpfColor Success = WpfColor.FromRgb(34, 197, 94);
+    // Maiev palette — aligned with apps/web globals.css
+    public static readonly WpfColor Bg = WpfColor.FromRgb(0x1a, 0x24, 0x20);
+    public static readonly WpfColor Card = WpfColor.FromRgb(0x24, 0x30, 0x2c);
+    public static readonly WpfColor BorderColor = WpfColor.FromRgb(0x36, 0x45, 0x4f);
+    public static readonly WpfColor TextPrimary = WpfColor.FromRgb(0xe0, 0xe0, 0xe0);
+    public static readonly WpfColor TextMuted = WpfColor.FromRgb(0xa8, 0xb0, 0xb0);
+    public static readonly WpfColor Accent = WpfColor.FromRgb(0x50, 0xc8, 0x78);
+    public static readonly WpfColor AccentOn = WpfColor.FromRgb(0x0f, 0x1a, 0x12);
+    public static readonly WpfColor Gold = WpfColor.FromRgb(0xc5, 0xa0, 0x59);
+    public static readonly WpfColor Danger = WpfColor.FromRgb(0xb5, 0x4a, 0x3f);
+    public static readonly WpfColor Success = WpfColor.FromRgb(0x50, 0xc8, 0x78);
 
     public const double ButtonRadius = 14;
     public const double CardRadius = 12;
@@ -41,6 +44,8 @@ internal static class UiTheme
     public static readonly SolidColorBrush TextBrush = Brush(TextPrimary);
     public static readonly SolidColorBrush MutedBrush = Brush(TextMuted);
     public static readonly SolidColorBrush AccentBrush = Brush(Accent);
+    public static readonly SolidColorBrush AccentOnBrush = Brush(AccentOn);
+    public static readonly SolidColorBrush GoldBrush = Brush(Gold);
     public static readonly SolidColorBrush DangerBrush = Brush(Danger);
     public static readonly SolidColorBrush SuccessBrush = Brush(Success);
 
@@ -103,7 +108,7 @@ internal static class UiTheme
         };
 
     public static WpfButton PrimaryButton(string content) =>
-        CreateRoundedButton(content, AccentBrush, TextBrush, null);
+        CreateRoundedButton(content, AccentBrush, AccentOnBrush, null);
 
     public static WpfButton SecondaryButton(string content) =>
         CreateRoundedButton(content, CardBrush, TextBrush, BorderBrush);
