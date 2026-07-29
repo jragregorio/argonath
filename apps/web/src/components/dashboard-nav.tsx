@@ -402,16 +402,27 @@ export function DashboardNav() {
 
   return (
     <>
-      {/* Mobile top bar */}
+      {/* Mobile top bar — fixed (sticky fails under overflow-x-hidden ancestors) */}
       <div
-        className="md:hidden sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-border bg-background px-4 py-3"
-        style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
+        className="md:hidden fixed top-0 inset-x-0 z-40 flex items-center justify-between gap-3 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90 px-4"
+        style={{
+          paddingTop: "env(safe-area-inset-top, 0px)",
+          height: "calc(3.5rem + env(safe-area-inset-top, 0px))",
+        }}
       >
         <Brand compact />
         <span className="text-sm font-medium text-muted-foreground truncate">
           {pageTitle(pathname)}
         </span>
       </div>
+      {/* Reserves space so content starts below the fixed top bar */}
+      <div
+        className="md:hidden shrink-0"
+        style={{
+          height: "calc(3.5rem + env(safe-area-inset-top, 0px))",
+        }}
+        aria-hidden
+      />
 
       <MobileBottomTabs
         moreOpen={moreOpen}
