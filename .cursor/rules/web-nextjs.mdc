@@ -1,0 +1,13 @@
+---
+description: Next.js web app conventions
+globs: apps/web/**
+alwaysApply: false
+---
+
+# apps/web
+
+- App Router under `src/app`. Alias `@/*` → `src/*`.
+- UI components: `@/components/ui/*`; use `cn` from `@warden/ui`.
+- Do not import `@warden/db` or `@prisma/client` in `src/`.
+- Keep `vercel.json` `cd ../..` paths valid — do not move this app.
+- Lint: `.eslintrc.json` + `next lint`. Env: `.env.local` from `.env.example`.

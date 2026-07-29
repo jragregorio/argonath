@@ -1,0 +1,14 @@
+---
+description: Warden monorepo overview and non-negotiables
+alwaysApply: true
+---
+
+# Repo overview
+
+- Product: parental screen-time control (web dashboard + Windows agent).
+- npm name: `warden` / `@warden/*`. Folder may be `Guardian`. Do not rename unless asked.
+- Apps: `apps/web` (Next.js/Vercel), `apps/agent` (.NET `Warden.Tray`).
+- Packages: `api`, `db`, `shared`, `ui` under `packages/`.
+- Read `AGENTS.md`, `docs/ai/PROJECT_CONTEXT.md`, and any `docs/work/active/*` before multi-step work.
+- Never commit or print secrets from `.env` / `.env.local`.
+- Prefer existing scripts: `npm run verify`, `npm run check:boundaries`.

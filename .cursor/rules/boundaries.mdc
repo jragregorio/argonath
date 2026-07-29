@@ -1,0 +1,14 @@
+---
+description: Enforce apps vs packages and .NET dependency direction
+alwaysApply: true
+---
+
+# Boundaries
+
+- Packages must not import `apps/*`.
+- No cross-app source imports between `apps/web` and `apps/agent`.
+- `@warden` graph: `web → api|shared|ui`, `api → db|shared`; no cycles.
+- Only `packages/db` constructs `PrismaClient`. Web uses DB via `@warden/api`.
+- `packages/ui` is `cn()` only — no domain/tRPC/Prisma/auth.
+- Keep `Warden.Core` / `Warden.LockUI` inside `apps/agent`.
+- After structural edits run `npm run check:boundaries`.

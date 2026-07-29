@@ -1,0 +1,33 @@
+# Boundaries
+
+## TypeScript / npm
+
+```
+@warden/web  →  @warden/api, @warden/shared, @warden/ui
+@warden/api  →  @warden/db, @warden/shared
+@warden/db   →  (none)
+@warden/shared → (none)
+@warden/ui   →  (none)
+```
+
+Forbidden:
+
+- Any import from `packages/**` into `apps/**` paths (packages → apps)
+- `apps/web` importing `apps/agent` sources or vice versa
+- `new PrismaClient()` outside `packages/db`
+- Domain/tRPC/Prisma imports inside `packages/ui`
+
+## .NET
+
+```
+Warden.Core          (leaf)
+Warden.LockUI     → Core
+Warden.Tray       → Core, LockUI
+Warden.Agent      → Core, LockUI
+```
+
+All projects live under `apps/agent/`. See [ADR-0002](../decisions/0002-keep-dotnet-libraries-in-apps-agent.md).
+
+## Enforcement
+
+`npm run check:boundaries` (`scripts/check-boundaries.mjs`). Included in `npm run verify`.

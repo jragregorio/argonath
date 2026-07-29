@@ -1,0 +1,14 @@
+---
+description: How to use docs/work session memory across long tasks
+alwaysApply: true
+---
+
+# Session memory
+
+For multi-phase work:
+
+1. Read `docs/work/active/<task>.md` if it exists.
+2. After each phase: record commands, results, decisions, next step.
+3. On context limits: update the task file, then re-read `AGENTS.md` + `docs/ai/*` + the task file.
+4. Archive to `docs/work/archive/` only when acceptance criteria are met.
+5. Do not invent green validation — record real exit codes.

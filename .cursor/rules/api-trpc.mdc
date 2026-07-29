@@ -1,0 +1,13 @@
+---
+description: tRPC and auth package conventions
+globs: packages/api/**
+alwaysApply: false
+---
+
+# packages/api
+
+- Export surface: `src/index.ts` and `./router-type`.
+- Use `prisma` from `@warden/db`; never `new PrismaClient()` here.
+- Auth lives in `src/auth/`; keep JWT/cookie names stable unless migrating clients.
+- Must not import from `apps/*`.
+- Env consumed at runtime via Next host process (JWT, Supabase keys).

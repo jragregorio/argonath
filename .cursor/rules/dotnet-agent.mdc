@@ -1,0 +1,13 @@
+---
+description: Windows .NET agent conventions
+globs: apps/agent/**
+alwaysApply: false
+---
+
+# apps/agent
+
+- Solution: `Warden.sln`. Primary UX: `Warden.Tray`.
+- `Warden.Core` is a leaf library; LockUI/Tray/Agent reference it via sibling paths.
+- Do not move Core/LockUI to `packages/` (ADR-0002).
+- Bootstrap via `warden.json` or `WARDEN_API_BASE_URL`.
+- Validate with `dotnet build apps/agent/Warden.sln`. No .NET test projects yet.

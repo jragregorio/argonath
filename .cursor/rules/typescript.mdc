@@ -1,0 +1,13 @@
+---
+description: TypeScript conventions for this monorepo
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# TypeScript
+
+- Strict mode via root `tsconfig.json`; packages extend it.
+- Prefer workspace packages (`@warden/*`) over deep relative paths across package roots.
+- Declare every `@warden/*` import in the consuming `package.json`.
+- Do not bump unrelated dependency versions during refactors.
+- Run `npm run typecheck` before claiming TS work is done.

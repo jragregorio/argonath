@@ -1,0 +1,13 @@
+---
+description: Prisma database package conventions
+globs: packages/db/**
+alwaysApply: false
+---
+
+# packages/db
+
+- Sole `PrismaClient` owner (`src/index.ts`).
+- Schema: `prisma/schema.prisma`. Env: `DATABASE_URL`, `DIRECT_URL` in `.env`.
+- Prefer `npm run db:validate` / `db:push` from package or root scripts.
+- Do not add a second Prisma schema elsewhere.
+- If adding migrations later, commit `migration_lock.toml` with them.
