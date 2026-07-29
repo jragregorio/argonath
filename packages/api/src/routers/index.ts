@@ -20,6 +20,8 @@ import {
 import {
   getCachedSignedSnapshotUrl,
   invalidateSignedSnapshotUrl,
+  isMissingStorageObjectError,
+  markSignedSnapshotUrlMissing,
 } from "../lib/signed-url-cache";
 import {
   protectedProcedure,
@@ -1234,16 +1236,40 @@ export const snapshotRouter = router({
           if (snapshot.status !== "ready") {
             return { ...snapshot, url: null };
           }
+
+          let markedFailed = false;
           const url = await getCachedSignedSnapshotUrl(
             snapshot.storageKey,
             async () => {
-              const { data } = await supabase.storage
+              const { data, error } = await supabase.storage
                 .from("snapshots")
                 .createSignedUrl(snapshot.storageKey, 3600);
-              return data?.signedUrl ?? null;
+
+              if (data?.signedUrl) {
+                return data.signedUrl;
+              }
+
+              // Orphan ready row: DB says ready but the object is gone from Storage.
+              // Mark failed so we stop re-signing every poll (stops 400 spam).
+              if (isMissingStorageObjectError(error)) {
+                markSignedSnapshotUrlMissing(snapshot.storageKey);
+                markedFailed = true;
+                await prisma.snapshot
+                  .update({
+                    where: { id: snapshot.id },
+                    data: { status: "failed" },
+                  })
+                  .catch(() => {});
+              }
+              return null;
             }
           );
-          return { ...snapshot, url };
+
+          return {
+            ...snapshot,
+            ...(markedFailed ? { status: "failed" as const } : {}),
+            url,
+          };
         })
       );
 
@@ -1769,21 +1795,41 @@ export const agentRouter = router({
     const results = [];
 
     for (const snapshot of pending) {
+      // upsert: true so a re-poll after a successful PUT does not 400 with
+      // "already exists" when createSignedUploadUrl tries to reserve the key again.
       const { data: uploadData, error } = await supabase.storage
         .from("snapshots")
-        .createSignedUploadUrl(snapshot.storageKey);
+        .createSignedUploadUrl(snapshot.storageKey, { upsert: true });
 
-      if (error || !uploadData) {
+      if (uploadData && !error) {
+        results.push({
+          snapshotId: snapshot.id,
+          type: snapshot.type === "webcam" ? "capture:webcam" : "capture:screen",
+          uploadUrl: uploadData.signedUrl,
+          token: uploadData.token,
+          storageKey: snapshot.storageKey,
+        });
         continue;
       }
 
-      results.push({
-        snapshotId: snapshot.id,
-        type: snapshot.type === "webcam" ? "capture:webcam" : "capture:screen",
-        uploadUrl: uploadData.signedUrl,
-        token: uploadData.token,
-        storageKey: snapshot.storageKey,
-      });
+      // Fallback: object may already be in the bucket (upload done, confirm pending).
+      // Promote to ready instead of leaving it pending forever.
+      const { data: existing } = await supabase.storage
+        .from("snapshots")
+        .createSignedUrl(snapshot.storageKey, 60);
+
+      if (existing?.signedUrl) {
+        await prisma.snapshot.update({
+          where: { id: snapshot.id },
+          data: { status: "ready" },
+        });
+        void broadcastToDevice(ctx.device.id, {
+          type: "snapshot:ready",
+          deviceId: ctx.device.id,
+          payload: { snapshotId: snapshot.id },
+          timestamp: new Date().toISOString(),
+        }).catch(() => {});
+      }
     }
 
     return results;

@@ -15,7 +15,7 @@ public class PairingRequest
 {
     public string Code { get; set; } = "";
     public string MachineName { get; set; } = "";
-    public string AgentVersion { get; set; } = "0.3.7";
+    public string AgentVersion { get; set; } = "0.3.8";
 }
 
 public class PairingResponse
@@ -34,7 +34,7 @@ public class HeartbeatRequest
     public int ActiveMinutesToday { get; set; }
     public int IdleMinutesToday { get; set; }
     public bool IsLocked { get; set; }
-    public string AgentVersion { get; set; } = "0.3.7";
+    public string AgentVersion { get; set; } = "0.3.8";
     public string MachineName { get; set; } = "";
 }
 
