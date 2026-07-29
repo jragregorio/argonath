@@ -566,6 +566,23 @@ export default function ChildDetailPage() {
     if (ok) deleteDevice.mutate({ deviceId: device.id });
   };
 
+  const effectiveLimit = evaluation
+    ? evaluation.dailyLimitMinutes + evaluation.bonusMinutes
+    : 0;
+  const remainingFraction =
+    !evaluation || effectiveLimit <= 0
+      ? 0
+      : Math.min(
+          1,
+          Math.max(0, evaluation.remainingMinutes / effectiveLimit)
+        );
+  const usageFillClass =
+    !evaluation ||
+    evaluation.status !== "allowed" ||
+    remainingFraction <= 0.2
+      ? "bg-destructive/35"
+      : "bg-primary/30";
+
   return (
     <div className="space-y-8">
       <div>
@@ -643,32 +660,43 @@ export default function ChildDetailPage() {
         )}
 
         {evaluation && (
-          <Card className="mt-4 p-4 md:border-0 md:bg-transparent md:p-0 md:mt-2">
-            <div className="flex flex-wrap items-center gap-3">
-              <Badge
-                variant={
-                  evaluation.status === "allowed" ? "success" : "warning"
-                }
-              >
-                {getPolicyStatusLabel(evaluation.status)}
-              </Badge>
-              <span className="text-muted-foreground text-sm">
-                {evaluation.usedMinutes} /{" "}
-                {evaluation.dailyLimitMinutes + evaluation.bonusMinutes} min
-                used today
-                {evaluation.bonusMinutes > 0 &&
-                  ` (+${evaluation.bonusMinutes} bonus)`}
-              </span>
-              <span className="hidden md:inline text-xs text-muted-foreground">
-                Refreshes every 10s from agent heartbeats
-              </span>
+          <div className="relative mt-4 overflow-hidden rounded-xl border border-border bg-card md:mt-2 md:border-0 md:bg-transparent">
+            {/* Remaining-time fill behind content (same idea as the tray usage card) */}
+            <div
+              className={`pointer-events-none absolute inset-y-0 left-0 transition-[width] duration-500 ease-out md:hidden ${usageFillClass}`}
+              style={{ width: `${remainingFraction * 100}%` }}
+              aria-hidden
+            />
+            <div className="relative z-10 p-4 md:p-0">
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge
+                  variant={
+                    evaluation.status === "allowed" ? "success" : "warning"
+                  }
+                >
+                  {getPolicyStatusLabel(evaluation.status)}
+                </Badge>
+                <span className="text-sm text-foreground/90 md:text-muted-foreground">
+                  {evaluation.usedMinutes} / {effectiveLimit} min used today
+                  {evaluation.bonusMinutes > 0 &&
+                    ` (+${evaluation.bonusMinutes} bonus)`}
+                </span>
+                <span className="hidden md:inline text-xs text-muted-foreground">
+                  Refreshes every 10s from agent heartbeats
+                </span>
+              </div>
+              {evaluation.status === "allowed" ? (
+                <p className="text-sm text-muted-foreground mt-2 md:hidden">
+                  {evaluation.remainingMinutes} min remaining today
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground mt-2 md:hidden">
+                  {evaluation.message ??
+                    getPolicyStatusLabel(evaluation.status)}
+                </p>
+              )}
             </div>
-            {evaluation.status === "allowed" && (
-              <p className="text-sm text-muted-foreground mt-2 md:hidden">
-                {evaluation.remainingMinutes} min remaining today
-              </p>
-            )}
-          </Card>
+          </div>
         )}
       </div>
 
