@@ -55,17 +55,3 @@ export async function prefetchDashboardShell() {
     return null;
   }
 }
-
-/** Prefetch Overview page queries. */
-export async function prefetchDashboardOverview() {
-  try {
-    const helpers = await createTRPCServerHelpers();
-    await Promise.all([
-      helpers.dashboard.overview.prefetch(),
-      helpers.dashboard.activity.prefetch({ limit: 20 }),
-    ]);
-    return helpers.dehydrate();
-  } catch {
-    return null;
-  }
-}
