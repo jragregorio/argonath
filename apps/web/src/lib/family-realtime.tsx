@@ -50,21 +50,27 @@ function invalidateForEvent(
     return;
   }
 
-  if (type === "extension:approved" || type === "extension:denied") {
+  if (
+    type === "extension:requested" ||
+    type === "extension:approved" ||
+    type === "extension:denied"
+  ) {
     void utils.extension.listPending.invalidate();
-    void utils.extension.listHistory.invalidate();
     void utils.dashboard.navBadges.invalidate();
     void utils.dashboard.overview.invalidate();
     void utils.dashboard.activity.invalidate();
-    void utils.children.list.invalidate();
-    void utils.device.list.invalidate();
-    if (childId) {
-      void utils.children.get.invalidate({ childId });
-      void utils.policy.getEvaluation.invalidate({ childId });
-    } else {
-      // device.list cache miss — cannot scope without guessing childId
-      void utils.children.get.invalidate();
-      void utils.policy.getEvaluation.invalidate();
+    if (type !== "extension:requested") {
+      void utils.extension.listHistory.invalidate();
+      void utils.children.list.invalidate();
+      void utils.device.list.invalidate();
+      if (childId) {
+        void utils.children.get.invalidate({ childId });
+        void utils.policy.getEvaluation.invalidate({ childId });
+      } else {
+        // device.list cache miss — cannot scope without guessing childId
+        void utils.children.get.invalidate();
+        void utils.policy.getEvaluation.invalidate();
+      }
     }
     return;
   }

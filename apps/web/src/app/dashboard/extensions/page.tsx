@@ -24,7 +24,7 @@ export default function ExtensionsPage() {
   const utils = trpc.useUtils();
   const { data: requests, isLoading: pendingLoading } =
     trpc.extension.listPending.useQuery(undefined, {
-      // extension:approved / extension:denied invalidate; safety if Realtime drops
+      // extension:requested / approved / denied invalidate; safety if Realtime drops
       refetchInterval: POLL_SAFETY_MS,
     });
   const { data: history, isLoading: historyLoading } =

@@ -1723,6 +1723,17 @@ export const agentRouter = router({
         },
       });
 
+      void broadcastToDevice(ctx.device.id, {
+        type: "extension:requested",
+        deviceId: ctx.device.id,
+        payload: {
+          requestId: request.id,
+          childId: ctx.device.childId,
+          requestedMinutes: input.requestedMinutes,
+        },
+        timestamp: new Date().toISOString(),
+      }).catch(() => {});
+
       return request;
     }),
 
