@@ -81,28 +81,6 @@ public class EnforcementEngine
                         ? el.GetRawText()
                         : JsonSerializer.Serialize(evt.Payload);
                     var payload = JsonSerializer.Deserialize<NudgePayload>(json, JsonOptions);
-                    // #region agent log
-                    try
-                    {
-                        var logPath = @"c:\DEV\Guardian\debug-8f2974.log";
-                        var line = JsonSerializer.Serialize(new
-                        {
-                            sessionId = "8f2974",
-                            hypothesisId = "D",
-                            location = "EnforcementEngine.HandleRealtimeEvent",
-                            message = "realtime nudge:show received",
-                            data = new
-                            {
-                                nudgeId = payload?.NudgeId,
-                                autoDismissSeconds = payload?.AutoDismissSeconds,
-                                hasPayload = payload != null
-                            },
-                            timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                        });
-                        File.AppendAllText(logPath, line + Environment.NewLine);
-                    }
-                    catch { }
-                    // #endregion
                     if (payload != null)
                         TryRequestNudge(payload);
                 }
@@ -116,50 +94,9 @@ public class EnforcementEngine
 
         lock (_nudgeLock)
         {
-            if (!_nudgeShown.Add(payload.NudgeId))
-            {
-                // #region agent log
-                try
-                {
-                    var logPath = @"c:\DEV\Guardian\debug-8f2974.log";
-                    var line = JsonSerializer.Serialize(new
-                    {
-                        sessionId = "8f2974",
-                        hypothesisId = "D",
-                        location = "EnforcementEngine.TryRequestNudge",
-                        message = "nudge skipped already shown",
-                        data = new { nudgeId = payload.NudgeId },
-                        timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                    });
-                    File.AppendAllText(logPath, line + Environment.NewLine);
-                }
-                catch { }
-                // #endregion
-                return;
-            }
+            if (!_nudgeShown.Add(payload.NudgeId)) return;
         }
 
-        // #region agent log
-        try
-        {
-            var logPath = @"c:\DEV\Guardian\debug-8f2974.log";
-            var line = JsonSerializer.Serialize(new
-            {
-                sessionId = "8f2974",
-                hypothesisId = "D",
-                location = "EnforcementEngine.TryRequestNudge",
-                message = "nudge requested for UI",
-                data = new
-                {
-                    nudgeId = payload.NudgeId,
-                    autoDismissSeconds = payload.AutoDismissSeconds
-                },
-                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-            });
-            File.AppendAllText(logPath, line + Environment.NewLine);
-        }
-        catch { }
-        // #endregion
         NudgeRequested?.Invoke(payload);
     }
 
@@ -414,39 +351,9 @@ public class EnforcementEngine
         }
     }
 
-    private static DateTime _lastEmptyNudgePollLog = DateTime.MinValue;
-
     public async Task ProcessPendingNudgesAsync()
     {
         var pending = await _api.GetPendingNudgesAsync();
-        // #region agent log
-        try
-        {
-            var shouldLog = pending.Count > 0
-                || (DateTime.UtcNow - _lastEmptyNudgePollLog).TotalSeconds >= 10;
-            if (shouldLog)
-            {
-                if (pending.Count == 0) _lastEmptyNudgePollLog = DateTime.UtcNow;
-                var logPath = @"c:\DEV\Guardian\debug-8f2974.log";
-                var line = JsonSerializer.Serialize(new
-                {
-                    sessionId = "8f2974",
-                    hypothesisId = "D",
-                    location = "EnforcementEngine.ProcessPendingNudgesAsync",
-                    message = "pendingNudges poll result",
-                    data = new
-                    {
-                        count = pending.Count,
-                        ids = pending.Select(p => p.NudgeId).ToArray(),
-                        autoDismiss = pending.Select(p => p.AutoDismissSeconds).ToArray()
-                    },
-                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                });
-                File.AppendAllText(logPath, line + Environment.NewLine);
-            }
-        }
-        catch { }
-        // #endregion
         foreach (var item in pending)
         {
             TryRequestNudge(

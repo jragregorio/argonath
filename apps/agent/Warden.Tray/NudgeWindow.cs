@@ -112,9 +112,6 @@ public sealed class NudgeWindow : Window
         };
         _autoDismissTimer.Tick += (_, _) =>
         {
-            // #region agent log
-            DebugSessionLog.Write("C", "NudgeWindow.autoDismiss", "auto-dismiss timer fired", new { NudgeId });
-            // #endregion
             Expired = true;
             CloseQuietly();
         };
@@ -142,14 +139,6 @@ public sealed class NudgeWindow : Window
     private void CloseWith(string response)
     {
         if (_closed) return;
-        // #region agent log
-        DebugSessionLog.Write("A", "NudgeWindow.CloseWith", "button clicked", new
-        {
-            NudgeId,
-            response,
-            ExpiredBefore = Expired
-        });
-        // #endregion
         Response = response;
         Expired = false;
         CloseQuietly();

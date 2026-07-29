@@ -359,24 +359,9 @@ static class Program
         {
             if (!_activeNudgeWindows.Add(payload.NudgeId))
             {
-                // #region agent log
-                DebugSessionLog.Write("D", "Program.ShowNudge", "UI skipped duplicate window", new
-                {
-                    payload.NudgeId
-                });
-                // #endregion
                 return;
             }
         }
-
-        // #region agent log
-        DebugSessionLog.Write("D", "Program.ShowNudge", "showing nudge window", new
-        {
-            payload.NudgeId,
-            payload.AutoDismissSeconds,
-            payload.Message
-        });
-        // #endregion
 
         var window = new NudgeWindow(
             payload.NudgeId,
@@ -389,22 +374,10 @@ static class Program
             try
             {
                 await _engine.AckNudgeAsync(payload.NudgeId, "delivered");
-                // #region agent log
-                DebugSessionLog.Write("B", "Program.ShowNudge", "delivered ack ok", new
-                {
-                    payload.NudgeId
-                });
-                // #endregion
             }
-            catch (Exception ex)
+            catch
             {
-                // #region agent log
-                DebugSessionLog.Write("B", "Program.ShowNudge", "delivered ack failed", new
-                {
-                    payload.NudgeId,
-                    error = ex.Message
-                });
-                // #endregion
+                // Delivery ack is best-effort; poll/realtime still show the UI.
             }
         });
 
@@ -419,40 +392,15 @@ static class Program
 
             var status = window.Expired ? "expired" : "seen";
             var response = window.Response;
-            // #region agent log
-            DebugSessionLog.Write("A", "Program.ShowNudge.Closed", "closing nudge → ack", new
-            {
-                payload.NudgeId,
-                status,
-                response,
-                windowExpired = window.Expired
-            });
-            // #endregion
             _ = Task.Run(async () =>
             {
                 try
                 {
                     await _engine.AckNudgeAsync(payload.NudgeId, status, response);
-                    // #region agent log
-                    DebugSessionLog.Write("B", "Program.ShowNudge.Closed", "final ack ok", new
-                    {
-                        payload.NudgeId,
-                        status,
-                        response
-                    });
-                    // #endregion
                 }
-                catch (Exception ex)
+                catch
                 {
-                    // #region agent log
-                    DebugSessionLog.Write("B", "Program.ShowNudge.Closed", "final ack failed", new
-                    {
-                        payload.NudgeId,
-                        status,
-                        response,
-                        error = ex.Message
-                    });
-                    // #endregion
+                    // Best-effort.
                 }
             });
         };
