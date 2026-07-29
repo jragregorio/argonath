@@ -38,13 +38,22 @@ export type RealtimeEventType =
   | "extension:denied"
   | "snapshot:ready"
   | "snapshot:failed"
-  | "policy:updated";
+  | "policy:updated"
+  | "nudge:show"
+  | "nudge:seen";
 
 export type RealtimeEvent<T = unknown> = {
   type: RealtimeEventType;
   deviceId: string;
   payload?: T;
   timestamp: string;
+};
+
+export type NudgeCommandPayload = {
+  nudgeId: string;
+  message: string;
+  /** Auto-dismiss after this many seconds (phase 1 gentle). */
+  autoDismissSeconds: number;
 };
 
 export type CaptureCommandPayload = {
@@ -87,7 +96,7 @@ export const DEVICE_ONLINE_THRESHOLD_SECONDS = HEARTBEAT_INTERVAL_SECONDS * 3;
 export const IDLE_THRESHOLD_SECONDS = 300;
 
 /** Product / dashboard version (keep in sync with Warden.Tray `<Version>`). */
-export const APP_VERSION = "0.2.7";
+export const APP_VERSION = "0.2.8";
 
 export function isDeviceRecentlySeen(
   lastSeenAt: Date | string | null | undefined,

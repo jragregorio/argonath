@@ -19,6 +19,8 @@ static class Program
     private static DateTime _lastHeartbeatAt = DateTime.UtcNow;
     private static ConfigStore? _configStore;
     private static bool _capturePollInFlight;
+    private static readonly HashSet<string> _activeNudgeWindows = new();
+    private static readonly object _nudgeUiLock = new();
 
     [STAThread]
     static void Main()
@@ -108,6 +110,11 @@ static class Program
             });
         };
 
+        _engine.NudgeRequested += payload =>
+        {
+            _ = app.Dispatcher.InvokeAsync(() => ShowNudge(payload));
+        };
+
         _realtime = new RealtimeService(_configStore, evt => _engine!.HandleRealtimeEvent(evt));
 
         _ = Task.Run(async () =>
@@ -119,6 +126,7 @@ static class Program
                 await app.Dispatcher.InvokeAsync(async () =>
                 {
                     await PollPendingCapturesAsync();
+                    await PollPendingNudgesAsync();
                 });
             }
             catch (DeviceUnpairedException ex)
@@ -174,6 +182,7 @@ static class Program
             try
             {
                 await PollPendingCapturesAsync();
+                await PollPendingNudgesAsync();
             }
             catch (DeviceUnpairedException ex)
             {
@@ -320,6 +329,76 @@ static class Program
         {
             _capturePollInFlight = false;
         }
+    }
+
+    private static async Task PollPendingNudgesAsync()
+    {
+        if (_engine == null)
+        {
+            return;
+        }
+
+        await _engine.ProcessPendingNudgesAsync();
+    }
+
+    private static void ShowNudge(Warden.Core.Models.NudgePayload payload)
+    {
+        if (_engine == null || string.IsNullOrWhiteSpace(payload.NudgeId))
+        {
+            return;
+        }
+
+        lock (_nudgeUiLock)
+        {
+            if (!_activeNudgeWindows.Add(payload.NudgeId))
+            {
+                return;
+            }
+        }
+
+        var window = new NudgeWindow(
+            payload.NudgeId,
+            payload.Message,
+            payload.AutoDismissSeconds
+        );
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _engine.AckNudgeAsync(payload.NudgeId, "delivered");
+            }
+            catch
+            {
+                // Delivery ack is best-effort; poll/realtime still show the UI.
+            }
+        });
+
+        window.Closed += (_, _) =>
+        {
+            lock (_nudgeUiLock)
+            {
+                _activeNudgeWindows.Remove(payload.NudgeId);
+            }
+
+            // Keep engine _nudgeShown so poll does not re-open this nudge before ack lands.
+
+            var status = window.Expired ? "expired" : "seen";
+            var response = window.Response;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _engine.AckNudgeAsync(payload.NudgeId, status, response);
+                }
+                catch
+                {
+                    // Best-effort.
+                }
+            });
+        };
+
+        window.Show();
     }
 
     private static void UpdateTrayStatusText()

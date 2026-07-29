@@ -26,6 +26,7 @@ import {
   Unlock,
   Video,
   ChevronDown,
+  Bell,
 } from "lucide-react";
 import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/dev-config";
@@ -192,10 +193,89 @@ export default function ChildDetailPage() {
   const [pendingLocks, setPendingLocks] = useState<
     Record<string, boolean | undefined>
   >({});
+  const [nudgeByDevice, setNudgeByDevice] = useState<
+    Record<string, { nudgeId: string; label: string }>
+  >({});
   const [captureFeedback, setCaptureFeedback] = useState<
     Record<string, CaptureFeedback>
   >({});
   const capturePollersRef = useRef<Record<string, number>>({});
+
+  const sendNudge = trpc.device.sendNudge.useMutation({
+    onMutate: ({ deviceId }) => {
+      setNudgeByDevice((prev) => ({
+        ...prev,
+        [deviceId]: { nudgeId: prev[deviceId]?.nudgeId ?? "", label: "Sending…" },
+      }));
+    },
+    onSuccess: (data, { deviceId }) => {
+      setNudgeByDevice((prev) => ({
+        ...prev,
+        [deviceId]: { nudgeId: data.id, label: "Waiting…" },
+      }));
+      void utils.dashboard.activity.invalidate();
+    },
+    onError: (err, { deviceId }) => {
+      setNudgeByDevice((prev) => ({
+        ...prev,
+        [deviceId]: { nudgeId: "", label: err.message },
+      }));
+    },
+  });
+
+  useEffect(() => {
+    const active = Object.entries(nudgeByDevice).filter(([, v]) => v.nudgeId);
+    if (active.length === 0) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      for (const [deviceId, state] of active) {
+        try {
+          const nudge = await utils.device.getNudge.fetch({
+            nudgeId: state.nudgeId,
+          });
+          if (cancelled) return;
+
+          let label = state.label;
+          if (nudge.status === "delivered") label = "Delivered";
+          else if (nudge.status === "seen") {
+            label =
+              nudge.response === "on_my_way" ? "Seen · On my way" : "Seen · OK";
+          } else if (nudge.status === "expired") label = "Expired";
+          else if (nudge.status === "pending") label = "Waiting…";
+
+          setNudgeByDevice((prev) => {
+            const cur = prev[deviceId];
+            if (!cur || cur.nudgeId !== state.nudgeId || cur.label === label) {
+              return prev;
+            }
+            return { ...prev, [deviceId]: { ...cur, label } };
+          });
+
+          if (nudge.status === "seen" || nudge.status === "expired") {
+            window.setTimeout(() => {
+              setNudgeByDevice((prev) => {
+                const cur = prev[deviceId];
+                if (!cur || cur.nudgeId !== state.nudgeId) return prev;
+                const next = { ...prev };
+                delete next[deviceId];
+                return next;
+              });
+            }, 5000);
+          }
+        } catch {
+          // Keep last label.
+        }
+      }
+    };
+
+    void poll();
+    const id = window.setInterval(() => void poll(), 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [nudgeByDevice, utils.device.getNudge]);
 
   const clearCaptureFeedbackSoon = (deviceId: string, delayMs = 3000) => {
     window.setTimeout(() => {
@@ -956,6 +1036,32 @@ export default function ChildDetailPage() {
                   </div>
 
                   <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
+                    {nudgeByDevice[device.id]?.label && (
+                      <span className="text-xs text-muted-foreground sm:mr-1">
+                        {nudgeByDevice[device.id].label}
+                      </span>
+                    )}
+                    <Button
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                      onClick={() => sendNudge.mutate({ deviceId: device.id })}
+                      disabled={
+                        !device.deviceToken ||
+                        !device.isOnline ||
+                        Boolean(nudgeByDevice[device.id]?.nudgeId) ||
+                        sendNudge.isPending
+                      }
+                      title={
+                        !device.deviceToken
+                          ? "Device must be paired first"
+                          : !device.isOnline
+                            ? "Device is offline"
+                            : "Send a gentle attention nudge"
+                      }
+                    >
+                      <Bell className="w-4 h-4 mr-2" />
+                      Nudge
+                    </Button>
                     {effectiveAdminLock ? (
                       <Button
                         variant="outline"

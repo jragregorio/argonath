@@ -22,12 +22,15 @@ public class EnforcementEngine
 
     private readonly HashSet<string> _captureInFlight = new();
     private readonly object _captureLock = new();
+    private readonly HashSet<string> _nudgeShown = new();
+    private readonly object _nudgeLock = new();
 
     public event Action<PolicyEvaluation>? PolicyChanged;
     public event Action? LockRequired;
     public event Action? UnlockRequired;
     public event Action<RealtimeEvent>? RealtimeEventReceived;
     public event Action<CapturePayload, string>? CaptureRequested;
+    public event Action<NudgePayload>? NudgeRequested;
 
     public bool IsLocked => _isLocked;
     public bool IsAdminLocked => _currentPolicy?.AdminLock ?? false;
@@ -71,6 +74,37 @@ public class EnforcementEngine
                         CaptureRequested?.Invoke(payload, evt.Type);
                 }
                 break;
+            case "nudge:show":
+                if (evt.Payload != null)
+                {
+                    var json = evt.Payload is JsonElement el
+                        ? el.GetRawText()
+                        : JsonSerializer.Serialize(evt.Payload);
+                    var payload = JsonSerializer.Deserialize<NudgePayload>(json, JsonOptions);
+                    if (payload != null)
+                        TryRequestNudge(payload);
+                }
+                break;
+        }
+    }
+
+    private void TryRequestNudge(NudgePayload payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload.NudgeId)) return;
+
+        lock (_nudgeLock)
+        {
+            if (!_nudgeShown.Add(payload.NudgeId)) return;
+        }
+
+        NudgeRequested?.Invoke(payload);
+    }
+
+    public void MarkNudgeComplete(string nudgeId)
+    {
+        lock (_nudgeLock)
+        {
+            _nudgeShown.Remove(nudgeId);
         }
     }
 
@@ -316,4 +350,23 @@ public class EnforcementEngine
             );
         }
     }
+
+    public async Task ProcessPendingNudgesAsync()
+    {
+        var pending = await _api.GetPendingNudgesAsync();
+        foreach (var item in pending)
+        {
+            TryRequestNudge(
+                new NudgePayload
+                {
+                    NudgeId = item.NudgeId,
+                    Message = item.Message,
+                    AutoDismissSeconds = item.AutoDismissSeconds
+                }
+            );
+        }
+    }
+
+    public Task AckNudgeAsync(string nudgeId, string status, string? response = null) =>
+        _api.AckNudgeAsync(nudgeId, status, response);
 }

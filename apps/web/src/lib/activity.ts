@@ -3,6 +3,7 @@ const ACTION_LABELS: Record<string, string> = {
   admin_unlock: "Released a lockdown",
   pairing_code_generated: "Generated a pairing code",
   capture_requested: "Requested a capture",
+  nudge_sent: "Sent a nudge",
   snapshot_deleted: "Deleted a snapshot",
   extension_approved: "Approved extra screen time",
   extension_denied: "Denied extra screen time",

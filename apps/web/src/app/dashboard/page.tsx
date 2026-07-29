@@ -16,6 +16,7 @@ import {
   Clock,
   ArrowRight,
   Activity,
+  Bell,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -63,6 +64,9 @@ export default function DashboardPage() {
     Record<string, boolean | undefined>
   >({});
   const [showAllActivity, setShowAllActivity] = useState(false);
+  const [nudgeByDevice, setNudgeByDevice] = useState<
+    Record<string, { nudgeId: string; label: string }>
+  >({});
 
   const setAdminLock = trpc.device.setAdminLock.useMutation({
     onMutate: async ({ deviceId, locked }) => {
@@ -85,7 +89,83 @@ export default function DashboardPage() {
     },
   });
 
+  const sendNudge = trpc.device.sendNudge.useMutation({
+    onMutate: ({ deviceId }) => {
+      setNudgeByDevice((prev) => ({
+        ...prev,
+        [deviceId]: { nudgeId: prev[deviceId]?.nudgeId ?? "", label: "Sending…" },
+      }));
+    },
+    onSuccess: (data, { deviceId }) => {
+      setNudgeByDevice((prev) => ({
+        ...prev,
+        [deviceId]: { nudgeId: data.id, label: "Waiting…" },
+      }));
+      void utils.dashboard.activity.invalidate();
+    },
+    onError: (err, { deviceId }) => {
+      setNudgeByDevice((prev) => ({
+        ...prev,
+        [deviceId]: { nudgeId: "", label: err.message },
+      }));
+    },
+  });
+
   const devices = overview?.children.flatMap((child) => child.devices) ?? [];
+
+  useEffect(() => {
+    const active = Object.entries(nudgeByDevice).filter(([, v]) => v.nudgeId);
+    if (active.length === 0) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      for (const [deviceId, state] of active) {
+        try {
+          const nudge = await utils.device.getNudge.fetch({
+            nudgeId: state.nudgeId,
+          });
+          if (cancelled) return;
+
+          let label = state.label;
+          if (nudge.status === "delivered") label = "Delivered";
+          else if (nudge.status === "seen") {
+            label =
+              nudge.response === "on_my_way" ? "Seen · On my way" : "Seen · OK";
+          } else if (nudge.status === "expired") label = "Expired";
+          else if (nudge.status === "pending") label = "Waiting…";
+
+          setNudgeByDevice((prev) => {
+            const cur = prev[deviceId];
+            if (!cur || cur.nudgeId !== state.nudgeId || cur.label === label) {
+              return prev;
+            }
+            return { ...prev, [deviceId]: { ...cur, label } };
+          });
+
+          if (nudge.status === "seen" || nudge.status === "expired") {
+            window.setTimeout(() => {
+              setNudgeByDevice((prev) => {
+                const cur = prev[deviceId];
+                if (!cur || cur.nudgeId !== state.nudgeId) return prev;
+                const next = { ...prev };
+                delete next[deviceId];
+                return next;
+              });
+            }, 5000);
+          }
+        } catch {
+          // Keep last label.
+        }
+      }
+    };
+
+    void poll();
+    const id = window.setInterval(() => void poll(), 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [nudgeByDevice, utils.device.getNudge]);
 
   useEffect(() => {
     if (!overview?.children.length) return;
@@ -411,41 +491,71 @@ export default function DashboardPage() {
                                 </Badge>
                               )}
                             </div>
-                            {effectiveAdminLock ? (
+                            <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:items-center">
+                              {nudgeByDevice[device.id]?.label && (
+                                <span className="text-xs text-muted-foreground sm:text-right">
+                                  {nudgeByDevice[device.id].label}
+                                </span>
+                              )}
                               <Button
                                 variant="outline"
-                                className="w-full sm:ml-auto sm:w-auto"
+                                className="w-full sm:w-auto"
                                 onClick={() =>
-                                  setAdminLock.mutate({
-                                    deviceId: device.id,
-                                    locked: false,
-                                  })
+                                  sendNudge.mutate({ deviceId: device.id })
                                 }
-                              >
-                                <Unlock className="w-4 h-4 mr-1.5" />
-                                Release
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="destructive"
-                                className="w-full sm:ml-auto sm:w-auto"
-                                onClick={() =>
-                                  setAdminLock.mutate({
-                                    deviceId: device.id,
-                                    locked: true,
-                                  })
+                                disabled={
+                                  !device.deviceToken ||
+                                  !device.isOnline ||
+                                  Boolean(nudgeByDevice[device.id]?.nudgeId) ||
+                                  sendNudge.isPending
                                 }
-                                disabled={!device.deviceToken}
                                 title={
                                   !device.deviceToken
                                     ? "Device must be paired first"
-                                    : undefined
+                                    : !device.isOnline
+                                      ? "Device is offline"
+                                      : "Send a gentle attention nudge"
                                 }
                               >
-                                <Lock className="w-4 h-4 mr-1.5" />
-                                Lock down
+                                <Bell className="w-4 h-4 mr-1.5" />
+                                Nudge
                               </Button>
-                            )}
+                              {effectiveAdminLock ? (
+                                <Button
+                                  variant="outline"
+                                  className="w-full sm:w-auto"
+                                  onClick={() =>
+                                    setAdminLock.mutate({
+                                      deviceId: device.id,
+                                      locked: false,
+                                    })
+                                  }
+                                >
+                                  <Unlock className="w-4 h-4 mr-1.5" />
+                                  Release
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="destructive"
+                                  className="w-full sm:w-auto"
+                                  onClick={() =>
+                                    setAdminLock.mutate({
+                                      deviceId: device.id,
+                                      locked: true,
+                                    })
+                                  }
+                                  disabled={!device.deviceToken}
+                                  title={
+                                    !device.deviceToken
+                                      ? "Device must be paired first"
+                                      : undefined
+                                  }
+                                >
+                                  <Lock className="w-4 h-4 mr-1.5" />
+                                  Lock down
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         );
                       })

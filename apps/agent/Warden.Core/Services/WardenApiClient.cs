@@ -224,4 +224,47 @@ public class WardenApiClient
         return await response.Content.ReadFromJsonAsync<List<PendingCapture>>(JsonOptions)
             ?? [];
     }
+
+    public async Task<List<PendingNudge>> GetPendingNudgesAsync()
+    {
+        SetDeviceTokenHeader();
+        var config = _configStore.Load();
+
+        var response = await _http.GetAsync(
+            $"{config.ApiBaseUrl}/api/agent?action=pendingNudges"
+        );
+
+        HandleUnpairedResponse(response);
+        if (!response.IsSuccessStatusCode)
+        {
+            return [];
+        }
+
+        return await response.Content.ReadFromJsonAsync<List<PendingNudge>>(JsonOptions)
+            ?? [];
+    }
+
+    public async Task AckNudgeAsync(string nudgeId, string status, string? responseLabel = null)
+    {
+        SetDeviceTokenHeader();
+        var config = _configStore.Load();
+
+        object request = string.IsNullOrEmpty(responseLabel)
+            ? new { action = "ackNudge", nudgeId, status }
+            : new { action = "ackNudge", nudgeId, status, response = responseLabel };
+
+        var response = await _http.PostAsJsonAsync(
+            $"{config.ApiBaseUrl}/api/agent",
+            request
+        );
+
+        var body = await response.Content.ReadAsStringAsync();
+        HandleUnpairedResponse(response);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"ackNudge failed ({(int)response.StatusCode}): {body}"
+            );
+        }
+    }
 }

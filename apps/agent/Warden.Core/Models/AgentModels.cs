@@ -15,7 +15,7 @@ public class PairingRequest
 {
     public string Code { get; set; } = "";
     public string MachineName { get; set; } = "";
-    public string AgentVersion { get; set; } = "0.2.7";
+    public string AgentVersion { get; set; } = "0.2.8";
 }
 
 public class PairingResponse
@@ -34,7 +34,7 @@ public class HeartbeatRequest
     public int ActiveMinutesToday { get; set; }
     public int IdleMinutesToday { get; set; }
     public bool IsLocked { get; set; }
-    public string AgentVersion { get; set; } = "0.2.7";
+    public string AgentVersion { get; set; } = "0.2.8";
     public string MachineName { get; set; } = "";
 }
 
@@ -99,6 +99,20 @@ public class PendingCapture
     public string UploadUrl { get; set; } = "";
     public string? Token { get; set; }
     public string StorageKey { get; set; } = "";
+}
+
+public class NudgePayload
+{
+    public string NudgeId { get; set; } = "";
+    public string Message { get; set; } = "";
+    public int AutoDismissSeconds { get; set; } = 45;
+}
+
+public class PendingNudge
+{
+    public string NudgeId { get; set; } = "";
+    public string Message { get; set; } = "";
+    public int AutoDismissSeconds { get; set; } = 45;
 }
 
 public class ExtensionPayload

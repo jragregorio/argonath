@@ -37,6 +37,7 @@ model Family {
   auditLogs     AuditLog[]
   members       FamilyMember[]
   refreshTokens RefreshToken[]
+  nudges        Nudge[]
 }
 
 model FamilyMember {
@@ -89,6 +90,7 @@ model Child {
   extensionRequests  ExtensionRequest[]
   snapshots          Snapshot[]
   extensionOverrides ExtensionOverride[]
+  nudges             Nudge[]
 
   @@index([familyId])
 }
@@ -114,6 +116,7 @@ model Device {
   usageLogs         UsageLog[]
   extensionRequests ExtensionRequest[]
   snapshots         Snapshot[]
+  nudges            Nudge[]
 
   @@index([childId])
   @@index([deviceToken])
@@ -200,6 +203,30 @@ model Snapshot {
   @@index([deviceId])
   @@index([deviceId, status])
   @@index([status, viewedAt])
+  @@index([expiresAt])
+}
+
+model Nudge {
+  id         String    @id @default(cuid())
+  familyId   String
+  childId    String
+  deviceId   String
+  message    String    @default("Your parent wants your attention")
+  /// pending | delivered | seen | expired
+  status     String    @default("pending")
+  /// ok | on_my_way
+  response   String?
+  requestedBy String
+  createdAt  DateTime  @default(now())
+  seenAt     DateTime?
+  expiresAt  DateTime
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  child  Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, status])
+  @@index([familyId, createdAt])
   @@index([expiresAt])
 }
 

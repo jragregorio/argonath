@@ -604,6 +604,155 @@ export const deviceRouter = router({
 
       return updated;
     }),
+
+  sendNudge: parentProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        message: z
+          .string()
+          .trim()
+          .min(1)
+          .max(200)
+          .optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const device = await prisma.device.findFirst({
+        where: {
+          id: input.deviceId,
+          child: { familyId: family.id },
+        },
+      });
+
+      if (!device) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      if (!device.deviceToken) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Device must be paired first",
+        });
+      }
+
+      if (!isDeviceRecentlySeen(device.lastSeenAt)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Device is offline",
+        });
+      }
+
+      const now = new Date();
+      const active = await prisma.nudge.findFirst({
+        where: {
+          deviceId: device.id,
+          status: { in: ["pending", "delivered"] },
+          expiresAt: { gt: now },
+        },
+      });
+
+      if (active) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "A nudge is already in progress on this device",
+        });
+      }
+
+      const autoDismissSeconds = 45;
+      const expiresAt = new Date(now.getTime() + autoDismissSeconds * 1000);
+      const message =
+        input.message?.trim() || "Your parent wants your attention";
+
+      const nudge = await prisma.nudge.create({
+        data: {
+          familyId: family.id,
+          childId: device.childId,
+          deviceId: device.id,
+          message,
+          status: "pending",
+          requestedBy: ctx.userId,
+          expiresAt,
+        },
+      });
+
+      await logAudit(family.id, ctx.userId, "nudge_sent", {
+        deviceId: device.id,
+        childId: device.childId,
+        nudgeId: nudge.id,
+      });
+
+      void broadcastToDevice(device.id, {
+        type: "nudge:show",
+        deviceId: device.id,
+        payload: {
+          nudgeId: nudge.id,
+          message,
+          autoDismissSeconds,
+        },
+        timestamp: now.toISOString(),
+      }).catch(() => {});
+
+      return {
+        id: nudge.id,
+        status: nudge.status,
+        message: nudge.message,
+        expiresAt: nudge.expiresAt,
+        autoDismissSeconds,
+      };
+    }),
+
+  getNudge: parentProcedure
+    .input(z.object({ nudgeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const nudge = await prisma.nudge.findFirst({
+        where: {
+          id: input.nudgeId,
+          familyId: family.id,
+        },
+        select: {
+          id: true,
+          deviceId: true,
+          childId: true,
+          message: true,
+          status: true,
+          response: true,
+          createdAt: true,
+          seenAt: true,
+          expiresAt: true,
+        },
+      });
+
+      if (!nudge) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      if (
+        (nudge.status === "pending" || nudge.status === "delivered") &&
+        nudge.expiresAt.getTime() <= Date.now()
+      ) {
+        const expired = await prisma.nudge.update({
+          where: { id: nudge.id },
+          data: { status: "expired" },
+          select: {
+            id: true,
+            deviceId: true,
+            childId: true,
+            message: true,
+            status: true,
+            response: true,
+            createdAt: true,
+            seenAt: true,
+            expiresAt: true,
+          },
+        });
+        return expired;
+      }
+
+      return nudge;
+    }),
 });
 
 export const extensionRouter = router({
@@ -1548,6 +1697,107 @@ export const agentRouter = router({
 
     return results;
   }),
+
+  pendingNudges: agentProcedure.query(async ({ ctx }) => {
+    const now = new Date();
+    await prisma.nudge.updateMany({
+      where: {
+        deviceId: ctx.device.id,
+        status: { in: ["pending", "delivered"] },
+        expiresAt: { lte: now },
+      },
+      data: { status: "expired" },
+    });
+
+    const pending = await prisma.nudge.findMany({
+      where: {
+        deviceId: ctx.device.id,
+        status: { in: ["pending", "delivered"] },
+        expiresAt: { gt: now },
+      },
+      orderBy: { createdAt: "asc" },
+      take: 3,
+      select: {
+        id: true,
+        message: true,
+        expiresAt: true,
+        createdAt: true,
+      },
+    });
+
+    return pending.map((nudge) => {
+      const remainingMs = Math.max(0, nudge.expiresAt.getTime() - now.getTime());
+      return {
+        nudgeId: nudge.id,
+        message: nudge.message,
+        autoDismissSeconds: Math.max(5, Math.ceil(remainingMs / 1000)),
+      };
+    });
+  }),
+
+  ackNudge: agentProcedure
+    .input(
+      z.object({
+        nudgeId: z.string(),
+        status: z.enum(["delivered", "seen", "expired"]),
+        response: z.enum(["ok", "on_my_way"]).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const nudge = await prisma.nudge.findFirst({
+        where: {
+          id: input.nudgeId,
+          deviceId: ctx.device.id,
+        },
+      });
+
+      if (!nudge) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      if (nudge.status === "seen" || nudge.status === "expired") {
+        return { ok: true, status: nudge.status };
+      }
+
+      if (input.status === "delivered") {
+        if (nudge.status === "pending") {
+          await prisma.nudge.update({
+            where: { id: nudge.id },
+            data: { status: "delivered" },
+          });
+        }
+        return { ok: true, status: "delivered" };
+      }
+
+      if (input.status === "expired") {
+        await prisma.nudge.update({
+          where: { id: nudge.id },
+          data: { status: "expired" },
+        });
+        return { ok: true, status: "expired" };
+      }
+
+      const updated = await prisma.nudge.update({
+        where: { id: nudge.id },
+        data: {
+          status: "seen",
+          response: input.response ?? "ok",
+          seenAt: new Date(),
+        },
+      });
+
+      void broadcastToDevice(ctx.device.id, {
+        type: "nudge:seen",
+        deviceId: ctx.device.id,
+        payload: {
+          nudgeId: updated.id,
+          response: updated.response,
+        },
+        timestamp: new Date().toISOString(),
+      }).catch(() => {});
+
+      return { ok: true, status: "seen", response: updated.response };
+    }),
 
   setLocked: agentProcedure
     .input(z.object({ isLocked: z.boolean() }))

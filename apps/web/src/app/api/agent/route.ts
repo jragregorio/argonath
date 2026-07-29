@@ -10,7 +10,9 @@ type AgentProcedure =
   | "confirmSnapshot"
   | "setLocked"
   | "clearAdminLock"
-  | "pendingCaptures";
+  | "pendingCaptures"
+  | "pendingNudges"
+  | "ackNudge";
 
 async function callAgentProcedure(
   procedure: AgentProcedure,
@@ -29,6 +31,12 @@ async function callAgentProcedure(
       return caller.agent.getPolicy();
     case "pendingCaptures":
       return caller.agent.pendingCaptures();
+    case "pendingNudges":
+      return caller.agent.pendingNudges();
+    case "ackNudge":
+      return caller.agent.ackNudge(
+        input as Parameters<typeof caller.agent.ackNudge>[0]
+      );
     case "requestExtension":
       return caller.agent.requestExtension(
         input as Parameters<typeof caller.agent.requestExtension>[0]
@@ -101,6 +109,14 @@ export async function POST(request: NextRequest) {
         );
         return NextResponse.json(result);
       }
+      case "ackNudge": {
+        const result = await callAgentProcedure(
+          "ackNudge",
+          input,
+          deviceToken
+        );
+        return NextResponse.json(result);
+      }
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
@@ -125,6 +141,11 @@ export async function GET(request: NextRequest) {
 
     if (action === "pendingCaptures") {
       const result = await callAgentProcedure("pendingCaptures", {}, deviceToken);
+      return NextResponse.json(result);
+    }
+
+    if (action === "pendingNudges") {
+      const result = await callAgentProcedure("pendingNudges", {}, deviceToken);
       return NextResponse.json(result);
     }
 
