@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useFamilyRealtimeEvent } from "@/lib/family-realtime";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
+import { OverviewSkeleton } from "@/components/dashboard-skeletons";
 import {
   Monitor,
   AlertCircle,
@@ -32,7 +33,7 @@ import {
   formatActivityDetail,
   getActivityLabel,
 } from "@/lib/activity";
-import { POLL_BACKGROUND_MS, POLL_LIVE_MS } from "@/lib/query-defaults";
+import { POLL_SAFETY_MS } from "@/lib/query-defaults";
 
 function usagePercent(used: number, limit: number) {
   if (limit <= 0) return used > 0 ? 100 : 0;
@@ -53,12 +54,16 @@ function statusBadgeVariant(status: PolicyStatus) {
 
 export default function DashboardOverviewPage() {
   const utils = trpc.useUtils();
-  const { data: overview, isLoading } = trpc.dashboard.overview.useQuery(undefined, {
-    refetchInterval: POLL_LIVE_MS,
-  });
+  const { data: overview, isLoading } = trpc.dashboard.overview.useQuery(
+    undefined,
+    {
+      // Covered by lock / policy / extension / device:online Realtime events
+      refetchInterval: POLL_SAFETY_MS,
+    }
+  );
   const { data: activity } = trpc.dashboard.activity.useQuery(
     { limit: 20 },
-    { refetchInterval: POLL_BACKGROUND_MS }
+    { refetchInterval: POLL_SAFETY_MS }
   );
   const [pendingLocks, setPendingLocks] = useState<
     Record<string, boolean | undefined>
@@ -113,48 +118,82 @@ export default function DashboardOverviewPage() {
 
   const devices = overview?.children.flatMap((child) => child.devices) ?? [];
 
+  const activeNudgeKey = useMemo(
+    () =>
+      Object.entries(nudgeByDevice)
+        .filter(([, v]) => v.nudgeId)
+        .map(([deviceId, v]) => `${deviceId}:${v.nudgeId}`)
+        .sort()
+        .join("|"),
+    [nudgeByDevice]
+  );
+
+  const clearNudgeSoon = (deviceId: string, nudgeId: string) => {
+    window.setTimeout(() => {
+      setNudgeByDevice((prev) => {
+        const cur = prev[deviceId];
+        if (!cur || cur.nudgeId !== nudgeId) return prev;
+        const next = { ...prev };
+        delete next[deviceId];
+        return next;
+      });
+    }, 5000);
+  };
+
+  const applyNudgeStatus = (
+    deviceId: string,
+    nudgeId: string,
+    status: string
+  ) => {
+    let label = "Waiting…";
+    if (status === "delivered") label = "Delivered";
+    else if (status === "seen") label = "Seen";
+    else if (status === "expired") label = "Expired";
+    else if (status === "pending") label = "Waiting…";
+
+    setNudgeByDevice((prev) => {
+      const cur = prev[deviceId];
+      if (!cur || cur.nudgeId !== nudgeId || cur.label === label) {
+        return prev;
+      }
+      return { ...prev, [deviceId]: { ...cur, label } };
+    });
+
+    if (status === "seen" || status === "expired") {
+      clearNudgeSoon(deviceId, nudgeId);
+    }
+  };
+
+  useFamilyRealtimeEvent((event) => {
+    if (event.type !== "nudge:seen") return;
+    const payload = event.payload as { nudgeId?: string } | undefined;
+    const nudgeId = payload?.nudgeId;
+    if (!nudgeId) return;
+    applyNudgeStatus(event.deviceId, nudgeId, "seen");
+  });
+
+  // Fallback poll when Realtime is slow/missing; keyed by nudge ids only
   useEffect(() => {
-    const active = Object.entries(nudgeByDevice).filter(([, v]) => v.nudgeId);
-    if (active.length === 0) return;
+    if (!activeNudgeKey) return;
+
+    const active = activeNudgeKey.split("|").map((pair) => {
+      const [deviceId, nudgeId] = pair.split(":");
+      return { deviceId, nudgeId };
+    });
 
     let cancelled = false;
     const poll = async () => {
-      for (const [deviceId, state] of active) {
-        try {
-          const nudge = await utils.device.getNudge.fetch({
-            nudgeId: state.nudgeId,
-          });
-          if (cancelled) return;
-
-          let label = state.label;
-          if (nudge.status === "delivered") label = "Delivered";
-          else if (nudge.status === "seen") label = "Seen";
-          else if (nudge.status === "expired") label = "Expired";
-          else if (nudge.status === "pending") label = "Waiting…";
-
-          setNudgeByDevice((prev) => {
-            const cur = prev[deviceId];
-            if (!cur || cur.nudgeId !== state.nudgeId || cur.label === label) {
-              return prev;
-            }
-            return { ...prev, [deviceId]: { ...cur, label } };
-          });
-
-          if (nudge.status === "seen" || nudge.status === "expired") {
-            window.setTimeout(() => {
-              setNudgeByDevice((prev) => {
-                const cur = prev[deviceId];
-                if (!cur || cur.nudgeId !== state.nudgeId) return prev;
-                const next = { ...prev };
-                delete next[deviceId];
-                return next;
-              });
-            }, 5000);
+      await Promise.all(
+        active.map(async ({ deviceId, nudgeId }) => {
+          try {
+            const nudge = await utils.device.getNudge.fetch({ nudgeId });
+            if (cancelled) return;
+            applyNudgeStatus(deviceId, nudgeId, nudge.status);
+          } catch {
+            // Keep last label.
           }
-        } catch {
-          // Keep last label.
-        }
-      }
+        })
+      );
     };
 
     void poll();
@@ -163,7 +202,8 @@ export default function DashboardOverviewPage() {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [nudgeByDevice, utils.device.getNudge]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- activeNudgeKey is the stable membership key
+  }, [activeNudgeKey, utils.device.getNudge]);
 
   useEffect(() => {
     if (!overview?.children.length) return;
@@ -192,45 +232,7 @@ export default function DashboardOverviewPage() {
   }, [overview]);
 
   if (isLoading) {
-    return (
-      <div className="space-y-6 md:space-y-8">
-        <div className="hidden md:block space-y-2">
-          <Skeleton className="h-9 w-48" />
-          <Skeleton className="h-5 w-80 max-w-full" />
-        </div>
-        <Skeleton className="h-16 w-full rounded-xl md:hidden" />
-        <div className="hidden md:grid md:grid-cols-3 gap-4">
-          {[0, 1, 2].map((i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-4 w-24 mb-3" />
-                <Skeleton className="h-9 w-16" />
-              </CardHeader>
-            </Card>
-          ))}
-        </div>
-        <div>
-          <Skeleton className="h-7 w-28 mb-4" />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {[0, 1].map((i) => (
-              <Card key={i}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <Skeleton className="h-6 w-40" />
-                    <Skeleton className="h-5 w-20 rounded-full" />
-                  </div>
-                  <Skeleton className="h-2 w-full mt-4 rounded-full" />
-                  <Skeleton className="h-4 w-36 mt-2" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-10 w-full" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return <OverviewSkeleton />;
   }
 
   const children = overview?.children ?? [];
@@ -496,7 +498,9 @@ export default function DashboardOverviewPage() {
                                   !device.isPaired ||
                                   !device.isOnline ||
                                   Boolean(nudgeByDevice[device.id]?.nudgeId) ||
-                                  sendNudge.isPending
+                                  (sendNudge.isPending &&
+                                    sendNudge.variables?.deviceId ===
+                                      device.id)
                                 }
                                 title={
                                   !device.isPaired

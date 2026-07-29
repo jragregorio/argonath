@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { useFamilyRealtimeEvent } from "@/lib/family-realtime";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
+import { SnapshotsGridSkeleton } from "@/components/dashboard-skeletons";
 import { getDeviceDisplayName } from "@warden/shared";
 import { cn } from "@warden/ui";
 import { Camera, CheckSquare, Loader2, Square, Trash2, Video, X } from "lucide-react";
-import { POLL_BACKGROUND_MS, POLL_LIVE_MS } from "@/lib/query-defaults";
+import { POLL_LIVE_MS, POLL_SAFETY_MS } from "@/lib/query-defaults";
 
 type SnapshotStatusFilter = "all" | "ready" | "pending" | "failed";
 
@@ -69,11 +70,12 @@ export default function SnapshotsPage() {
 
   const { data: children } = trpc.children.list.useQuery();
   const { data: snapshots, isLoading } = trpc.snapshot.list.useQuery(listInput, {
-    // Poll faster only while a capture is in flight; otherwise background cadence.
+    placeholderData: keepPreviousData,
+    // snapshot:ready / snapshot:failed invalidate; poll faster while pending
     refetchInterval: (query) => {
       const rows = query.state.data;
       if (rows?.some((s) => s.status === "pending")) return POLL_LIVE_MS;
-      return POLL_BACKGROUND_MS;
+      return POLL_SAFETY_MS;
     },
   });
   const markAllViewed = trpc.snapshot.markAllViewed.useMutation({
@@ -293,20 +295,7 @@ export default function SnapshotsPage() {
       )}
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[0, 1, 2].map((i) => (
-            <Card key={i} className="overflow-hidden p-0">
-              <Skeleton className="aspect-video w-full rounded-none rounded-t-xl" />
-              <div className="p-6 pt-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <Skeleton className="h-4 w-28" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                </div>
-                <Skeleton className="h-4 w-40" />
-              </div>
-            </Card>
-          ))}
-        </div>
+        <SnapshotsGridSkeleton />
       ) : snapshots && snapshots.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {snapshots.map((snapshot) => {

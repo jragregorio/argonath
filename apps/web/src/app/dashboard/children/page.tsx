@@ -8,11 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ChildrenListSkeleton } from "@/components/dashboard-skeletons";
 import { getDeviceDisplayName } from "@warden/shared";
 import { Pencil, Plus, Trash2, User } from "lucide-react";
 import Link from "next/link";
-import { POLL_LIVE_MS } from "@/lib/query-defaults";
+import { POLL_SAFETY_MS } from "@/lib/query-defaults";
 
 export default function ChildrenPage() {
   const [name, setName] = useState("");
@@ -21,7 +21,8 @@ export default function ChildrenPage() {
   const [editName, setEditName] = useState("");
   const utils = trpc.useUtils();
   const { data: children, isLoading } = trpc.children.list.useQuery(undefined, {
-    refetchInterval: POLL_LIVE_MS,
+    // Covered by lock / policy / extension / device:online Realtime events
+    refetchInterval: POLL_SAFETY_MS,
   });
   const createChild = trpc.children.create.useMutation({
     onSuccess: () => {
@@ -94,23 +95,7 @@ export default function ChildrenPage() {
       )}
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[0, 1, 2].map((i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-36" />
-                <Skeleton className="h-4 w-28 mt-2" />
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex gap-2">
-                  <Skeleton className="h-5 w-20 rounded-full" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                </div>
-                <Skeleton className="h-4 w-32" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <ChildrenListSkeleton />
       ) : children && children.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {children.map((child) => (

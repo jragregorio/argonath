@@ -15,14 +15,18 @@ export type AccessTokenClaims = {
   jti: string;
 };
 
+let cachedJwtSecret: Uint8Array | null = null;
+
 function getJwtSecret(): Uint8Array {
+  if (cachedJwtSecret) return cachedJwtSecret;
   const secret = process.env.AUTH_JWT_SECRET?.trim();
   if (!secret || secret.length < 32) {
     throw new Error(
       "AUTH_JWT_SECRET must be set to a string at least 32 characters long"
     );
   }
-  return new TextEncoder().encode(secret);
+  cachedJwtSecret = new TextEncoder().encode(secret);
+  return cachedJwtSecret;
 }
 
 export async function hashPassword(password: string): Promise<string> {

@@ -34,8 +34,14 @@ import {
 import { requireFamilyAccess, revokeOtherUserSessions } from "../auth/session";
 import { hashPassword, verifyPassword } from "../auth/tokens";
 
-async function getFamilyForUser(ctx: { userId: string; familyId: string }) {
-  return requireFamilyAccess(ctx.userId, ctx.familyId);
+async function getFamilyForUser(ctx: {
+  userId: string;
+  familyId: string;
+  loadFamily: () => Promise<
+    Awaited<ReturnType<typeof requireFamilyAccess>>
+  >;
+}) {
+  return ctx.loadFamily();
 }
 
 /** Fields safe to expose to the parent dashboard (no deviceToken). */
@@ -191,19 +197,20 @@ export const familyRouter = router({
 
 export const authRouter = router({
   me: protectedProcedure.query(async ({ ctx }) => {
-    const user = await prisma.user.findUnique({
-      where: { id: ctx.userId },
-      select: { id: true, email: true, name: true, createdAt: true },
-    });
+    const [user, memberships] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: ctx.userId },
+        select: { id: true, email: true, name: true, createdAt: true },
+      }),
+      prisma.familyMember.findMany({
+        where: { userId: ctx.userId },
+        include: { family: { select: { id: true, name: true } } },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
     if (!user) {
       throw new TRPCError({ code: "UNAUTHORIZED" });
     }
-
-    const memberships = await prisma.familyMember.findMany({
-      where: { userId: ctx.userId },
-      include: { family: { select: { id: true, name: true } } },
-      orderBy: { createdAt: "asc" },
-    });
 
     return {
       user,
@@ -310,7 +317,10 @@ export const authRouter = router({
         data: { passwordHash },
       });
 
-      await revokeOtherUserSessions(ctx.userId, ctx.refreshTokenFamilyId);
+      await revokeOtherUserSessions(
+        ctx.userId,
+        await ctx.resolveRefreshTokenFamilyId()
+      );
 
       return { ok: true };
     }),
@@ -318,15 +328,17 @@ export const authRouter = router({
 
 export const childrenRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
-    const family = await getFamilyForUser(ctx);
-    const children = await prisma.child.findMany({
-      where: { familyId: family.id },
-      include: {
-        devices: { select: deviceClientSelect },
-        policies: { where: { isActive: true }, take: 1 },
-      },
-      orderBy: { createdAt: "asc" },
-    });
+    const [, children] = await Promise.all([
+      getFamilyForUser(ctx),
+      prisma.child.findMany({
+        where: { familyId: ctx.familyId },
+        include: {
+          devices: { select: deviceClientSelect },
+          policies: { where: { isActive: true }, take: 1 },
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
 
     return children.map((child) => ({
       ...child,
@@ -367,8 +379,11 @@ export const childrenRouter = router({
   get: protectedProcedure
     .input(z.object({ childId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const family = await getFamilyForUser(ctx);
-      return getChildForFamily(input.childId, family.id);
+      const [, child] = await Promise.all([
+        getFamilyForUser(ctx),
+        getChildForFamily(input.childId, ctx.familyId),
+      ]);
+      return child;
     }),
 
   rename: parentProcedure
@@ -445,12 +460,13 @@ export const policyRouter = router({
         policy,
       });
 
+      // Best-effort: tray also polls agent.getPolicy for the updated policy.
       for (const device of child.devices) {
-        await broadcastToDevice(device.id, {
+        void broadcastToDevice(device.id, {
           type: "policy:updated",
           deviceId: device.id,
           timestamp: new Date().toISOString(),
-        });
+        }).catch(() => {});
       }
 
       return policy;
@@ -459,19 +475,20 @@ export const policyRouter = router({
   getEvaluation: protectedProcedure
     .input(z.object({ childId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const family = await getFamilyForUser(ctx);
-      const child = await getChildForFamily(input.childId, family.id);
-      const policy = child.policies[0];
-
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const usageLogs = await prisma.usageLog.findMany({
-        where: {
-          device: { childId: child.id },
-          date: today,
-        },
-      });
+      const [, child, usageLogs] = await Promise.all([
+        getFamilyForUser(ctx),
+        getChildForFamily(input.childId, ctx.familyId),
+        prisma.usageLog.findMany({
+          where: {
+            device: { childId: input.childId },
+            date: today,
+          },
+        }),
+      ]);
+      const policy = child.policies[0];
 
       const usedMinutes = usageLogs.reduce((sum, log) => sum + log.activeMinutes, 0);
 
@@ -531,15 +548,17 @@ export const deviceRouter = router({
     }),
 
   list: protectedProcedure.query(async ({ ctx }) => {
-    const family = await getFamilyForUser(ctx);
-    const devices = await prisma.device.findMany({
-      where: { child: { familyId: family.id } },
-      select: {
-        ...deviceClientSelect,
-        child: { select: { id: true, displayName: true } },
-      },
-      orderBy: { lastSeenAt: "desc" },
-    });
+    const [, devices] = await Promise.all([
+      getFamilyForUser(ctx),
+      prisma.device.findMany({
+        where: { child: { familyId: ctx.familyId } },
+        select: {
+          ...deviceClientSelect,
+          child: { select: { id: true, displayName: true } },
+        },
+        orderBy: { lastSeenAt: "desc" },
+      }),
+    ]);
     return devices.map((device) => {
       const { child, deviceToken, ...rest } = device;
       return {
@@ -662,13 +681,23 @@ export const deviceRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const family = await getFamilyForUser(ctx);
-      const device = await prisma.device.findFirst({
-        where: {
-          id: input.deviceId,
-          child: { familyId: family.id },
-        },
-      });
+      const now = new Date();
+      const [family, device, active] = await Promise.all([
+        getFamilyForUser(ctx),
+        prisma.device.findFirst({
+          where: {
+            id: input.deviceId,
+            child: { familyId: ctx.familyId },
+          },
+        }),
+        prisma.nudge.findFirst({
+          where: {
+            deviceId: input.deviceId,
+            status: { in: ["pending", "delivered"] },
+            expiresAt: { gt: now },
+          },
+        }),
+      ]);
 
       if (!device) {
         throw new TRPCError({ code: "NOT_FOUND" });
@@ -687,15 +716,6 @@ export const deviceRouter = router({
           message: "Device is offline",
         });
       }
-
-      const now = new Date();
-      const active = await prisma.nudge.findFirst({
-        where: {
-          deviceId: device.id,
-          status: { in: ["pending", "delivered"] },
-          expiresAt: { gt: now },
-        },
-      });
 
       if (active) {
         throw new TRPCError({
@@ -803,20 +823,23 @@ export const deviceRouter = router({
 
 export const extensionRouter = router({
   listPending: protectedProcedure.query(async ({ ctx }) => {
-    const family = await getFamilyForUser(ctx);
-    return prisma.extensionRequest.findMany({
-      where: {
-        child: { familyId: family.id },
-        status: "pending",
-      },
-      include: {
-        child: { select: { id: true, displayName: true } },
-        device: {
-          select: { id: true, machineName: true, displayName: true },
+    const [, requests] = await Promise.all([
+      getFamilyForUser(ctx),
+      prisma.extensionRequest.findMany({
+        where: {
+          child: { familyId: ctx.familyId },
+          status: "pending",
         },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+        include: {
+          child: { select: { id: true, displayName: true } },
+          device: {
+            select: { id: true, machineName: true, displayName: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+    return requests;
   }),
 
   listHistory: protectedProcedure
@@ -892,15 +915,17 @@ export const extensionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const family = await getFamilyForUser(ctx);
-      const request = await prisma.extensionRequest.findFirst({
-        where: {
-          id: input.requestId,
-          child: { familyId: family.id },
-          status: "pending",
-        },
-        include: { device: true },
-      });
+      const [family, request] = await Promise.all([
+        getFamilyForUser(ctx),
+        prisma.extensionRequest.findFirst({
+          where: {
+            id: input.requestId,
+            child: { familyId: ctx.familyId },
+            status: "pending",
+          },
+          include: { device: true },
+        }),
+      ]);
 
       if (!request) {
         throw new TRPCError({ code: "NOT_FOUND" });
@@ -921,38 +946,45 @@ export const extensionRouter = router({
         const endOfDay = new Date();
         endOfDay.setHours(23, 59, 59, 999);
 
-        await prisma.extensionOverride.create({
-          data: {
-            childId: request.childId,
-            extraMinutes: request.requestedMinutes,
-            expiresAt: endOfDay,
-            sourceRequestId: request.id,
-          },
-        });
+        await Promise.all([
+          prisma.extensionOverride.create({
+            data: {
+              childId: request.childId,
+              extraMinutes: request.requestedMinutes,
+              expiresAt: endOfDay,
+              sourceRequestId: request.id,
+            },
+          }),
+          prisma.device.update({
+            where: { id: request.deviceId },
+            data: { isLocked: false },
+          }),
+          logAudit(family.id, ctx.userId, `extension_${status}`, {
+            requestId: request.id,
+            minutes: request.requestedMinutes,
+          }),
+        ]);
 
-        await prisma.device.update({
-          where: { id: request.deviceId },
-          data: { isLocked: false },
-        });
-
-        await broadcastToDevice(request.deviceId, {
+        // Best-effort: tray also polls agent.getPolicy (bonusMinutes / lock state).
+        void broadcastToDevice(request.deviceId, {
           type: "extension:approved",
           deviceId: request.deviceId,
           payload: { extraMinutes: request.requestedMinutes },
           timestamp: new Date().toISOString(),
-        });
+        }).catch(() => {});
       } else {
-        await broadcastToDevice(request.deviceId, {
+        await logAudit(family.id, ctx.userId, `extension_${status}`, {
+          requestId: request.id,
+          minutes: request.requestedMinutes,
+        });
+
+        // Best-effort: tray also polls agent.getPolicy (bonusMinutes / lock state).
+        void broadcastToDevice(request.deviceId, {
           type: "extension:denied",
           deviceId: request.deviceId,
           timestamp: new Date().toISOString(),
-        });
+        }).catch(() => {});
       }
-
-      await logAudit(family.id, ctx.userId, `extension_${status}`, {
-        requestId: request.id,
-        minutes: request.requestedMinutes,
-      });
 
       return { status };
     }),
@@ -960,19 +992,19 @@ export const extensionRouter = router({
 
 export const dashboardRouter = router({
   navBadges: protectedProcedure.query(async ({ ctx }) => {
-    const family = await getFamilyForUser(ctx);
     const now = new Date();
 
-    const [pendingRequests, unviewedSnapshots] = await Promise.all([
+    const [, pendingRequests, unviewedSnapshots] = await Promise.all([
+      getFamilyForUser(ctx),
       prisma.extensionRequest.count({
         where: {
-          child: { familyId: family.id },
+          child: { familyId: ctx.familyId },
           status: "pending",
         },
       }),
       prisma.snapshot.count({
         where: {
-          child: { familyId: family.id },
+          child: { familyId: ctx.familyId },
           status: "ready",
           viewedAt: null,
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
@@ -985,14 +1017,14 @@ export const dashboardRouter = router({
 
   /** Family overview: children with today's usage, policy status, and devices. */
   overview: protectedProcedure.query(async ({ ctx }) => {
-    const family = await getFamilyForUser(ctx);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const now = new Date();
 
-    const [children, pendingRequests, usageLogs] = await Promise.all([
+    const [, children, pendingRequests, usageLogs] = await Promise.all([
+      getFamilyForUser(ctx),
       prisma.child.findMany({
-        where: { familyId: family.id },
+        where: { familyId: ctx.familyId },
         include: {
           devices: { select: deviceClientSelect },
           policies: { where: { isActive: true }, take: 1 },
@@ -1004,14 +1036,14 @@ export const dashboardRouter = router({
       }),
       prisma.extensionRequest.count({
         where: {
-          child: { familyId: family.id },
+          child: { familyId: ctx.familyId },
           status: "pending",
         },
       }),
       prisma.usageLog.findMany({
         where: {
           date: today,
-          device: { child: { familyId: family.id } },
+          device: { child: { familyId: ctx.familyId } },
         },
         select: {
           activeMinutes: true,
@@ -1415,14 +1447,16 @@ export const snapshotRouter = router({
         });
       }
 
-      const family = await getFamilyForUser(ctx);
-      const device = await prisma.device.findFirst({
-        where: {
-          id: input.deviceId,
-          child: { familyId: family.id },
-        },
-        include: { child: true },
-      });
+      const [family, device] = await Promise.all([
+        getFamilyForUser(ctx),
+        prisma.device.findFirst({
+          where: {
+            id: input.deviceId,
+            child: { familyId: ctx.familyId },
+          },
+          include: { child: true },
+        }),
+      ]);
 
       if (!device) {
         throw new TRPCError({ code: "NOT_FOUND" });
@@ -1610,54 +1644,53 @@ export const agentRouter = router({
       });
 
       if (!wasOnline) {
-        await broadcastToDevice(device.id, {
+        void broadcastToDevice(device.id, {
           type: "device:online",
           deviceId: device.id,
           timestamp: new Date().toISOString(),
-        });
+        }).catch(() => {});
       }
 
       return { ok: true };
     }),
 
   getPolicy: agentProcedure.query(async ({ ctx }) => {
-    const device = await prisma.device.findUnique({
-      where: { id: ctx.device.id },
-      include: {
-        child: {
-          include: {
-            family: true,
-            policies: { where: { isActive: true }, take: 1 },
-            extensionOverrides: {
-              where: { expiresAt: { gt: new Date() } },
-            },
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+
+    const [child, usageLogs] = await Promise.all([
+      prisma.child.findUnique({
+        where: { id: ctx.device.childId },
+        include: {
+          family: { select: { parentPin: true } },
+          policies: { where: { isActive: true }, take: 1 },
+          extensionOverrides: {
+            where: { expiresAt: { gt: now } },
           },
         },
-      },
-    });
+      }),
+      prisma.usageLog.findMany({
+        where: {
+          device: { childId: ctx.device.childId },
+          date: today,
+        },
+      }),
+    ]);
 
-    if (!device) {
+    if (!child) {
       throw new TRPCError({ code: "NOT_FOUND" });
     }
 
-    const policy = device.child.policies[0];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const policy = child.policies[0];
 
-    const usageLogs = await prisma.usageLog.findMany({
-      where: {
-        device: { childId: device.childId },
-        date: today,
-      },
-    });
-
-    const thisDeviceLog = usageLogs.find((log) => log.deviceId === device.id);
+    const thisDeviceLog = usageLogs.find((log) => log.deviceId === ctx.device.id);
     const usedMinutesToday = usageLogs.reduce(
       (sum, log) => sum + log.activeMinutes,
       0
     );
 
-    const bonusMinutes = device.child.extensionOverrides.reduce(
+    const bonusMinutes = child.extensionOverrides.reduce(
       (sum, o) => sum + o.extraMinutes,
       0
     );
@@ -1673,8 +1706,8 @@ export const agentRouter = router({
       usedMinutesToday,
       thisDeviceMinutes: thisDeviceLog?.activeMinutes ?? 0,
       bonusMinutes,
-      parentPin: device.child.family.parentPin ?? null,
-      adminLock: device.adminLock,
+      parentPin: child.family.parentPin ?? null,
+      adminLock: ctx.device.adminLock,
     };
   }),
 
@@ -1699,25 +1732,26 @@ export const agentRouter = router({
       const endOfDay = new Date();
       endOfDay.setHours(23, 59, 59, 999);
 
-      await prisma.extensionOverride.create({
-        data: {
-          childId: ctx.device.childId,
-          extraMinutes: input.extraMinutes,
-          expiresAt: endOfDay,
-        },
-      });
+      await Promise.all([
+        prisma.extensionOverride.create({
+          data: {
+            childId: ctx.device.childId,
+            extraMinutes: input.extraMinutes,
+            expiresAt: endOfDay,
+          },
+        }),
+        prisma.device.update({
+          where: { id: ctx.device.id },
+          data: { isLocked: false },
+        }),
+      ]);
 
-      await prisma.device.update({
-        where: { id: ctx.device.id },
-        data: { isLocked: false },
-      });
-
-      await broadcastToDevice(ctx.device.id, {
+      void broadcastToDevice(ctx.device.id, {
         type: "extension:approved",
         deviceId: ctx.device.id,
         payload: { extraMinutes: input.extraMinutes },
         timestamp: new Date().toISOString(),
-      });
+      }).catch(() => {});
 
       return { ok: true, extraMinutes: input.extraMinutes };
     }),
@@ -1940,28 +1974,29 @@ export const agentRouter = router({
         data: { isLocked: input.isLocked },
       });
 
-      await broadcastToDevice(ctx.device.id, {
+      void broadcastToDevice(ctx.device.id, {
         type: input.isLocked ? "device:locked" : "device:unlocked",
         deviceId: ctx.device.id,
         timestamp: new Date().toISOString(),
-      });
+      }).catch(() => {});
 
       return { ok: true };
     }),
 
   clearAdminLock: agentProcedure.mutation(async ({ ctx }) => {
-    await prisma.device.update({
-      where: { id: ctx.device.id },
-      data: {
-        adminLock: false,
-        isLocked: false,
-      },
-    });
-
-    const family = await prisma.child.findUnique({
-      where: { id: ctx.device.childId },
-      select: { familyId: true },
-    });
+    const [, family] = await Promise.all([
+      prisma.device.update({
+        where: { id: ctx.device.id },
+        data: {
+          adminLock: false,
+          isLocked: false,
+        },
+      }),
+      prisma.child.findUnique({
+        where: { id: ctx.device.childId },
+        select: { familyId: true },
+      }),
+    ]);
 
     if (family) {
       await logAudit(family.familyId, "agent", "admin_unlock", {
@@ -1970,12 +2005,12 @@ export const agentRouter = router({
       });
     }
 
-    await broadcastToDevice(ctx.device.id, {
+    void broadcastToDevice(ctx.device.id, {
       type: "device:unlocked",
       deviceId: ctx.device.id,
       payload: { adminLock: false },
       timestamp: new Date().toISOString(),
-    });
+    }).catch(() => {});
 
     return { ok: true };
   }),

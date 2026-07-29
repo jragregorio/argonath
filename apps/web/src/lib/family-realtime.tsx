@@ -12,7 +12,7 @@ import {
 import type { RealtimeEvent } from "@warden/shared";
 import { trpc } from "@/lib/trpc";
 import { subscribeDeviceChannels } from "@/lib/realtime";
-import { POLL_BACKGROUND_MS, POLL_LIVE_MS } from "@/lib/query-defaults";
+import { POLL_BACKGROUND_MS, POLL_SAFETY_MS } from "@/lib/query-defaults";
 
 type RealtimeListener = (event: RealtimeEvent) => void;
 
@@ -24,42 +24,98 @@ type FamilyRealtimeContextValue = {
 const FamilyRealtimeContext =
   createContext<FamilyRealtimeContextValue | null>(null);
 
+type DeviceListRow = {
+  id: string;
+  child: { id: string };
+};
+
+function childIdForDevice(
+  devices: DeviceListRow[] | undefined,
+  deviceId: string
+): string | undefined {
+  return devices?.find((d) => d.id === deviceId)?.child.id;
+}
+
 function invalidateForEvent(
   utils: ReturnType<typeof trpc.useUtils>,
-  event: RealtimeEvent
+  event: RealtimeEvent,
+  devices: DeviceListRow[] | undefined
 ) {
   const type = event.type;
+  const childId = childIdForDevice(devices, event.deviceId);
 
-  if (
-    type.startsWith("extension:") ||
-    type === "device:locked" ||
-    type === "device:unlocked" ||
-    type === "policy:updated" ||
-    type === "nudge:seen" ||
-    type === "nudge:show"
-  ) {
-    void utils.dashboard.overview.invalidate();
-    void utils.dashboard.activity.invalidate();
-    void utils.children.list.invalidate();
-    void utils.children.get.invalidate();
-    void utils.policy.getEvaluation.invalidate();
-    void utils.device.list.invalidate();
+  // Nudge rows only — sendNudge/ackNudge do not touch children, policy, or devices.
+  // Pages listen via useFamilyRealtimeEvent for label updates.
+  if (type === "nudge:seen" || type === "nudge:show") {
+    return;
   }
 
-  if (type.startsWith("extension:")) {
+  if (type === "extension:approved" || type === "extension:denied") {
     void utils.extension.listPending.invalidate();
     void utils.extension.listHistory.invalidate();
     void utils.dashboard.navBadges.invalidate();
+    void utils.dashboard.overview.invalidate();
+    void utils.dashboard.activity.invalidate();
+    void utils.children.list.invalidate();
+    void utils.device.list.invalidate();
+    if (childId) {
+      void utils.children.get.invalidate({ childId });
+      void utils.policy.getEvaluation.invalidate({ childId });
+    } else {
+      // device.list cache miss — cannot scope without guessing childId
+      void utils.children.get.invalidate();
+      void utils.policy.getEvaluation.invalidate();
+    }
+    return;
+  }
+
+  if (type === "device:locked" || type === "device:unlocked") {
+    void utils.device.list.invalidate();
+    void utils.children.list.invalidate();
+    void utils.dashboard.overview.invalidate();
+    void utils.dashboard.activity.invalidate();
+    void utils.dashboard.navBadges.invalidate();
+    if (childId) {
+      void utils.children.get.invalidate({ childId });
+    } else {
+      // device.list cache miss — cannot scope without guessing childId
+      void utils.children.get.invalidate();
+    }
+    return;
+  }
+
+  if (type === "policy:updated") {
+    void utils.children.list.invalidate();
+    void utils.dashboard.overview.invalidate();
+    void utils.dashboard.activity.invalidate();
+    if (childId) {
+      void utils.children.get.invalidate({ childId });
+      void utils.policy.getEvaluation.invalidate({ childId });
+    } else {
+      // device.list cache miss — cannot scope without guessing childId
+      void utils.children.get.invalidate();
+      void utils.policy.getEvaluation.invalidate();
+    }
+    return;
   }
 
   if (type === "snapshot:ready" || type === "snapshot:failed") {
     void utils.snapshot.list.invalidate();
     void utils.dashboard.navBadges.invalidate();
-    void utils.children.get.invalidate();
+    void utils.dashboard.activity.invalidate();
+    return;
   }
 
-  if (type === "device:locked" || type === "device:unlocked") {
-    void utils.dashboard.navBadges.invalidate();
+  if (type === "device:online" || type === "device:offline") {
+    void utils.device.list.invalidate();
+    void utils.children.list.invalidate();
+    void utils.dashboard.overview.invalidate();
+    if (childId) {
+      void utils.children.get.invalidate({ childId });
+    } else {
+      // device.list cache miss — cannot scope without guessing childId
+      void utils.children.get.invalidate();
+    }
   }
 }
 
@@ -68,9 +124,11 @@ export function FamilyRealtimeProvider({ children }: { children: ReactNode }) {
   const listenersRef = useRef(new Set<RealtimeListener>());
 
   const { data: badges } = trpc.dashboard.navBadges.useQuery(undefined, {
-    refetchInterval: POLL_LIVE_MS,
+    // extension:* / snapshot:* invalidate badges; safety net if Realtime drops
+    refetchInterval: POLL_SAFETY_MS,
   });
   const { data: devices } = trpc.device.list.useQuery(undefined, {
+    // device:offline is never broadcast — keep a moderate poll for online decay
     refetchInterval: POLL_BACKGROUND_MS,
   });
 
@@ -79,10 +137,12 @@ export function FamilyRealtimeProvider({ children }: { children: ReactNode }) {
     [devices]
   );
   const deviceIdsKey = deviceIds.join(",");
+  const devicesRef = useRef(devices);
+  devicesRef.current = devices;
 
   useEffect(() => {
     return subscribeDeviceChannels(deviceIds, (event) => {
-      invalidateForEvent(utils, event);
+      invalidateForEvent(utils, event, devicesRef.current);
       listenersRef.current.forEach((listener) => {
         try {
           listener(event);

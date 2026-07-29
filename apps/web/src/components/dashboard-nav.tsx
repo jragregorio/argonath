@@ -119,7 +119,8 @@ function NavFooter({ onNavigate }: { onNavigate?: () => void }) {
         body: JSON.stringify({ familyId }),
       });
       if (!res.ok) return;
-      await utils.invalidate();
+      // Do not await refetches — clear the switcher spinner while cache resets.
+      void utils.invalidate();
       router.refresh();
     } finally {
       setSwitching(false);

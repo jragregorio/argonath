@@ -1,16 +1,63 @@
 import { prisma } from "@warden/db";
-import type { Device, FamilyRole } from "@warden/db";
+import type { Device, Family, FamilyRole } from "@warden/db";
+import { TRPCError } from "@trpc/server";
 import { hashToken, verifyAccessToken } from "./auth/tokens";
-import { ensureDevBypassIdentity } from "./auth/session";
+import { ensureDevBypassIdentity, requireFamilyAccess } from "./auth/session";
 
 export type Context = {
   userId: string | null;
   familyId: string | null;
   role: FamilyRole | null;
-  /** Active refresh-token family for this request, if a valid refresh cookie was provided. */
-  refreshTokenFamilyId: string | null;
+  /** Resolves the active refresh-token family for this request (lazy, memoized). */
+  resolveRefreshTokenFamilyId: () => Promise<string | null>;
+  /** Membership + family row for this request (lazy, memoized; one query per HTTP request). */
+  loadFamily: () => Promise<Family & { role: FamilyRole }>;
   device: (Device & { child: { familyId: string } }) | null;
 };
+
+function createRefreshTokenFamilyResolver(
+  refreshToken: string | null | undefined
+): () => Promise<string | null> {
+  let cached: Promise<string | null> | null = null;
+  return () => {
+    if (!cached) {
+      cached = (async () => {
+        if (!refreshToken) return null;
+        const existing = await prisma.refreshToken.findUnique({
+          where: { tokenHash: hashToken(refreshToken) },
+          select: { tokenFamilyId: true, revokedAt: true, expiresAt: true },
+        });
+        if (
+          existing &&
+          !existing.revokedAt &&
+          existing.expiresAt > new Date()
+        ) {
+          return existing.tokenFamilyId;
+        }
+        return null;
+      })();
+    }
+    return cached;
+  };
+}
+
+function createFamilyLoader(
+  userId: string | null,
+  familyId: string | null
+): () => Promise<Family & { role: FamilyRole }> {
+  // Cache the promise (not the value) so concurrent batched procedures share one in-flight query.
+  let cached: Promise<Family & { role: FamilyRole }> | null = null;
+  return () => {
+    if (!cached) {
+      if (!userId || !familyId) {
+        cached = Promise.reject(new TRPCError({ code: "NOT_FOUND" }));
+      } else {
+        cached = requireFamilyAccess(userId, familyId);
+      }
+    }
+    return cached;
+  };
+}
 
 export async function createContext(opts: {
   userId?: string | null;
@@ -22,7 +69,6 @@ export async function createContext(opts: {
   devBypass?: boolean;
 }): Promise<Context> {
   let device: Context["device"] = null;
-  let refreshTokenFamilyId: string | null = null;
 
   if (opts.deviceToken) {
     device = await prisma.device.findUnique({
@@ -31,19 +77,9 @@ export async function createContext(opts: {
     });
   }
 
-  if (opts.refreshToken) {
-    const existing = await prisma.refreshToken.findUnique({
-      where: { tokenHash: hashToken(opts.refreshToken) },
-      select: { tokenFamilyId: true, revokedAt: true, expiresAt: true },
-    });
-    if (
-      existing &&
-      !existing.revokedAt &&
-      existing.expiresAt > new Date()
-    ) {
-      refreshTokenFamilyId = existing.tokenFamilyId;
-    }
-  }
+  const resolveRefreshTokenFamilyId = createRefreshTokenFamilyResolver(
+    opts.refreshToken
+  );
 
   if (opts.devBypass) {
     const identity = await ensureDevBypassIdentity({
@@ -54,7 +90,8 @@ export async function createContext(opts: {
       userId: identity.userId,
       familyId: identity.familyId,
       role: identity.role,
-      refreshTokenFamilyId,
+      resolveRefreshTokenFamilyId,
+      loadFamily: createFamilyLoader(identity.userId, identity.familyId),
       device,
     };
   }
@@ -66,17 +103,21 @@ export async function createContext(opts: {
         userId: claims.sub,
         familyId: claims.fid,
         role: claims.role,
-        refreshTokenFamilyId,
+        resolveRefreshTokenFamilyId,
+        loadFamily: createFamilyLoader(claims.sub, claims.fid),
         device,
       };
     }
   }
 
+  const userId = opts.userId ?? null;
+  const familyId = opts.familyId ?? null;
   return {
-    userId: opts.userId ?? null,
-    familyId: opts.familyId ?? null,
+    userId,
+    familyId,
     role: opts.role ?? null,
-    refreshTokenFamilyId,
+    resolveRefreshTokenFamilyId,
+    loadFamily: createFamilyLoader(userId, familyId),
     device,
   };
 }

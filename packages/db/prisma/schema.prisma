@@ -1,5 +1,9 @@
 generator client {
   provider = "prisma-client-js"
+  // Loads relations via LATERAL JOIN in one statement. Supavisor transaction mode
+  // requires pgbouncer=true, which wraps each call in BEGIN/DEALLOCATE/COMMIT, so
+  // a per-relation SELECT costs a full round trip.
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -93,6 +97,7 @@ model Child {
   nudges             Nudge[]
 
   @@index([familyId])
+  @@index([familyId, createdAt])
 }
 
 model Device {
@@ -120,6 +125,7 @@ model Device {
 
   @@index([childId])
   @@index([deviceToken])
+  @@index([lastSeenAt])
 }
 
 model ScreenTimePolicy {
@@ -166,6 +172,8 @@ model ExtensionRequest {
   @@index([childId])
   @@index([deviceId])
   @@index([status])
+  @@index([status, createdAt])
+  @@index([resolvedAt])
 }
 
 model ExtensionOverride {
@@ -203,6 +211,8 @@ model Snapshot {
   @@index([deviceId])
   @@index([deviceId, status])
   @@index([status, viewedAt])
+  @@index([childId, capturedAt])
+  @@index([childId, status, viewedAt])
   @@index([expiresAt])
 }
 
@@ -242,6 +252,7 @@ model AuditLog {
 
   @@index([familyId])
   @@index([createdAt])
+  @@index([familyId, createdAt])
 }
 
 model CaptureRateLimit {
