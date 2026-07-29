@@ -255,11 +255,6 @@ function Brand({ compact = false }: { compact?: boolean }) {
       <span className={`${compact ? "text-base" : "text-lg"} font-bold`}>
         Warden
       </span>
-      {!compact && (
-        <span className="text-sm font-medium text-muted-foreground">
-          v{APP_VERSION}
-        </span>
-      )}
     </div>
   );
 }
