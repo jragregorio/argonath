@@ -57,6 +57,15 @@ Establish AI guardrails, docs, hygiene, config normalization, and boundary check
 - Commands: `git ls-files` for env secrets → none; `git diff --check`
 - Results: no tracked secret-bearing env files
 - Next: Phase 3 structural doc move
+- Commit: `a403443`
+
+### Phase 3 — Structural reorganization
+
+- Date: 2026-07-29
+- Changes: `git mv DEV-TESTING.md → docs/development/local-testing.md`; updated README link; fixed relative env links inside local-testing.md
+- Evidence for no app/package moves: ADR-0001; `vercel.json` `cd ../..`; acyclic package graph already correct
+- Commands: grep for `DEV-TESTING.md` path links → only historical mentions remain; `git diff --check` PASS
+- Next: Phase 4 config normalization
 
 ## Final
 

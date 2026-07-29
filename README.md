@@ -17,7 +17,7 @@ Parental screen time control SaaS with a parent web dashboard and a Windows agen
 
 ## Local core testing (no Supabase)
 
-See [DEV-TESTING.md](DEV-TESTING.md) for time limits, lockout, and extension approval without Supabase (optional auth bypass).
+See [docs/development/local-testing.md](docs/development/local-testing.md) for time limits, lockout, and extension approval without Supabase (optional auth bypass).
 
 Quick start:
 

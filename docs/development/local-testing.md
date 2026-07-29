@@ -18,7 +18,7 @@ Verify: `docker compose ps` shows `warden-postgres` running.
 
 ## 2. Apply database schema
 
-Ensure [`packages/db/.env`](packages/db/.env) exists (copy from `.env.example` if needed).
+Ensure [`packages/db/.env`](../../packages/db/.env) exists (copy from `.env.example` if needed).
 
 ```bash
 npm run db:push
@@ -32,7 +32,7 @@ npm run dev
 
 Open [http://localhost:3000/dashboard](http://localhost:3000/dashboard) — with auth bypass, sign-in is skipped.
 
-Required env in [`apps/web/.env.local`](apps/web/.env.local):
+Required env in [`apps/web/.env.local`](../../apps/web/.env.local):
 
 ```
 NEXT_PUBLIC_DEV_AUTH_BYPASS=true
