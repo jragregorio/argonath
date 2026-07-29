@@ -20,6 +20,7 @@ import {
   Copy,
   Lock,
   Monitor,
+  MoreHorizontal,
   Pencil,
   RefreshCw,
   Trash2,
@@ -393,6 +394,8 @@ export default function ChildDetailPage() {
   const [childNameDraft, setChildNameDraft] = useState("");
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [deviceNameDraft, setDeviceNameDraft] = useState("");
+  const [deviceMoreOpenId, setDeviceMoreOpenId] = useState<string | null>(null);
+  const deviceMoreRef = useRef<HTMLDivElement | null>(null);
   const [policySavedAt, setPolicySavedAt] = useState<number | null>(null);
   const [policyEditorOpen, setPolicyEditorOpen] = useState(false);
 
@@ -425,6 +428,29 @@ export default function ChildDetailPage() {
     const timer = window.setTimeout(() => setPolicySavedAt(null), 4000);
     return () => window.clearTimeout(timer);
   }, [policySavedAt]);
+
+  useEffect(() => {
+    if (!deviceMoreOpenId) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      if (
+        deviceMoreRef.current &&
+        !deviceMoreRef.current.contains(event.target as Node)
+      ) {
+        setDeviceMoreOpenId(null);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDeviceMoreOpenId(null);
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [deviceMoreOpenId]);
 
   useEffect(() => {
     if (!pairingCode) return;
@@ -1035,9 +1061,9 @@ export default function ChildDetailPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                     {nudgeByDevice[device.id]?.label && (
-                      <span className="text-xs text-muted-foreground sm:mr-1">
+                      <span className="text-xs text-muted-foreground sm:order-first sm:mr-1">
                         {nudgeByDevice[device.id].label}
                       </span>
                     )}
@@ -1074,7 +1100,7 @@ export default function ChildDetailPage() {
                         }
                       >
                         <Unlock className="w-4 h-4 mr-2" />
-                        Release lockdown
+                        Release
                       </Button>
                     ) : (
                       <Button
@@ -1098,49 +1124,84 @@ export default function ChildDetailPage() {
                       </Button>
                     )}
 
-                    {device.isOnline && isSupabaseConfigured() && (
-                      <>
-                        <Button
-                          variant="outline"
-                          className="w-full sm:w-auto"
-                          onClick={() =>
-                            requestCapture.mutate({
-                              deviceId: device.id,
-                              type: "screen",
-                            })
-                          }
-                          disabled={captureBusy}
-                        >
-                          <Camera className="w-4 h-4 mr-2" />
-                          Screenshot
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="w-full sm:w-auto"
-                          onClick={() =>
-                            requestCapture.mutate({
-                              deviceId: device.id,
-                              type: "webcam",
-                            })
-                          }
-                          disabled={captureBusy}
-                        >
-                          <Video className="w-4 h-4 mr-2" />
-                          Webcam
-                        </Button>
-                      </>
-                    )}
-
-                    <Button
-                      variant="outline"
-                      className="w-full sm:w-auto"
-                      onClick={() => confirmDeleteDevice(device)}
-                      disabled={deleteDevice.isPending}
-                      title="Remove device"
+                    <div
+                      className="relative w-full sm:w-auto"
+                      ref={
+                        deviceMoreOpenId === device.id ? deviceMoreRef : undefined
+                      }
                     >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Remove
-                    </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        onClick={() =>
+                          setDeviceMoreOpenId((prev) =>
+                            prev === device.id ? null : device.id
+                          )
+                        }
+                        aria-expanded={deviceMoreOpenId === device.id}
+                        aria-haspopup="menu"
+                      >
+                        <MoreHorizontal className="w-4 h-4 mr-2" />
+                        More
+                      </Button>
+                      {deviceMoreOpenId === device.id && (
+                        <div
+                          role="menu"
+                          className="absolute left-0 right-0 sm:left-auto sm:right-0 z-20 mt-1.5 min-w-[12rem] overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg"
+                        >
+                          {device.isOnline && isSupabaseConfigured() && (
+                            <>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-secondary disabled:opacity-50"
+                                disabled={captureBusy}
+                                onClick={() => {
+                                  setDeviceMoreOpenId(null);
+                                  requestCapture.mutate({
+                                    deviceId: device.id,
+                                    type: "screen",
+                                  });
+                                }}
+                              >
+                                <Camera className="w-4 h-4 text-muted-foreground" />
+                                Screenshot
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-secondary disabled:opacity-50"
+                                disabled={captureBusy}
+                                onClick={() => {
+                                  setDeviceMoreOpenId(null);
+                                  requestCapture.mutate({
+                                    deviceId: device.id,
+                                    type: "webcam",
+                                  });
+                                }}
+                              >
+                                <Video className="w-4 h-4 text-muted-foreground" />
+                                Webcam
+                              </button>
+                              <div className="my-1 border-t border-border" />
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-destructive hover:bg-secondary disabled:opacity-50"
+                            disabled={deleteDevice.isPending}
+                            onClick={() => {
+                              setDeviceMoreOpenId(null);
+                              confirmDeleteDevice(device);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Remove device
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   {feedback && (
                     <p
