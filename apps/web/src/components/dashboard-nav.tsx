@@ -441,6 +441,9 @@ export function DashboardNav() {
         </div>
         <NavLinks />
         <NavFooter />
+        <p className="mt-auto pt-4 text-center text-[11px] text-muted-foreground/70">
+          Made by JRAG · v{APP_VERSION}
+        </p>
       </aside>
     </>
   );
