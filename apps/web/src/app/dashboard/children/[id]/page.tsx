@@ -34,6 +34,7 @@ import {
   rollbackAdminLock,
 } from "@/lib/device-cache";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { AllowedWindowsEditor } from "@/components/allowed-windows-editor";
 
 const DAYS = [
   { value: 1, label: "Mon" },
@@ -71,11 +72,22 @@ function formatWindowsSummary(windows: AllowedWindow[]) {
     return "Allowed any time (within daily limit)";
   }
 
-  return windows
-    .map((window) => {
-      const day =
-        DAYS.find((d) => d.value === window.day)?.label ?? `Day ${window.day}`;
-      return `${day} ${window.start}–${window.end}`;
+  const byRange = new Map<string, number[]>();
+  for (const window of windows) {
+    const key = `${window.start}–${window.end}`;
+    const days = byRange.get(key) ?? [];
+    days.push(window.day);
+    byRange.set(key, days);
+  }
+
+  return [...byRange.entries()]
+    .map(([range, days]) => {
+      const labels = days
+        .sort((a, b) => a - b)
+        .map(
+          (day) => DAYS.find((d) => d.value === day)?.label ?? `Day ${day}`
+        );
+      return `${labels.join(", ")} ${range}`;
     })
     .join(" · ");
 }
@@ -493,27 +505,6 @@ export default function ChildDetailPage() {
     setPolicySavedAt(null);
   };
 
-  const addWindow = () => {
-    setAllowedWindows([
-      ...currentWindows,
-      { day: 1, start: "15:00", end: "20:00" },
-    ]);
-  };
-
-  const updateWindow = (
-    index: number,
-    field: keyof AllowedWindow,
-    value: string | number
-  ) => {
-    const updated = [...currentWindows];
-    updated[index] = { ...updated[index], [field]: value };
-    setAllowedWindows(updated);
-  };
-
-  const removeWindow = (index: number) => {
-    setAllowedWindows(currentWindows.filter((_, i) => i !== index));
-  };
-
   const startRenameChild = () => {
     setChildNameDraft(child.displayName);
     setEditingChildName(true);
@@ -609,59 +600,10 @@ export default function ChildDetailPage() {
         />
       </div>
 
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <Label>Allowed windows</Label>
-          <Button variant="outline" size="sm" onClick={addWindow}>
-            Add window
-          </Button>
-        </div>
-        {currentWindows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No windows set — allowed any time (within daily limit)
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {currentWindows.map((window, i) => (
-              <div key={i} className="flex gap-2 items-center flex-wrap">
-                <select
-                  value={window.day}
-                  onChange={(e) =>
-                    updateWindow(i, "day", parseInt(e.target.value))
-                  }
-                  className="h-11 rounded-lg border border-border bg-background px-2 text-sm"
-                >
-                  {DAYS.map((d) => (
-                    <option key={d.value} value={d.value}>
-                      {d.label}
-                    </option>
-                  ))}
-                </select>
-                <Input
-                  type="time"
-                  value={window.start}
-                  onChange={(e) => updateWindow(i, "start", e.target.value)}
-                  className="w-32"
-                />
-                <span className="text-muted-foreground">to</span>
-                <Input
-                  type="time"
-                  value={window.end}
-                  onChange={(e) => updateWindow(i, "end", e.target.value)}
-                  className="w-32"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeWindow(i)}
-                >
-                  ×
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <AllowedWindowsEditor
+        windows={currentWindows}
+        onChange={setAllowedWindows}
+      />
 
       <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
         <Button
