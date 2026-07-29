@@ -36,9 +36,10 @@ export default function HomePage() {
         className="pointer-events-none absolute inset-0 -z-10"
         aria-hidden="true"
       >
-        <div className="home-glow absolute -left-32 top-0 h-[520px] w-[520px] rounded-full bg-sky-500/20 blur-[120px]" />
-        <div className="absolute right-0 top-[30%] h-[420px] w-[420px] rounded-full bg-blue-900/40 blur-[100px]" />
-        <div className="absolute bottom-0 left-1/3 h-[360px] w-[360px] rounded-full bg-slate-700/30 blur-[90px]" />
+        <div className="home-glow absolute -left-32 top-0 h-[520px] w-[520px] rounded-full bg-armor/40 blur-[120px]" />
+        <div className="absolute right-0 top-[25%] h-[420px] w-[420px] rounded-full bg-secondary/50 blur-[100px]" />
+        <div className="absolute bottom-0 left-1/3 h-[360px] w-[360px] rounded-full bg-attention/12 blur-[90px]" />
+        <div className="absolute right-1/3 top-[60%] h-[220px] w-[220px] rounded-full bg-plume/20 blur-[90px]" />
         <div
           className="absolute inset-0 opacity-[0.35]"
           style={{
@@ -54,7 +55,7 @@ export default function HomePage() {
       <header className="home-fade relative z-10 px-6 py-5">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <Shield className="h-8 w-8 text-primary" aria-hidden="true" />
+            <Shield className="h-8 w-8 text-attention" aria-hidden="true" />
             <span className="font-display text-xl font-bold tracking-tight">
               Warden
             </span>
@@ -101,7 +102,7 @@ export default function HomePage() {
         {/* How it works */}
         <section className="border-t border-white/5 px-6 py-24">
           <div className="mx-auto max-w-6xl">
-            <p className="text-sm font-medium uppercase tracking-[0.18em] text-sky-400/90">
+            <p className="text-sm font-medium uppercase tracking-[0.18em] text-attention/90">
               How it works
             </p>
             <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
@@ -126,7 +127,7 @@ export default function HomePage() {
                 },
               ].map((item) => (
                 <li key={item.step} className="relative">
-                  <span className="font-display text-4xl font-bold text-sky-500/25">
+                  <span className="font-display text-4xl font-bold text-armor/40">
                     {item.step}
                   </span>
                   <h3 className="mt-3 font-display text-xl font-semibold tracking-tight">
@@ -145,7 +146,7 @@ export default function HomePage() {
         <section className="px-6 py-24">
           <div className="mx-auto max-w-6xl">
             <div className="max-w-2xl">
-              <p className="text-sm font-medium uppercase tracking-[0.18em] text-sky-400/90">
+              <p className="text-sm font-medium uppercase tracking-[0.18em] text-attention/90">
                 Parents decide
               </p>
               <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
@@ -176,26 +177,26 @@ export default function HomePage() {
             </h2>
             <div className="mt-14 grid gap-16 md:grid-cols-2">
               <div>
-                <h3 className="font-display text-xl font-semibold tracking-tight text-sky-300">
+                <h3 className="font-display text-xl font-semibold tracking-tight text-primary">
                   For parents
                 </h3>
                 <ul className="mt-5 space-y-4 text-muted-foreground">
                   <li className="flex gap-3">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-attention" />
                     <span>
                       Set daily limits and see how much time is left in real
                       time.
                     </span>
                   </li>
                   <li className="flex gap-3">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-attention" />
                     <span>
                       Approve or deny extension requests from your phone or
                       laptop.
                     </span>
                   </li>
                   <li className="flex gap-3">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-attention" />
                     <span>
                       Optional snapshots and nudges when you need a closer look.
                     </span>
@@ -203,24 +204,24 @@ export default function HomePage() {
                 </ul>
               </div>
               <div>
-                <h3 className="font-display text-xl font-semibold tracking-tight text-sky-300">
+                <h3 className="font-display text-xl font-semibold tracking-tight text-primary">
                   For kids
                 </h3>
                 <ul className="mt-5 space-y-4 text-muted-foreground">
                   <li className="flex gap-3">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-attention" />
                     <span>
                       A clear daily limit — no surprise cutoffs mid-sentence.
                     </span>
                   </li>
                   <li className="flex gap-3">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-attention" />
                     <span>
                       Request more time when it matters; parents decide.
                     </span>
                   </li>
                   <li className="flex gap-3">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" />
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-attention" />
                     <span>
                       Idle time doesn&apos;t burn the clock — play and homework
                       stay fair.
@@ -235,12 +236,16 @@ export default function HomePage() {
         {/* Windows agent */}
         <section className="px-6 py-24">
           <div className="mx-auto max-w-6xl">
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900 to-sky-950 px-8 py-14 sm:px-12">
+            <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-[#1a2420] via-card to-[#283c3c] px-8 py-14 sm:px-12">
               <div
-                className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-sky-500/20 blur-3xl"
+                className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-live/15 blur-3xl"
                 aria-hidden="true"
               />
-              <p className="text-sm font-medium uppercase tracking-[0.18em] text-sky-400/90">
+              <div
+                className="pointer-events-none absolute -bottom-16 left-10 h-40 w-40 rounded-full bg-plume/15 blur-3xl"
+                aria-hidden="true"
+              />
+              <p className="text-sm font-medium uppercase tracking-[0.18em] text-attention/90">
                 Windows agent
               </p>
               <h2 className="mt-3 max-w-xl font-display text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
@@ -308,7 +313,7 @@ export default function HomePage() {
       <footer className="border-t border-white/5 px-6 py-8">
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Shield className="h-4 w-4 text-primary" aria-hidden="true" />
+            <Shield className="h-4 w-4 text-attention" aria-hidden="true" />
             <span>Warden</span>
           </div>
           <p className="text-sm text-muted-foreground">Made by JRAG</p>

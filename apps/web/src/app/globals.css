@@ -1,25 +1,34 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #0f172a;
-  --color-foreground: #f8fafc;
-  --color-card: #1e293b;
-  --color-card-foreground: #f8fafc;
-  --color-primary: #3b82f6;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #334155;
-  --color-secondary-foreground: #f8fafc;
-  --color-muted: #334155;
-  --color-muted-foreground: #94a3b8;
-  --color-accent: #1d4ed8;
-  --color-accent-foreground: #ffffff;
-  --color-destructive: #ef4444;
+  /*
+   * Maiev mock v3 — local preview only
+   * Surfaces: sage/teal. Interactive primary: Warden/fel green (readable on dark).
+   * Gold trim + silver text; violet only as subtle undertone.
+   */
+  --color-background: #1a2420;
+  --color-foreground: #e0e0e0;
+  --color-card: #24302c;
+  --color-card-foreground: #e0e0e0;
+  --color-primary: #50c878;
+  --color-primary-foreground: #0f1a12;
+  --color-secondary: #283c3c;
+  --color-secondary-foreground: #e0e0e0;
+  --color-muted: #2a3530;
+  --color-muted-foreground: #a8b0b0;
+  --color-accent: #3b9b5c;
+  --color-accent-foreground: #0f1a12;
+  --color-destructive: #b54a3f;
   --color-destructive-foreground: #ffffff;
-  --color-attention: #f59e0b;
-  --color-attention-foreground: #0f172a;
-  --color-border: #334155;
-  --color-input: #334155;
-  --color-ring: #3b82f6;
+  --color-attention: #c5a059;
+  --color-attention-foreground: #1a2420;
+  --color-border: #36454f;
+  --color-input: #36454f;
+  --color-ring: #d4af37;
+  --color-plume: #2e1a47;
+  --color-live: #50c878;
+  --color-fel: #39ff14;
+  --color-armor: #2f4f39;
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;

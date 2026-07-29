@@ -223,7 +223,7 @@ function NavFooter({ onNavigate }: { onNavigate?: () => void }) {
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`flex items-center gap-2 ${compact ? "" : "px-2"}`}>
-      <Shield className={`${compact ? "w-6 h-6" : "w-7 h-7"} text-primary`} />
+      <Shield className={`${compact ? "w-6 h-6" : "w-7 h-7"} text-attention`} />
       <span className={`${compact ? "text-base" : "text-lg"} font-bold`}>
         Warden
       </span>
