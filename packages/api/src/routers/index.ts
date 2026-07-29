@@ -1630,7 +1630,7 @@ export const agentRouter = router({
         },
       });
 
-      const wasOnline = device.isOnline;
+      const wasRecentlySeen = isDeviceRecentlySeen(device.lastSeenAt);
 
       await prisma.device.update({
         where: { id: device.id },
@@ -1643,7 +1643,8 @@ export const agentRouter = router({
         },
       });
 
-      if (!wasOnline) {
+      // DB isOnline is sticky (never cleared); detect reconnect from lastSeen window.
+      if (!wasRecentlySeen) {
         void broadcastToDevice(device.id, {
           type: "device:online",
           deviceId: device.id,

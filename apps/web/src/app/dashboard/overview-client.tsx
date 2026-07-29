@@ -33,7 +33,7 @@ import {
   formatActivityDetail,
   getActivityLabel,
 } from "@/lib/activity";
-import { POLL_SAFETY_MS } from "@/lib/query-defaults";
+import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 
 function usagePercent(used: number, limit: number) {
   if (limit <= 0) return used > 0 ? 100 : 0;
@@ -57,13 +57,13 @@ export default function DashboardOverviewPage() {
   const { data: overview, isLoading } = trpc.dashboard.overview.useQuery(
     undefined,
     {
-      // Covered by lock / policy / extension / device:online Realtime events
-      refetchInterval: POLL_SAFETY_MS,
+      // Online / usage follow heartbeats; Realtime covers lock/policy/extension
+      refetchInterval: POLL_HEARTBEAT_MS,
     }
   );
   const { data: activity } = trpc.dashboard.activity.useQuery(
     { limit: 20 },
-    { refetchInterval: POLL_SAFETY_MS }
+    { refetchInterval: POLL_HEARTBEAT_MS }
   );
   const [pendingLocks, setPendingLocks] = useState<
     Record<string, boolean | undefined>

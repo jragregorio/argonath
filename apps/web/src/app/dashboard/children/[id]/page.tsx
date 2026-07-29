@@ -39,7 +39,7 @@ import {
   rollbackAdminLock,
 } from "@/lib/device-cache";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
-import { POLL_SAFETY_MS } from "@/lib/query-defaults";
+import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 
 const AllowedWindowsEditor = dynamic(
   () =>
@@ -131,16 +131,16 @@ export default function ChildDetailPage() {
     { childId },
     {
       placeholderData: keepPreviousData,
-      // Covered by lock / policy / extension / device:online Realtime events
-      refetchInterval: POLL_SAFETY_MS,
+      // Heartbeats update lastSeen/usage; device:online Realtime covers reconnect
+      refetchInterval: POLL_HEARTBEAT_MS,
     }
   );
   const { data: evaluation } = trpc.policy.getEvaluation.useQuery(
     { childId },
     {
       placeholderData: keepPreviousData,
-      // Covered by policy:updated / extension:* Realtime events
-      refetchInterval: POLL_SAFETY_MS,
+      // Usage ticks via heartbeats; policy/extension Realtime covers other changes
+      refetchInterval: POLL_HEARTBEAT_MS,
     }
   );
   const updatePolicy = trpc.policy.update.useMutation({

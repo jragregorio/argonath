@@ -12,7 +12,7 @@ import {
 import type { RealtimeEvent } from "@warden/shared";
 import { trpc } from "@/lib/trpc";
 import { subscribeDeviceChannels } from "@/lib/realtime";
-import { POLL_BACKGROUND_MS, POLL_SAFETY_MS } from "@/lib/query-defaults";
+import { POLL_HEARTBEAT_MS, POLL_SAFETY_MS } from "@/lib/query-defaults";
 
 type RealtimeListener = (event: RealtimeEvent) => void;
 
@@ -118,9 +118,11 @@ function invalidateForEvent(
     void utils.dashboard.overview.invalidate();
     if (childId) {
       void utils.children.get.invalidate({ childId });
+      void utils.policy.getEvaluation.invalidate({ childId });
     } else {
       // device.list cache miss — cannot scope without guessing childId
       void utils.children.get.invalidate();
+      void utils.policy.getEvaluation.invalidate();
     }
   }
 }
@@ -134,8 +136,8 @@ export function FamilyRealtimeProvider({ children }: { children: ReactNode }) {
     refetchInterval: POLL_SAFETY_MS,
   });
   const { data: devices } = trpc.device.list.useQuery(undefined, {
-    // device:offline is never broadcast — keep a moderate poll for online decay
-    refetchInterval: POLL_BACKGROUND_MS,
+    // device:offline is never broadcast — poll for online decay + missed reconnects
+    refetchInterval: POLL_HEARTBEAT_MS,
   });
 
   const deviceIds = useMemo(

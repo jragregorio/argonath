@@ -3,6 +3,12 @@
 export const QUERY_STALE_TIME_MS = 30_000;
 
 /**
+ * Agent heartbeats write usage / lastSeen often; pages that display those
+ * values poll at this cadence when Realtime does not cover every write.
+ */
+export const POLL_HEARTBEAT_MS = 30_000;
+
+/**
  * Faster cadence while something is in-flight (e.g. pending captures).
  * Prefer Realtime invalidation for settled data.
  */

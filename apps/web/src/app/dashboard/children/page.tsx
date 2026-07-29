@@ -12,7 +12,7 @@ import { ChildrenListSkeleton } from "@/components/dashboard-skeletons";
 import { getDeviceDisplayName } from "@warden/shared";
 import { Pencil, Plus, Trash2, User } from "lucide-react";
 import Link from "next/link";
-import { POLL_SAFETY_MS } from "@/lib/query-defaults";
+import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 
 export default function ChildrenPage() {
   const [name, setName] = useState("");
@@ -21,8 +21,8 @@ export default function ChildrenPage() {
   const [editName, setEditName] = useState("");
   const utils = trpc.useUtils();
   const { data: children, isLoading } = trpc.children.list.useQuery(undefined, {
-    // Covered by lock / policy / extension / device:online Realtime events
-    refetchInterval: POLL_SAFETY_MS,
+    // Online badges / usage follow heartbeats; Realtime covers lock/policy/extension
+    refetchInterval: POLL_HEARTBEAT_MS,
   });
   const createChild = trpc.children.create.useMutation({
     onSuccess: () => {
