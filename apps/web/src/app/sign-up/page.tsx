@@ -32,6 +32,7 @@ export default function SignUpPage() {
           email,
           password,
           familyName: familyName.trim() || undefined,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });
       const data = await res.json();

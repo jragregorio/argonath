@@ -34,6 +34,8 @@ model Family {
   id        String   @id @default(cuid())
   name      String
   parentPin String?
+  /// IANA time zone for allowed hours and "today" usage (e.g. Asia/Manila).
+  timezone  String   @default("UTC")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

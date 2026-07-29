@@ -11,7 +11,7 @@ Source of truth: `packages/db/prisma/schema.prisma`.
 | Model | Notes |
 |-------|--------|
 | `User` | Email/password (hash) |
-| `Family` | Optional `parentPin` |
+| `Family` | Optional `parentPin`; `timezone` (IANA) for allowed hours and “today” usage |
 | `FamilyMember` | User↔Family + role |
 | `RefreshToken` | Rotating refresh families |
 | `Child` | Display name under family |

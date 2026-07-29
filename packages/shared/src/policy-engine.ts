@@ -5,31 +5,24 @@ import type {
   PolicyStatus,
   ScreenTimePolicyInput,
 } from "./types";
+import { DEFAULT_TIME_ZONE, getZonedTimeParts } from "./timezone";
 
 function parseTime(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
 }
 
-function getDayOfWeek(date: Date): number {
-  const day = date.getDay();
-  return day === 0 ? 7 : day;
-}
-
-function getMinutesSinceMidnight(date: Date): number {
-  return date.getHours() * 60 + date.getMinutes();
-}
-
 function isWithinWindow(
   windows: AllowedWindow[],
-  now: Date
+  now: Date,
+  timeZone: string
 ): { inWindow: boolean; nextStart?: string } {
   if (windows.length === 0) {
     return { inWindow: true };
   }
 
-  const currentDay = getDayOfWeek(now);
-  const currentMinutes = getMinutesSinceMidnight(now);
+  const { dayOfWeek: currentDay, minutesSinceMidnight: currentMinutes } =
+    getZonedTimeParts(now, timeZone);
 
   const todayWindows = windows.filter((w) => w.day === currentDay);
   for (const window of todayWindows) {
@@ -84,7 +77,8 @@ export function evaluatePolicy(
   policy: ScreenTimePolicyInput,
   usedMinutesToday: number,
   overrides: ExtensionOverrideInput[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  timeZone: string = DEFAULT_TIME_ZONE
 ): PolicyEvaluation {
   const bonusMinutes = getActiveBonusMinutes(overrides, now);
   const effectiveLimit = policy.dailyLimitMinutes + bonusMinutes;
@@ -100,7 +94,11 @@ export function evaluatePolicy(
     };
   }
 
-  const { inWindow, nextStart } = isWithinWindow(policy.allowedWindows, now);
+  const { inWindow, nextStart } = isWithinWindow(
+    policy.allowedWindows,
+    now,
+    timeZone
+  );
 
   if (!inWindow) {
     return {

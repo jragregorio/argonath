@@ -21,13 +21,40 @@ public static class PolicyEngine
         return date.Hour * 60 + date.Minute;
     }
 
+    /// <summary>
+    /// Resolves "now" in the family IANA timezone when provided; otherwise local clock.
+    /// </summary>
+    public static DateTime ResolveNow(string? timeZoneIana, DateTime? utcNow = null)
+    {
+        var utc = utcNow ?? DateTime.UtcNow;
+        if (string.IsNullOrWhiteSpace(timeZoneIana))
+            return DateTime.Now;
+
+        try
+        {
+            var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneIana);
+            return TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.SpecifyKind(utc, DateTimeKind.Utc),
+                tz);
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return DateTime.Now;
+        }
+        catch (InvalidTimeZoneException)
+        {
+            return DateTime.Now;
+        }
+    }
+
     public static PolicyEvaluation Evaluate(
         PolicyInfo policy,
         int usedMinutesToday,
         int bonusMinutes,
-        DateTime? now = null)
+        DateTime? now = null,
+        string? timeZoneIana = null)
     {
-        now ??= DateTime.Now;
+        now ??= ResolveNow(timeZoneIana);
         var effectiveLimit = policy.DailyLimitMinutes + bonusMinutes;
         var remaining = Math.Max(0, effectiveLimit - usedMinutesToday);
 

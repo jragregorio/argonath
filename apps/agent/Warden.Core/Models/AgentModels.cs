@@ -15,7 +15,7 @@ public class PairingRequest
 {
     public string Code { get; set; } = "";
     public string MachineName { get; set; } = "";
-    public string AgentVersion { get; set; } = "0.5.8";
+    public string AgentVersion { get; set; } = "0.5.9";
 }
 
 public class PairingResponse
@@ -34,7 +34,7 @@ public class HeartbeatRequest
     public int ActiveMinutesToday { get; set; }
     public int IdleMinutesToday { get; set; }
     public bool IsLocked { get; set; }
-    public string AgentVersion { get; set; } = "0.5.8";
+    public string AgentVersion { get; set; } = "0.5.9";
     public string MachineName { get; set; } = "";
 }
 
@@ -56,6 +56,8 @@ public class PolicyData
     public string? ParentPin { get; set; }
     /// <summary>Parent-triggered lockdown from the dashboard.</summary>
     public bool AdminLock { get; set; }
+    /// <summary>IANA family timezone for allowed-hours evaluation (e.g. Asia/Manila).</summary>
+    public string? Timezone { get; set; }
 }
 
 public class PolicyInfo

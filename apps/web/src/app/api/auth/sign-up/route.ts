@@ -11,6 +11,7 @@ const bodySchema = z.object({
   password: z.string().min(8),
   name: z.string().min(1).max(100),
   familyName: z.string().min(1).max(100).optional(),
+  timezone: z.string().min(1).max(100).optional(),
 });
 
 export async function POST(req: Request) {

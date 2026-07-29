@@ -146,6 +146,19 @@ public class EnforcementEngine
             _configStore.Save(config);
         }
 
+        // Align local usage day with family timezone once policy (and timezone) is known.
+        var familyToday = PolicyEngine.ResolveNow(_currentPolicy.Timezone).Date;
+        if (familyToday != _usageDayLocal)
+        {
+            _usageDayLocal = familyToday;
+            if (syncUsageFromServer)
+            {
+                // Fresh day boundary while syncing: trust server minutes for this calendar day.
+                _firedTimeWarnings.Clear();
+                _lastRemainingMinutes = null;
+            }
+        }
+
         EvaluateAndEnforce();
     }
 
@@ -158,12 +171,14 @@ public class EnforcementEngine
         // Ignore tiny jitter and huge gaps (sleep/hibernate).
         if (elapsedSeconds <= 0 || elapsedSeconds > 120) return;
 
-        var today = DateTime.Today;
+        var today = PolicyEngine.ResolveNow(_currentPolicy?.Timezone).Date;
         if (today != _usageDayLocal)
         {
             _usageDayLocal = today;
             _firedTimeWarnings.Clear();
             _lastRemainingMinutes = null;
+            _activeSecondsToday = 0;
+            _idleSecondsToday = 0;
         }
 
         if (IdleTimeDetector.IsUserActive())
@@ -191,7 +206,8 @@ public class EnforcementEngine
         var evaluation = PolicyEngine.Evaluate(
             _currentPolicy.Policy,
             UsedMinutesForEnforcement(),
-            _currentPolicy.BonusMinutes
+            _currentPolicy.BonusMinutes,
+            timeZoneIana: _currentPolicy.Timezone
         );
 
         if (_currentPolicy.AdminLock)

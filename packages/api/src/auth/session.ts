@@ -1,4 +1,5 @@
 import { prisma, type Family, type FamilyRole } from "@warden/db";
+import { isValidTimeZone } from "@warden/shared";
 import { TRPCError } from "@trpc/server";
 import {
   generateRefreshToken,
@@ -77,6 +78,8 @@ export async function signUp(opts: {
   password: string;
   name: string;
   familyName?: string;
+  /** IANA timezone from the browser; validated before store. */
+  timezone?: string;
   meta?: SessionMeta;
 }): Promise<SessionTokens> {
   const email = opts.email.trim().toLowerCase();
@@ -96,6 +99,8 @@ export async function signUp(opts: {
   }
 
   const passwordHash = await hashPassword(opts.password);
+  const timezone =
+    opts.timezone && isValidTimeZone(opts.timezone) ? opts.timezone : undefined;
 
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -112,6 +117,7 @@ export async function signUp(opts: {
           0,
           100
         ),
+        ...(timezone ? { timezone } : {}),
       },
     });
 

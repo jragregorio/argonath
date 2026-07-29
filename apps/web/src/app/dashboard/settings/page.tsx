@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check } from "lucide-react";
+import { COMMON_TIME_ZONES } from "@warden/shared";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +18,14 @@ function mutationErrorMessage(err: unknown, fallback: string) {
   return fallback;
 }
 
+function browserTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
 export default function SettingsPage() {
   const utils = trpc.useUtils();
   const { data: me } = trpc.auth.me.useQuery();
@@ -26,11 +35,22 @@ export default function SettingsPage() {
   const [email, setEmail] = useState("");
   const [emailPassword, setEmailPassword] = useState("");
   const [familyName, setFamilyName] = useState("");
+  const [timezone, setTimezone] = useState("UTC");
   const [pin, setPin] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordFormError, setPasswordFormError] = useState<string | null>(null);
+
+  const detectedTz = useMemo(() => browserTimeZone(), []);
+
+  const timezoneOptions = useMemo(() => {
+    const set = new Set<string>(COMMON_TIME_ZONES);
+    if (family?.timezone) set.add(family.timezone);
+    if (detectedTz) set.add(detectedTz);
+    if (timezone) set.add(timezone);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [family?.timezone, detectedTz, timezone]);
 
   useEffect(() => {
     if (me?.user) {
@@ -41,7 +61,8 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (family?.name) setFamilyName(family.name);
-  }, [family?.name]);
+    if (family?.timezone) setTimezone(family.timezone);
+  }, [family?.name, family?.timezone]);
 
   const updateName = trpc.auth.updateName.useMutation({
     onSuccess: () => {
@@ -66,6 +87,13 @@ export default function SettingsPage() {
     onSuccess: () => {
       utils.family.get.invalidate();
       utils.auth.me.invalidate();
+    },
+  });
+  const updateTimezone = trpc.family.updateTimezone.useMutation({
+    onSuccess: () => {
+      utils.family.get.invalidate();
+      utils.policy.getEvaluation.invalidate();
+      utils.dashboard.overview.invalidate();
     },
   });
   const updatePin = trpc.family.updatePin.useMutation({
@@ -283,10 +311,11 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle>Family</CardTitle>
             <CardDescription>
-              Rename the family shown in the dashboard sidebar
+              Rename the family and set the timezone used for allowed hours and
+              daily usage
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-8">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -325,6 +354,69 @@ export default function SettingsPage() {
                   {mutationErrorMessage(
                     renameFamily.error,
                     "Could not rename family"
+                  )}
+                </p>
+              )}
+            </form>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!timezone) return;
+                updateTimezone.mutate({ timezone });
+              }}
+              className="space-y-4 border-t border-border pt-6"
+            >
+              <div>
+                <Label htmlFor="timezone">Time zone</Label>
+                <select
+                  id="timezone"
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {timezoneOptions.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                      {detectedTz === tz ? " (this device)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Allowed hours (e.g. Thu 06:00–12:00) and “minutes used today”
+                  use this zone, not the server clock.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="submit"
+                  disabled={
+                    updateTimezone.isPending ||
+                    !timezone ||
+                    timezone === family?.timezone
+                  }
+                >
+                  {updateTimezone.isPending ? "Saving…" : "Save time zone"}
+                </Button>
+                {detectedTz && detectedTz !== timezone && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={updateTimezone.isPending}
+                    onClick={() => setTimezone(detectedTz)}
+                  >
+                    Use {detectedTz}
+                  </Button>
+                )}
+              </div>
+              {updateTimezone.isSuccess && (
+                <p className="text-sm text-green-400">Time zone updated</p>
+              )}
+              {updateTimezone.isError && (
+                <p className="text-sm text-destructive">
+                  {mutationErrorMessage(
+                    updateTimezone.error,
+                    "Could not update time zone"
                   )}
                 </p>
               )}

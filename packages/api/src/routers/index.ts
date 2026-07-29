@@ -2,10 +2,13 @@ import { prisma } from "@warden/db";
 import type { Prisma } from "@warden/db";
 import {
   CAPTURE_RATE_LIMIT_PER_HOUR,
+  DEFAULT_TIME_ZONE,
   evaluatePolicy,
   generateDeviceToken,
   generatePairingCode,
+  getCalendarDateInTimeZone,
   isDeviceRecentlySeen,
+  isValidTimeZone,
   PAIRING_CODE_EXPIRY_MINUTES,
   SNAPSHOT_RETENTION_DAYS,
   type AllowedWindow,
@@ -190,6 +193,29 @@ export const familyRouter = router({
       const updated = await prisma.family.update({
         where: { id: family.id },
         data: { parentPin: input.pin },
+      });
+      return toFamilyClientView(updated);
+    }),
+
+  updateTimezone: adminProcedure
+    .input(
+      z.object({
+        timezone: z
+          .string()
+          .trim()
+          .min(1)
+          .max(100)
+          .refine(isValidTimeZone, "Invalid IANA time zone"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const updated = await prisma.family.update({
+        where: { id: family.id },
+        data: { timezone: input.timezone },
+      });
+      await logAudit(family.id, ctx.userId, "timezone_updated", {
+        timezone: input.timezone,
       });
       return toFamilyClientView(updated);
     }),
@@ -475,11 +501,11 @@ export const policyRouter = router({
   getEvaluation: protectedProcedure
     .input(z.object({ childId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const family = await getFamilyForUser(ctx);
+      const timeZone = family.timezone || DEFAULT_TIME_ZONE;
+      const today = getCalendarDateInTimeZone(new Date(), timeZone);
 
-      const [, child, usageLogs] = await Promise.all([
-        getFamilyForUser(ctx),
+      const [child, usageLogs] = await Promise.all([
         getChildForFamily(input.childId, ctx.familyId),
         prisma.usageLog.findMany({
           where: {
@@ -491,15 +517,18 @@ export const policyRouter = router({
       const policy = child.policies[0];
 
       const usedMinutes = usageLogs.reduce((sum, log) => sum + log.activeMinutes, 0);
+      const overrides = child.extensionOverrides.map((o) => ({
+        extraMinutes: o.extraMinutes,
+        expiresAt: o.expiresAt,
+      }));
 
       if (!policy) {
         return evaluatePolicy(
           { dailyLimitMinutes: 120, allowedWindows: [], isActive: true },
           usedMinutes,
-          child.extensionOverrides.map((o) => ({
-            extraMinutes: o.extraMinutes,
-            expiresAt: o.expiresAt,
-          }))
+          overrides,
+          new Date(),
+          timeZone
         );
       }
 
@@ -510,10 +539,9 @@ export const policyRouter = router({
           isActive: policy.isActive,
         },
         usedMinutes,
-        child.extensionOverrides.map((o) => ({
-          extraMinutes: o.extraMinutes,
-          expiresAt: o.expiresAt,
-        }))
+        overrides,
+        new Date(),
+        timeZone
       );
     }),
 });
@@ -1064,12 +1092,12 @@ export const dashboardRouter = router({
 
   /** Family overview: children with today's usage, policy status, and devices. */
   overview: protectedProcedure.query(async ({ ctx }) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const family = await getFamilyForUser(ctx);
+    const timeZone = family.timezone || DEFAULT_TIME_ZONE;
+    const today = getCalendarDateInTimeZone(new Date(), timeZone);
     const now = new Date();
 
-    const [, children, pendingRequests, usageLogs] = await Promise.all([
-      getFamilyForUser(ctx),
+    const [children, pendingRequests, usageLogs] = await Promise.all([
       prisma.child.findMany({
         where: { familyId: ctx.familyId },
         include: {
@@ -1129,7 +1157,9 @@ export const dashboardRouter = router({
           child.extensionOverrides.map((o) => ({
             extraMinutes: o.extraMinutes,
             expiresAt: o.expiresAt,
-          }))
+          })),
+          now,
+          timeZone
         );
 
         const devices = toDeviceClientViews(child.devices);
@@ -1655,8 +1685,13 @@ export const agentRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const device = ctx.device;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+
+      const child = await prisma.child.findUnique({
+        where: { id: device.childId },
+        select: { family: { select: { timezone: true } } },
+      });
+      const timeZone = child?.family.timezone || DEFAULT_TIME_ZONE;
+      const today = getCalendarDateInTimeZone(new Date(), timeZone);
 
       await prisma.usageLog.upsert({
         where: {
@@ -1703,32 +1738,32 @@ export const agentRouter = router({
     }),
 
   getPolicy: agentProcedure.query(async ({ ctx }) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
     const now = new Date();
 
-    const [child, usageLogs] = await Promise.all([
-      prisma.child.findUnique({
-        where: { id: ctx.device.childId },
-        include: {
-          family: { select: { parentPin: true } },
-          policies: { where: { isActive: true }, take: 1 },
-          extensionOverrides: {
-            where: { expiresAt: { gt: now } },
-          },
+    const child = await prisma.child.findUnique({
+      where: { id: ctx.device.childId },
+      include: {
+        family: { select: { parentPin: true, timezone: true } },
+        policies: { where: { isActive: true }, take: 1 },
+        extensionOverrides: {
+          where: { expiresAt: { gt: now } },
         },
-      }),
-      prisma.usageLog.findMany({
-        where: {
-          device: { childId: ctx.device.childId },
-          date: today,
-        },
-      }),
-    ]);
+      },
+    });
 
     if (!child) {
       throw new TRPCError({ code: "NOT_FOUND" });
     }
+
+    const timeZone = child.family.timezone || DEFAULT_TIME_ZONE;
+    const today = getCalendarDateInTimeZone(now, timeZone);
+
+    const usageLogs = await prisma.usageLog.findMany({
+      where: {
+        device: { childId: ctx.device.childId },
+        date: today,
+      },
+    });
 
     const policy = child.policies[0];
 
@@ -1756,6 +1791,7 @@ export const agentRouter = router({
       bonusMinutes,
       parentPin: child.family.parentPin ?? null,
       adminLock: ctx.device.adminLock,
+      timezone: timeZone,
     };
   }),
 
