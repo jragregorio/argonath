@@ -1299,6 +1299,56 @@ export const snapshotRouter = router({
       return { ok: true };
     }),
 
+  deleteMany: parentProcedure
+    .input(
+      z.object({
+        snapshotIds: z.array(z.string()).min(1).max(50),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const uniqueIds = [...new Set(input.snapshotIds)];
+      const snapshots = await prisma.snapshot.findMany({
+        where: {
+          id: { in: uniqueIds },
+          child: { familyId: family.id },
+        },
+      });
+
+      if (snapshots.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      const storageKeys = snapshots
+        .map((snapshot) => snapshot.storageKey)
+        .filter((key): key is string => Boolean(key));
+
+      if (isSupabaseConfigured() && storageKeys.length > 0) {
+        const supabase = getSupabaseAdmin();
+        await supabase.storage
+          .from("snapshots")
+          .remove(storageKeys)
+          .catch(() => {});
+        for (const key of storageKeys) {
+          invalidateSignedSnapshotUrl(key);
+        }
+      }
+
+      await prisma.snapshot.deleteMany({
+        where: {
+          id: { in: snapshots.map((snapshot) => snapshot.id) },
+          child: { familyId: family.id },
+        },
+      });
+
+      await logAudit(family.id, ctx.userId, "snapshots_bulk_deleted", {
+        count: snapshots.length,
+        snapshotIds: snapshots.map((snapshot) => snapshot.id),
+      });
+
+      return { ok: true, deleted: snapshots.length };
+    }),
+
   getStatus: protectedProcedure
     .input(z.object({ snapshotId: z.string() }))
     .query(async ({ ctx, input }) => {
