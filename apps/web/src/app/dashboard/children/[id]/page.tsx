@@ -26,7 +26,6 @@ import {
   Unlock,
   Video,
   ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/dev-config";
@@ -34,6 +33,7 @@ import {
   optimisticAdminLock,
   rollbackAdminLock,
 } from "@/lib/device-cache";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 
 const DAYS = [
   { value: 1, label: "Mon" },
@@ -583,6 +583,163 @@ export default function ChildDetailPage() {
       ? "bg-destructive/35"
       : "bg-primary/30";
 
+  const renderPolicyEditor = (idPrefix: string) => (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <input
+          type="checkbox"
+          id={`${idPrefix}-active`}
+          checked={currentActive}
+          onChange={(e) => setIsActive(e.target.checked)}
+          className="rounded"
+        />
+        <Label htmlFor={`${idPrefix}-active`}>Policy active</Label>
+      </div>
+
+      <div>
+        <Label htmlFor={`${idPrefix}-limit`}>Daily limit (minutes)</Label>
+        <Input
+          id={`${idPrefix}-limit`}
+          type="number"
+          min={0}
+          max={1440}
+          value={currentLimit}
+          onChange={(e) => setDailyLimit(parseInt(e.target.value) || 0)}
+          className="mt-1"
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <Label>Allowed windows</Label>
+          <Button variant="outline" size="sm" onClick={addWindow}>
+            Add window
+          </Button>
+        </div>
+        {currentWindows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No windows set — allowed any time (within daily limit)
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {currentWindows.map((window, i) => (
+              <div key={i} className="flex gap-2 items-center flex-wrap">
+                <select
+                  value={window.day}
+                  onChange={(e) =>
+                    updateWindow(i, "day", parseInt(e.target.value))
+                  }
+                  className="h-11 rounded-lg border border-border bg-background px-2 text-sm"
+                >
+                  {DAYS.map((d) => (
+                    <option key={d.value} value={d.value}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+                <Input
+                  type="time"
+                  value={window.start}
+                  onChange={(e) => updateWindow(i, "start", e.target.value)}
+                  className="w-32"
+                />
+                <span className="text-muted-foreground">to</span>
+                <Input
+                  type="time"
+                  value={window.end}
+                  onChange={(e) => updateWindow(i, "end", e.target.value)}
+                  className="w-32"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeWindow(i)}
+                >
+                  ×
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
+        <Button
+          className="w-full sm:w-auto"
+          onClick={handleSavePolicy}
+          disabled={updatePolicy.isPending || !policyDirty}
+        >
+          {updatePolicy.isPending ? "Saving..." : "Save policy"}
+        </Button>
+        {policyDirty && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full sm:w-auto"
+            onClick={discardPolicyChanges}
+            disabled={updatePolicy.isPending}
+          >
+            Discard
+          </Button>
+        )}
+      </div>
+      {updatePolicy.isError && (
+        <p className="text-sm text-destructive">
+          {updatePolicy.error.message || "Could not save policy"}
+        </p>
+      )}
+    </div>
+  );
+
+  const renderPairingContent = () =>
+    pairingCode ? (
+      <div className="text-center space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Enter this code in the Windows agent
+        </p>
+        <p className="text-4xl font-mono font-bold tracking-widest">
+          {pairingCode.code}
+        </p>
+        <p className="text-sm font-medium tabular-nums">
+          Expires in {formatCountdown(pairingRemainingMs)}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {new Date(pairingCode.expiresAt).toLocaleTimeString()}
+        </p>
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-center gap-2 pt-1">
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              void navigator.clipboard.writeText(pairingCode.code);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
+          >
+            <Copy className="w-4 h-4 mr-2" />
+            {copied ? "Copied!" : "Copy code"}
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full sm:w-auto"
+            onClick={() => setPairingCode(null)}
+          >
+            Dismiss
+          </Button>
+        </div>
+      </div>
+    ) : null;
+
+  async function startPairing() {
+    const result = await generateCode.mutateAsync({ childId });
+    setPairingNotice(null);
+    setPairingCode({
+      code: result.code,
+      expiresAt: new Date(result.expiresAt),
+      deviceId: result.deviceId,
+    });
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -735,133 +892,14 @@ export default function ChildDetailPage() {
               type="button"
               variant="outline"
               className="w-full md:hidden"
-              onClick={() => setPolicyEditorOpen((prev) => !prev)}
+              onClick={() => setPolicyEditorOpen(true)}
             >
-              {policyEditorOpen ? (
-                <>
-                  <ChevronUp className="w-4 h-4 mr-2" />
-                  Hide editor
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="w-4 h-4 mr-2" />
-                  Edit limits
-                </>
-              )}
+              <ChevronDown className="w-4 h-4 mr-2" />
+              Edit limits
             </Button>
 
-            <div
-              className={`space-y-4 ${
-                policyEditorOpen ? "block" : "hidden"
-              } md:block`}
-            >
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="active"
-                checked={currentActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-                className="rounded"
-              />
-              <Label htmlFor="active">Policy active</Label>
-            </div>
-
-            <div>
-              <Label htmlFor="limit">Daily limit (minutes)</Label>
-              <Input
-                id="limit"
-                type="number"
-                min={0}
-                max={1440}
-                value={currentLimit}
-                onChange={(e) => setDailyLimit(parseInt(e.target.value) || 0)}
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <Label>Allowed windows</Label>
-                <Button variant="outline" size="sm" onClick={addWindow}>
-                  Add window
-                </Button>
-              </div>
-              {currentWindows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No windows set — allowed any time (within daily limit)
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {currentWindows.map((window, i) => (
-                    <div key={i} className="flex gap-2 items-center">
-                      <select
-                        value={window.day}
-                        onChange={(e) =>
-                          updateWindow(i, "day", parseInt(e.target.value))
-                        }
-                        className="h-10 rounded-lg border border-border bg-background px-2 text-sm"
-                      >
-                        {DAYS.map((d) => (
-                          <option key={d.value} value={d.value}>
-                            {d.label}
-                          </option>
-                        ))}
-                      </select>
-                      <Input
-                        type="time"
-                        value={window.start}
-                        onChange={(e) =>
-                          updateWindow(i, "start", e.target.value)
-                        }
-                        className="w-32"
-                      />
-                      <span className="text-muted-foreground">to</span>
-                      <Input
-                        type="time"
-                        value={window.end}
-                        onChange={(e) =>
-                          updateWindow(i, "end", e.target.value)
-                        }
-                        className="w-32"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeWindow(i)}
-                      >
-                        ×
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
-              <Button
-                className="w-full sm:w-auto"
-                onClick={handleSavePolicy}
-                disabled={updatePolicy.isPending || !policyDirty}
-              >
-                {updatePolicy.isPending ? "Saving..." : "Save policy"}
-              </Button>
-              {policyDirty && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full sm:w-auto"
-                  onClick={discardPolicyChanges}
-                  disabled={updatePolicy.isPending}
-                >
-                  Discard
-                </Button>
-              )}
-            </div>
-            {updatePolicy.isError && (
-              <p className="text-sm text-destructive">
-                {updatePolicy.error.message || "Could not save policy"}
-              </p>
-            )}
+            <div className="hidden md:block space-y-4">
+              {renderPolicyEditor("desktop")}
             </div>
           </CardContent>
         </Card>
@@ -1065,54 +1103,14 @@ export default function ChildDetailPage() {
             })}
 
             {pairingCode ? (
-              <div className="p-4 rounded-lg bg-primary/10 border border-primary/30 text-center">
-                <p className="text-sm text-muted-foreground mb-2">
-                  Enter this code in the Windows agent
-                </p>
-                <p className="text-4xl font-mono font-bold tracking-widest mb-2">
-                  {pairingCode.code}
-                </p>
-                <p className="text-sm font-medium tabular-nums mb-1">
-                  Expires in {formatCountdown(pairingRemainingMs)}
-                </p>
-                <p className="text-xs text-muted-foreground mb-3">
-                  {new Date(pairingCode.expiresAt).toLocaleTimeString()}
-                </p>
-                <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    className="w-full sm:w-auto"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(pairingCode.code);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                    }}
-                  >
-                    <Copy className="w-4 h-4 mr-2" />
-                    {copied ? "Copied!" : "Copy code"}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full sm:w-auto"
-                    onClick={() => setPairingCode(null)}
-                  >
-                    Dismiss
-                  </Button>
-                </div>
+              <div className="hidden md:block p-4 rounded-lg bg-primary/10 border border-primary/30">
+                {renderPairingContent()}
               </div>
             ) : (
               <Button
                 variant="outline"
                 className="w-full sm:w-auto"
-                onClick={async () => {
-                  const result = await generateCode.mutateAsync({ childId });
-                  setPairingNotice(null);
-                  setPairingCode({
-                    code: result.code,
-                    expiresAt: new Date(result.expiresAt),
-                    deviceId: result.deviceId,
-                  });
-                }}
+                onClick={() => void startPairing()}
                 disabled={generateCode.isPending}
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
@@ -1137,6 +1135,33 @@ export default function ChildDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <BottomSheet
+        open={policyEditorOpen}
+        onClose={() => setPolicyEditorOpen(false)}
+        title="Edit limits"
+        description="Daily limit and allowed time windows"
+      >
+        <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground mb-4">
+          <p>
+            <span className="text-foreground font-medium">
+              {currentLimit} min/day
+            </span>
+            {currentActive ? "" : " · policy off"}
+          </p>
+          <p className="mt-0.5">{formatWindowsSummary(currentWindows)}</p>
+        </div>
+        {renderPolicyEditor("sheet")}
+      </BottomSheet>
+
+      <BottomSheet
+        open={Boolean(pairingCode)}
+        onClose={() => setPairingCode(null)}
+        title="Pairing code"
+        description="Enter this code in the Windows agent"
+      >
+        {renderPairingContent()}
+      </BottomSheet>
     </div>
   );
 }

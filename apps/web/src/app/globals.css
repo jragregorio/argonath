@@ -31,4 +31,6 @@ body {
   background-color: var(--color-background);
   color: var(--color-foreground);
   font-family: system-ui, -apple-system, sans-serif;
+  /* Avoid rubber-band revealing wrong edges behind fixed chrome */
+  min-height: 100dvh;
 }

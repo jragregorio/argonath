@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getDeviceDisplayName } from "@warden/shared";
+import { cn } from "@warden/ui";
 import { Camera, Loader2, Trash2, Video, X } from "lucide-react";
 
 type SnapshotStatusFilter = "all" | "ready" | "pending" | "failed";
@@ -25,6 +26,31 @@ function statusLabel(status: string) {
   if (status === "failed") return "Failed";
   if (status === "pending") return "Pending";
   return status;
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "shrink-0 rounded-full border px-3.5 py-2 text-sm font-medium min-h-10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground hover:bg-secondary"
+      )}
+    >
+      {children}
+    </button>
+  );
 }
 
 export default function SnapshotsPage() {
@@ -95,56 +121,57 @@ export default function SnapshotsPage() {
     if (ok) deleteSnapshot.mutate({ snapshotId });
   };
 
-  return (
-    <div className="space-y-8">
-      <PageHeader
-        title="Snapshots"
-        description="On-demand screen and webcam captures from your children's devices"
-      />
+  const statusChips: { value: SnapshotStatusFilter; label: string }[] = [
+    { value: "all", label: "All" },
+    { value: "ready", label: "Ready" },
+    { value: "pending", label: "Pending" },
+    { value: "failed", label: "Failed" },
+  ];
 
-      <div className="flex flex-wrap items-end gap-3">
+  return (
+    <div className="space-y-6 md:space-y-8">
+      <div className="hidden md:block">
+        <PageHeader
+          title="Snapshots"
+          description="On-demand screen and webcam captures from your children's devices"
+        />
+      </div>
+
+      <div className="space-y-3">
         <div>
-          <label
-            htmlFor="child-filter"
-            className="block text-xs text-muted-foreground mb-1"
-          >
-            Child
-          </label>
-          <select
-            id="child-filter"
-            value={childFilter}
-            onChange={(e) => setChildFilter(e.target.value)}
-            className="h-10 rounded-lg border border-border bg-background px-3 text-sm min-w-[10rem]"
-          >
-            <option value="all">All children</option>
+          <p className="text-xs text-muted-foreground mb-2 px-0.5">Child</p>
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <FilterChip
+              active={childFilter === "all"}
+              onClick={() => setChildFilter("all")}
+            >
+              All
+            </FilterChip>
             {children?.map((child) => (
-              <option key={child.id} value={child.id}>
+              <FilterChip
+                key={child.id}
+                active={childFilter === child.id}
+                onClick={() => setChildFilter(child.id)}
+              >
                 {child.displayName}
-              </option>
+              </FilterChip>
             ))}
-          </select>
+          </div>
         </div>
 
         <div>
-          <label
-            htmlFor="status-filter"
-            className="block text-xs text-muted-foreground mb-1"
-          >
-            Status
-          </label>
-          <select
-            id="status-filter"
-            value={statusFilter}
-            onChange={(e) =>
-              setStatusFilter(e.target.value as SnapshotStatusFilter)
-            }
-            className="h-10 rounded-lg border border-border bg-background px-3 text-sm min-w-[9rem]"
-          >
-            <option value="all">All statuses</option>
-            <option value="ready">Ready</option>
-            <option value="pending">Pending</option>
-            <option value="failed">Failed</option>
-          </select>
+          <p className="text-xs text-muted-foreground mb-2 px-0.5">Status</p>
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {statusChips.map((chip) => (
+              <FilterChip
+                key={chip.value}
+                active={statusFilter === chip.value}
+                onClick={() => setStatusFilter(chip.value)}
+              >
+                {chip.label}
+              </FilterChip>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -261,6 +288,10 @@ export default function SnapshotsPage() {
       {lightbox && lightbox.url && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          style={{
+            paddingTop: "max(1rem, env(safe-area-inset-top, 0px))",
+            paddingBottom: "max(1rem, env(safe-area-inset-bottom, 0px))",
+          }}
           role="dialog"
           aria-modal="true"
           aria-label="Snapshot preview"
@@ -294,7 +325,7 @@ export default function SnapshotsPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-white hover:text-white hover:bg-white/10"
+                  className="text-white hover:text-white hover:bg-white/10 min-h-11 min-w-11"
                   onClick={() => setLightboxId(null)}
                 >
                   <X className="w-5 h-5" />
