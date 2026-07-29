@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useFamilyRealtime } from "@/lib/realtime";
@@ -16,6 +16,7 @@ import { getDeviceDisplayName, getPolicyStatusLabel } from "@warden/shared";
 import {
   ArrowLeft,
   Camera,
+  Check,
   Copy,
   Lock,
   Monitor,
@@ -42,6 +43,54 @@ const DAYS = [
   { value: 7, label: "Sun" },
 ];
 
+type CaptureFeedback = {
+  message: string;
+  tone: "pending" | "success" | "error";
+};
+
+type PairingCodeState = {
+  code: string;
+  expiresAt: Date;
+  deviceId: string;
+};
+
+function windowsEqual(a: AllowedWindow[], b: AllowedWindow[]) {
+  if (a.length !== b.length) return false;
+  return a.every(
+    (window, i) =>
+      window.day === b[i].day &&
+      window.start === b[i].start &&
+      window.end === b[i].end
+  );
+}
+
+function formatWindowsSummary(windows: AllowedWindow[]) {
+  if (windows.length === 0) {
+    return "Allowed any time (within daily limit)";
+  }
+
+  return windows
+    .map((window) => {
+      const day =
+        DAYS.find((d) => d.value === window.day)?.label ?? `Day ${window.day}`;
+      return `${day} ${window.start}–${window.end}`;
+    })
+    .join(" · ");
+}
+
+function formatCountdown(ms: number) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function captureToneClass(tone: CaptureFeedback["tone"]) {
+  if (tone === "success") return "text-green-400";
+  if (tone === "error") return "text-destructive";
+  return "text-muted-foreground";
+}
+
 export default function ChildDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -60,6 +109,11 @@ export default function ChildDetailPage() {
     onSuccess: () => {
       utils.policy.getEvaluation.invalidate({ childId });
       utils.children.get.invalidate({ childId });
+      utils.dashboard.overview.invalidate();
+      setDailyLimit(null);
+      setAllowedWindows(null);
+      setIsActive(null);
+      setPolicySavedAt(Date.now());
     },
   });
   const renameChild = trpc.children.rename.useMutation({
@@ -67,6 +121,7 @@ export default function ChildDetailPage() {
       utils.children.get.invalidate({ childId });
       utils.children.list.invalidate();
       utils.device.list.invalidate();
+      utils.dashboard.overview.invalidate();
       setEditingChildName(false);
     },
   });
@@ -74,14 +129,22 @@ export default function ChildDetailPage() {
     onSuccess: () => {
       utils.children.list.invalidate();
       utils.device.list.invalidate();
+      utils.dashboard.overview.invalidate();
       router.push("/dashboard/children");
     },
   });
-  const generateCode = trpc.device.generatePairingCode.useMutation();
+  const generateCode = trpc.device.generatePairingCode.useMutation({
+    onSuccess: () => {
+      utils.children.get.invalidate({ childId });
+      utils.device.list.invalidate();
+      utils.dashboard.overview.invalidate();
+    },
+  });
   const renameDevice = trpc.device.rename.useMutation({
     onSuccess: () => {
       utils.children.get.invalidate({ childId });
       utils.device.list.invalidate();
+      utils.dashboard.overview.invalidate();
       setEditingDeviceId(null);
     },
   });
@@ -89,6 +152,7 @@ export default function ChildDetailPage() {
     onSuccess: () => {
       utils.children.get.invalidate({ childId });
       utils.device.list.invalidate();
+      utils.dashboard.overview.invalidate();
     },
   });
   const setAdminLock = trpc.device.setAdminLock.useMutation({
@@ -107,13 +171,14 @@ export default function ChildDetailPage() {
     onSettled: () => {
       void utils.children.get.invalidate({ childId });
       void utils.device.list.invalidate();
+      void utils.dashboard.overview.invalidate();
     },
   });
   const [pendingLocks, setPendingLocks] = useState<
     Record<string, boolean | undefined>
   >({});
   const [captureFeedback, setCaptureFeedback] = useState<
-    Record<string, string>
+    Record<string, CaptureFeedback>
   >({});
   const capturePollersRef = useRef<Record<string, number>>({});
 
@@ -139,19 +204,19 @@ export default function ChildDetailPage() {
     stopCapturePoll(deviceId);
     setCaptureFeedback((prev) => ({
       ...prev,
-      [deviceId]: "Capture received",
+      [deviceId]: { message: "Capture received", tone: "success" },
     }));
     void utils.snapshot.list.invalidate();
-    clearCaptureFeedbackSoon(deviceId, 3000);
+    clearCaptureFeedbackSoon(deviceId, 4000);
   };
 
   const finishCaptureFailure = (deviceId: string, message: string) => {
     stopCapturePoll(deviceId);
     setCaptureFeedback((prev) => ({
       ...prev,
-      [deviceId]: message,
+      [deviceId]: { message, tone: "error" },
     }));
-    clearCaptureFeedbackSoon(deviceId, 5000);
+    clearCaptureFeedbackSoon(deviceId, 6000);
   };
 
   const watchCaptureStatus = (deviceId: string, snapshotId: string) => {
@@ -197,19 +262,25 @@ export default function ChildDetailPage() {
     onMutate: ({ deviceId, type }) => {
       setCaptureFeedback((prev) => ({
         ...prev,
-        [deviceId]:
-          type === "screen"
-            ? "Requesting screenshot…"
-            : "Requesting webcam capture…",
+        [deviceId]: {
+          message:
+            type === "screen"
+              ? "Requesting screenshot…"
+              : "Requesting webcam capture…",
+          tone: "pending",
+        },
       }));
     },
     onSuccess: (data, { deviceId, type }) => {
       setCaptureFeedback((prev) => ({
         ...prev,
-        [deviceId]:
-          type === "screen"
-            ? "Screenshot requested — waiting for device"
-            : "Webcam capture requested — waiting for device",
+        [deviceId]: {
+          message:
+            type === "screen"
+              ? "Screenshot requested — waiting for device…"
+              : "Webcam capture requested — waiting for device…",
+          tone: "pending",
+        },
       }));
       watchCaptureStatus(deviceId, data.id);
       void utils.snapshot.list.invalidate();
@@ -219,15 +290,15 @@ export default function ChildDetailPage() {
     },
   });
 
-  const [pairingCode, setPairingCode] = useState<{
-    code: string;
-    expiresAt: Date;
-  } | null>(null);
+  const [pairingCode, setPairingCode] = useState<PairingCodeState | null>(null);
+  const [pairingNotice, setPairingNotice] = useState<string | null>(null);
+  const [pairingTick, setPairingTick] = useState(0);
   const [copied, setCopied] = useState(false);
   const [editingChildName, setEditingChildName] = useState(false);
   const [childNameDraft, setChildNameDraft] = useState("");
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [deviceNameDraft, setDeviceNameDraft] = useState("");
+  const [policySavedAt, setPolicySavedAt] = useState<number | null>(null);
 
   const policy = child?.policies[0];
   const [dailyLimit, setDailyLimit] = useState<number | null>(null);
@@ -236,10 +307,76 @@ export default function ChildDetailPage() {
   );
   const [isActive, setIsActive] = useState<boolean | null>(null);
 
-  const currentLimit = dailyLimit ?? policy?.dailyLimitMinutes ?? 120;
-  const currentWindows =
-    allowedWindows ?? (policy?.allowedWindows as AllowedWindow[]) ?? [];
-  const currentActive = isActive ?? policy?.isActive ?? true;
+  const savedLimit = policy?.dailyLimitMinutes ?? 120;
+  const savedWindows =
+    (policy?.allowedWindows as AllowedWindow[] | undefined) ?? [];
+  const savedActive = policy?.isActive ?? true;
+
+  const currentLimit = dailyLimit ?? savedLimit;
+  const currentWindows = allowedWindows ?? savedWindows;
+  const currentActive = isActive ?? savedActive;
+
+  const policyDirty =
+    currentLimit !== savedLimit ||
+    currentActive !== savedActive ||
+    !windowsEqual(currentWindows, savedWindows);
+
+  const showPolicySaved =
+    policySavedAt !== null && Date.now() - policySavedAt < 4000 && !policyDirty;
+
+  useEffect(() => {
+    if (!policySavedAt) return;
+    const timer = window.setTimeout(() => setPolicySavedAt(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [policySavedAt]);
+
+  useEffect(() => {
+    if (!pairingCode) return;
+
+    const expiresAt = new Date(pairingCode.expiresAt).getTime();
+    const remaining = expiresAt - Date.now();
+
+    if (remaining <= 0) {
+      setPairingCode(null);
+      setPairingNotice("Pairing code expired — generate a new one");
+      return;
+    }
+
+    const expireTimer = window.setTimeout(() => {
+      setPairingCode(null);
+      setPairingNotice("Pairing code expired — generate a new one");
+    }, remaining);
+
+    const tickTimer = window.setInterval(() => {
+      setPairingTick((value) => value + 1);
+    }, 1000);
+
+    return () => {
+      window.clearTimeout(expireTimer);
+      window.clearInterval(tickTimer);
+    };
+  }, [pairingCode]);
+
+  useEffect(() => {
+    if (!pairingNotice) return;
+    const timer = window.setTimeout(() => setPairingNotice(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [pairingNotice]);
+
+  useEffect(() => {
+    if (!pairingCode || !child) return;
+    const device = child.devices.find((d) => d.id === pairingCode.deviceId);
+    if (device?.deviceToken) {
+      setPairingCode(null);
+      setPairingNotice("Device paired successfully");
+    }
+  }, [child, pairingCode]);
+
+  const pairingRemainingMs = useMemo(() => {
+    if (!pairingCode) return 0;
+    void pairingTick;
+    return new Date(pairingCode.expiresAt).getTime() - Date.now();
+  }, [pairingCode, pairingTick]);
 
   useEffect(() => {
     if (!child?.devices.length) return;
@@ -315,7 +452,25 @@ export default function ChildDetailPage() {
   }
 
   if (!child) {
-    return <div>Child not found</div>;
+    return (
+      <div className="space-y-4">
+        <Link
+          href="/dashboard/children"
+          className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to children
+        </Link>
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            <p>Child not found</p>
+            <p className="text-sm mt-1">
+              It may have been removed, or you don&apos;t have access.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const handleSavePolicy = () => {
@@ -327,6 +482,13 @@ export default function ChildDetailPage() {
     });
   };
 
+  const discardPolicyChanges = () => {
+    setDailyLimit(null);
+    setAllowedWindows(null);
+    setIsActive(null);
+    setPolicySavedAt(null);
+  };
+
   const addWindow = () => {
     setAllowedWindows([
       ...currentWindows,
@@ -334,7 +496,11 @@ export default function ChildDetailPage() {
     ]);
   };
 
-  const updateWindow = (index: number, field: keyof AllowedWindow, value: string | number) => {
+  const updateWindow = (
+    index: number,
+    field: keyof AllowedWindow,
+    value: string | number
+  ) => {
     const updated = [...currentWindows];
     updated[index] = { ...updated[index], [field]: value };
     setAllowedWindows(updated);
@@ -498,12 +664,34 @@ export default function ChildDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Screen time policy</CardTitle>
-            <CardDescription>
-              Set daily limits and allowed time windows
-            </CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <CardTitle>Screen time policy</CardTitle>
+                <CardDescription>
+                  Set daily limits and allowed time windows
+                </CardDescription>
+              </div>
+              {policyDirty ? (
+                <Badge variant="warning">Unsaved changes</Badge>
+              ) : showPolicySaved ? (
+                <Badge variant="success">
+                  <Check className="w-3 h-3 mr-1" />
+                  Saved
+                </Badge>
+              ) : null}
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+              <p>
+                <span className="text-foreground font-medium">
+                  {currentLimit} min/day
+                </span>
+                {currentActive ? "" : " · policy off"}
+              </p>
+              <p className="mt-0.5">{formatWindowsSummary(currentWindows)}</p>
+            </div>
+
             <div className="flex items-center gap-3">
               <input
                 type="checkbox"
@@ -559,14 +747,18 @@ export default function ChildDetailPage() {
                       <Input
                         type="time"
                         value={window.start}
-                        onChange={(e) => updateWindow(i, "start", e.target.value)}
+                        onChange={(e) =>
+                          updateWindow(i, "start", e.target.value)
+                        }
                         className="w-32"
                       />
                       <span className="text-muted-foreground">to</span>
                       <Input
                         type="time"
                         value={window.end}
-                        onChange={(e) => updateWindow(i, "end", e.target.value)}
+                        onChange={(e) =>
+                          updateWindow(i, "end", e.target.value)
+                        }
                         className="w-32"
                       />
                       <Button
@@ -582,9 +774,30 @@ export default function ChildDetailPage() {
               )}
             </div>
 
-            <Button onClick={handleSavePolicy} disabled={updatePolicy.isPending}>
-              {updatePolicy.isPending ? "Saving..." : "Save policy"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={handleSavePolicy}
+                disabled={updatePolicy.isPending || !policyDirty}
+              >
+                {updatePolicy.isPending ? "Saving..." : "Save policy"}
+              </Button>
+              {policyDirty && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={discardPolicyChanges}
+                  disabled={updatePolicy.isPending}
+                >
+                  Discard
+                </Button>
+              )}
+            </div>
+            {updatePolicy.isError && (
+              <p className="text-sm text-destructive">
+                {updatePolicy.error.message || "Could not save policy"}
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -600,178 +813,189 @@ export default function ChildDetailPage() {
               const pendingLock = pendingLocks[device.id];
               const effectiveAdminLock =
                 pendingLock !== undefined ? pendingLock : device.adminLock;
+              const feedback = captureFeedback[device.id];
+              const captureBusy = feedback?.tone === "pending";
 
               return (
-              <div
-                key={device.id}
-                className="flex flex-col gap-3 p-3 rounded-lg border border-border"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Monitor className="w-5 h-5 text-muted-foreground shrink-0" />
-                    <div className="min-w-0">
-                      {editingDeviceId === device.id ? (
-                        <form
-                          className="flex flex-wrap items-center gap-2"
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            saveDeviceName(device.id);
-                          }}
-                        >
-                          <Input
-                            value={deviceNameDraft}
-                            onChange={(e) => setDeviceNameDraft(e.target.value)}
-                            className="h-9 max-w-[12rem]"
-                            autoFocus
-                            maxLength={50}
-                          />
-                          <Button
-                            type="submit"
-                            size="sm"
-                            disabled={renameDevice.isPending}
+                <div
+                  key={device.id}
+                  className="flex flex-col gap-3 p-3 rounded-lg border border-border"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Monitor className="w-5 h-5 text-muted-foreground shrink-0" />
+                      <div className="min-w-0">
+                        {editingDeviceId === device.id ? (
+                          <form
+                            className="flex flex-wrap items-center gap-2"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              saveDeviceName(device.id);
+                            }}
                           >
-                            Save
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditingDeviceId(null)}
-                          >
-                            Cancel
-                          </Button>
-                        </form>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <p className="font-medium truncate">
-                            {getDeviceDisplayName(device)}
-                          </p>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0"
-                            onClick={() => startRenameDevice(device)}
-                            title="Rename device"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
+                            <Input
+                              value={deviceNameDraft}
+                              onChange={(e) =>
+                                setDeviceNameDraft(e.target.value)
+                              }
+                              className="h-9 max-w-[12rem]"
+                              autoFocus
+                              maxLength={50}
+                            />
+                            <Button
+                              type="submit"
+                              size="sm"
+                              disabled={renameDevice.isPending}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingDeviceId(null)}
+                            >
+                              Cancel
+                            </Button>
+                          </form>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium truncate">
+                              {getDeviceDisplayName(device)}
+                            </p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => startRenameDevice(device)}
+                              title="Rename device"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          {device.machineName &&
+                          device.displayName &&
+                          device.machineName !== device.displayName
+                            ? `${device.machineName} · `
+                            : ""}
+                          Agent v{device.agentVersion ?? "?"} ·{" "}
+                          {device.lastSeenAt
+                            ? `Last seen ${new Date(device.lastSeenAt).toLocaleString()}`
+                            : "Never connected"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge
+                        variant={device.isOnline ? "success" : "secondary"}
+                      >
+                        {device.isOnline ? "Online" : "Offline"}
+                      </Badge>
+                      {effectiveAdminLock && (
+                        <Badge variant="destructive">Locked down</Badge>
                       )}
-                      <p className="text-xs text-muted-foreground">
-                        {device.machineName &&
-                        device.displayName &&
-                        device.machineName !== device.displayName
-                          ? `${device.machineName} · `
-                          : ""}
-                        Agent v{device.agentVersion ?? "?"} ·{" "}
-                        {device.lastSeenAt
-                          ? `Last seen ${new Date(device.lastSeenAt).toLocaleString()}`
-                          : "Never connected"}
-                      </p>
+                      {pendingLock !== undefined && (
+                        <Badge variant="secondary">
+                          {pendingLock
+                            ? "Sending lock..."
+                            : "Waiting for unlock..."}
+                        </Badge>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant={device.isOnline ? "success" : "secondary"}>
-                      {device.isOnline ? "Online" : "Offline"}
-                    </Badge>
-                    {effectiveAdminLock && (
-                      <Badge variant="destructive">Locked down</Badge>
-                    )}
-                    {pendingLock !== undefined && (
-                      <Badge variant="secondary">
-                        {pendingLock ? "Sending lock..." : "Waiting for unlock..."}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {effectiveAdminLock ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {effectiveAdminLock ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setAdminLock.mutate({
+                            deviceId: device.id,
+                            locked: false,
+                          })
+                        }
+                      >
+                        <Unlock className="w-4 h-4 mr-2" />
+                        Release lockdown
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() =>
+                          setAdminLock.mutate({
+                            deviceId: device.id,
+                            locked: true,
+                          })
+                        }
+                        disabled={!device.deviceToken}
+                        title={
+                          !device.deviceToken
+                            ? "Device must be paired first"
+                            : "Immediately lock this device"
+                        }
+                      >
+                        <Lock className="w-4 h-4 mr-2" />
+                        Lock down
+                      </Button>
+                    )}
+
+                    {device.isOnline && isSupabaseConfigured() && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            requestCapture.mutate({
+                              deviceId: device.id,
+                              type: "screen",
+                            })
+                          }
+                          disabled={captureBusy}
+                        >
+                          <Camera className="w-4 h-4 mr-2" />
+                          Screenshot
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            requestCapture.mutate({
+                              deviceId: device.id,
+                              type: "webcam",
+                            })
+                          }
+                          disabled={captureBusy}
+                        >
+                          <Video className="w-4 h-4 mr-2" />
+                          Webcam
+                        </Button>
+                      </>
+                    )}
+
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() =>
-                        setAdminLock.mutate({
-                          deviceId: device.id,
-                          locked: false,
-                        })
-                      }
+                      onClick={() => confirmDeleteDevice(device)}
+                      disabled={deleteDevice.isPending}
+                      title="Remove device"
                     >
-                      <Unlock className="w-4 h-4 mr-2" />
-                      Release lockdown
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Remove
                     </Button>
-                  ) : (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() =>
-                        setAdminLock.mutate({
-                          deviceId: device.id,
-                          locked: true,
-                        })
-                      }
-                      disabled={!device.deviceToken}
-                      title={
-                        !device.deviceToken
-                          ? "Device must be paired first"
-                          : "Immediately lock this device"
-                      }
+                  </div>
+                  {feedback && (
+                    <p
+                      className={`text-xs ${captureToneClass(feedback.tone)}`}
+                      role="status"
                     >
-                      <Lock className="w-4 h-4 mr-2" />
-                      LOCK DOWN
-                    </Button>
+                      {feedback.message}
+                    </p>
                   )}
-
-                  {device.isOnline && isSupabaseConfigured() && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          requestCapture.mutate({
-                            deviceId: device.id,
-                            type: "screen",
-                          })
-                        }
-                        disabled={Boolean(captureFeedback[device.id])}
-                        title="Capture screen"
-                      >
-                        <Camera className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          requestCapture.mutate({
-                            deviceId: device.id,
-                            type: "webcam",
-                          })
-                        }
-                        disabled={Boolean(captureFeedback[device.id])}
-                        title="Capture webcam"
-                      >
-                        <Video className="w-4 h-4" />
-                      </Button>
-                    </>
-                  )}
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => confirmDeleteDevice(device)}
-                    disabled={deleteDevice.isPending}
-                    title="Remove device"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Remove
-                  </Button>
                 </div>
-                {captureFeedback[device.id] && (
-                  <p className="text-xs text-muted-foreground">
-                    {captureFeedback[device.id]}
-                  </p>
-                )}
-              </div>
               );
             })}
 
@@ -783,37 +1007,66 @@ export default function ChildDetailPage() {
                 <p className="text-4xl font-mono font-bold tracking-widest mb-2">
                   {pairingCode.code}
                 </p>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Expires {new Date(pairingCode.expiresAt).toLocaleTimeString()}
+                <p className="text-sm font-medium tabular-nums mb-1">
+                  Expires in {formatCountdown(pairingRemainingMs)}
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    navigator.clipboard.writeText(pairingCode.code);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  }}
-                >
-                  <Copy className="w-4 h-4 mr-2" />
-                  {copied ? "Copied!" : "Copy code"}
-                </Button>
+                <p className="text-xs text-muted-foreground mb-3">
+                  {new Date(pairingCode.expiresAt).toLocaleTimeString()}
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(pairingCode.code);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    {copied ? "Copied!" : "Copy code"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPairingCode(null)}
+                  >
+                    Dismiss
+                  </Button>
+                </div>
               </div>
             ) : (
               <Button
                 variant="outline"
                 onClick={async () => {
                   const result = await generateCode.mutateAsync({ childId });
+                  setPairingNotice(null);
                   setPairingCode({
                     code: result.code,
-                    expiresAt: result.expiresAt,
+                    expiresAt: new Date(result.expiresAt),
+                    deviceId: result.deviceId,
                   });
                 }}
                 disabled={generateCode.isPending}
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
-                Generate pairing code
+                {generateCode.isPending
+                  ? "Generating..."
+                  : "Generate pairing code"}
               </Button>
+            )}
+
+            {pairingNotice && (
+              <p
+                className={`text-sm text-center ${
+                  pairingNotice.includes("successfully")
+                    ? "text-green-400"
+                    : "text-muted-foreground"
+                }`}
+                role="status"
+              >
+                {pairingNotice}
+              </p>
             )}
           </CardContent>
         </Card>
