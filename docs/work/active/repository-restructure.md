@@ -66,6 +66,15 @@ Establish AI guardrails, docs, hygiene, config normalization, and boundary check
 - Evidence for no app/package moves: ADR-0001; `vercel.json` `cd ../..`; acyclic package graph already correct
 - Commands: grep for `DEV-TESTING.md` path links → only historical mentions remain; `git diff --check` PASS
 - Next: Phase 4 config normalization
+- Commit: `3bee2e8`
+
+### Phase 4 — Configuration normalization
+
+- Date: 2026-07-29
+- Changes: `apps/web/.eslintrc.json` (next/core-web-vitals); turbo `test`, `globalEnv`, `@warden/db#build` empty outputs; root scripts `test`/`verify`/`db:validate`; packages/db `db:validate`
+- Commands: `npx turbo lint` → PASS (exit 0; pre-existing img/hooks warnings); `npm run db:validate` → PASS; package-lock.json untouched
+- Note: `check:boundaries` wired in Phase 5 (avoid broken verify reference)
+- Next: Phase 5 boundary script
 
 ## Final
 

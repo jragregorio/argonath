@@ -1,9 +1,32 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "NODE_ENV",
+    "DATABASE_URL",
+    "DIRECT_URL",
+    "AUTH_JWT_SECRET",
+    "NEXT_PUBLIC_DEV_AUTH_BYPASS",
+    "DEV_BYPASS_USER_ID",
+    "DEV_BYPASS_FAMILY_ID",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "NEXT_PUBLIC_APP_URL",
+    "CRON_SECRET",
+    "VERCEL_URL",
+    "PORT",
+    "BASE_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "@warden/db#build": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "outputs": []
     },
     "dev": {
       "cache": false,
@@ -15,6 +38,9 @@
     "typecheck": {
       "dependsOn": ["^build"]
     },
+    "test": {
+      "dependsOn": ["^build"]
+    },
     "db:generate": {
       "cache": false
     },
@@ -22,6 +48,9 @@
       "cache": false
     },
     "db:migrate": {
+      "cache": false
+    },
+    "db:validate": {
       "cache": false
     }
   }
