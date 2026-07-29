@@ -30,4 +30,15 @@ All projects live under `apps/agent/`. See [ADR-0002](../decisions/0002-keep-dot
 
 ## Enforcement
 
-`npm run check:boundaries` (`scripts/check-boundaries.mjs`). Included in `npm run verify`.
+Run `npm run check:boundaries` (`scripts/check-boundaries.mjs`). Included in `npm run verify`.
+
+Checks:
+
+- No `packages → apps` imports
+- No cross-app source imports (`web` ↔ `agent`)
+- Acyclic `@warden/*` graph matching allowed edges
+- Every `@warden/*` import is declared in the consumer `package.json`
+- `PrismaClient` construction only in `packages/db` (root `scripts/` exempt)
+- `apps/web` source must not import `@warden/db` / `@prisma/client`
+- `packages/ui` free of domain/tRPC/Prisma
+- .NET `ProjectReference` paths stay under `apps/agent`; `Warden.Core` is a leaf

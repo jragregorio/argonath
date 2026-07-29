@@ -75,6 +75,14 @@ Establish AI guardrails, docs, hygiene, config normalization, and boundary check
 - Commands: `npx turbo lint` → PASS (exit 0; pre-existing img/hooks warnings); `npm run db:validate` → PASS; package-lock.json untouched
 - Note: `check:boundaries` wired in Phase 5 (avoid broken verify reference)
 - Next: Phase 5 boundary script
+- Commit: `40ebb12`
+
+### Phase 5 — Boundary enforcement
+
+- Date: 2026-07-29
+- Changes: Added `scripts/check-boundaries.mjs`; wired `npm run check:boundaries` and updated `verify`; expanded `docs/architecture/boundaries.md`
+- Commands: `node scripts/check-boundaries.mjs` → PASS
+- Next: Phase 6 full validation
 
 ## Final
 
