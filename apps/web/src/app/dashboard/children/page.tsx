@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getDeviceDisplayName } from "@warden/shared";
 import { Pencil, Plus, Trash2, User } from "lucide-react";
 import Link from "next/link";
+import { POLL_LIVE_MS } from "@/lib/query-defaults";
 
 export default function ChildrenPage() {
   const [name, setName] = useState("");
@@ -20,7 +21,7 @@ export default function ChildrenPage() {
   const [editName, setEditName] = useState("");
   const utils = trpc.useUtils();
   const { data: children, isLoading } = trpc.children.list.useQuery(undefined, {
-    refetchInterval: 5000,
+    refetchInterval: POLL_LIVE_MS,
   });
   const createChild = trpc.children.create.useMutation({
     onSuccess: () => {

@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getDeviceDisplayName } from "@warden/shared";
 import { Check, X, Clock, History } from "lucide-react";
+import { POLL_BACKGROUND_MS, POLL_LIVE_MS } from "@/lib/query-defaults";
 
 function formatWhen(value: Date | string | null | undefined) {
   if (!value) return "—";
@@ -24,15 +25,15 @@ export default function ExtensionsPage() {
   const utils = trpc.useUtils();
   const { data: requests, isLoading: pendingLoading } =
     trpc.extension.listPending.useQuery(undefined, {
-      refetchInterval: 5000,
+      refetchInterval: POLL_LIVE_MS,
     });
   const { data: history, isLoading: historyLoading } =
     trpc.extension.listHistory.useQuery(
       { limit: 50 },
-      { refetchInterval: 15_000 }
+      { refetchInterval: POLL_BACKGROUND_MS }
     );
   const { data: devices } = trpc.device.list.useQuery(undefined, {
-    refetchInterval: 15_000,
+    refetchInterval: POLL_BACKGROUND_MS,
   });
 
   const resolve = trpc.extension.resolve.useMutation({

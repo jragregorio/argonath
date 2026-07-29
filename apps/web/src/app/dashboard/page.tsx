@@ -33,6 +33,7 @@ import {
   formatActivityDetail,
   getActivityLabel,
 } from "@/lib/activity";
+import { POLL_BACKGROUND_MS, POLL_LIVE_MS } from "@/lib/query-defaults";
 
 function usagePercent(used: number, limit: number) {
   if (limit <= 0) return used > 0 ? 100 : 0;
@@ -54,11 +55,11 @@ function statusBadgeVariant(status: PolicyStatus) {
 export default function DashboardPage() {
   const utils = trpc.useUtils();
   const { data: overview, isLoading } = trpc.dashboard.overview.useQuery(undefined, {
-    refetchInterval: 10_000,
+    refetchInterval: POLL_LIVE_MS,
   });
   const { data: activity } = trpc.dashboard.activity.useQuery(
     { limit: 20 },
-    { refetchInterval: 15_000 }
+    { refetchInterval: POLL_BACKGROUND_MS }
   );
   const [pendingLocks, setPendingLocks] = useState<
     Record<string, boolean | undefined>

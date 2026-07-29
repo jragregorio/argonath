@@ -37,6 +37,7 @@ import {
 } from "@/lib/device-cache";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { AllowedWindowsEditor } from "@/components/allowed-windows-editor";
+import { POLL_LIVE_MS } from "@/lib/query-defaults";
 
 const DAYS = [
   { value: 1, label: "Mon" },
@@ -115,11 +116,11 @@ export default function ChildDetailPage() {
 
   const { data: child, isLoading } = trpc.children.get.useQuery(
     { childId },
-    { refetchInterval: 5000 }
+    { refetchInterval: POLL_LIVE_MS }
   );
   const { data: evaluation } = trpc.policy.getEvaluation.useQuery(
     { childId },
-    { refetchInterval: 10_000 }
+    { refetchInterval: POLL_LIVE_MS }
   );
   const updatePolicy = trpc.policy.update.useMutation({
     onSuccess: () => {
@@ -891,7 +892,7 @@ export default function ChildDetailPage() {
                     ` (+${evaluation.bonusMinutes} bonus)`}
                 </span>
                 <span className="hidden md:inline text-xs text-muted-foreground">
-                  Refreshes every 10s from agent heartbeats
+                  Refreshes every 30s from agent heartbeats (realtime updates sooner)
                 </span>
               </div>
               {evaluation.status === "allowed" ? (

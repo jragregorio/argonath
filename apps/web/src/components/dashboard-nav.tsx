@@ -19,6 +19,7 @@ import { isSupabaseConfigured } from "@/lib/dev-config";
 import { trpc } from "@/lib/trpc";
 import { useFamilyRealtime } from "@/lib/realtime";
 import { APP_VERSION } from "@warden/shared";
+import { POLL_BACKGROUND_MS, POLL_LIVE_MS } from "@/lib/query-defaults";
 
 const devAuthBypassEnabled =
   process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
@@ -45,10 +46,10 @@ const focusRing =
 function useNavBadges() {
   const utils = trpc.useUtils();
   const { data: badges } = trpc.dashboard.navBadges.useQuery(undefined, {
-    refetchInterval: 5000,
+    refetchInterval: POLL_LIVE_MS,
   });
   const { data: devices } = trpc.device.list.useQuery(undefined, {
-    refetchInterval: 15_000,
+    refetchInterval: POLL_BACKGROUND_MS,
   });
   const deviceIds = devices?.map((d) => d.id) ?? [];
 

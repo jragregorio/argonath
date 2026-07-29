@@ -5,6 +5,7 @@ import { httpBatchLink } from "@trpc/client";
 import { useState } from "react";
 import superjson from "superjson";
 import { trpc } from "./trpc";
+import { QUERY_STALE_TIME_MS } from "./query-defaults";
 
 function getBaseUrl() {
   if (typeof window !== "undefined") return "";
@@ -53,7 +54,18 @@ async function fetchWithRefresh(
 }
 
 export function TRPCProvider({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: QUERY_STALE_TIME_MS,
+            // Realtime + explicit intervals handle freshness; avoid refetch storms on focus.
+            refetchOnWindowFocus: false,
+          },
+        },
+      })
+  );
   const [trpcClient] = useState(() =>
     trpc.createClient({
       links: [
