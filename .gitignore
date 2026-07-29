@@ -17,6 +17,7 @@ obj/
 *.suo
 *.userosscache
 *.sln.docstates
+publish/
 
 # Env
 .env
@@ -28,6 +29,7 @@ obj/
 .vscode/
 *.swp
 *.swo
+.cursor/*.log
 
 # OS
 .DS_Store
@@ -37,9 +39,6 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Prisma
-packages/db/prisma/migrations/**/migration_lock.toml
 
 # Agent local config
 apps/agent/**/appsettings.Development.json

@@ -1,0 +1,19 @@
+# Generated / heavy — exclude from indexing
+node_modules/
+.next/
+.turbo/
+dist/
+build/
+out/
+bin/
+obj/
+publish/
+*.tsbuildinfo
+package-lock.json
+
+# Prisma generated client lives under node_modules; also ignore any local generate output
+packages/db/node_modules/
+**/generated/
+
+# Cursor debug
+.cursor/*.log

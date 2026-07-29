@@ -48,6 +48,15 @@ Establish AI guardrails, docs, hygiene, config normalization, and boundary check
 - Decisions: document target commands (`verify`, `check:boundaries`) before scripts exist in later phases
 - Risks: `docs/development/local-testing.md` linked but not moved until Phase 3
 - Next: Phase 2 hygiene
+- Commit: `1fe44f2`
+
+### Phase 2 — Repository hygiene
+
+- Date: 2026-07-29
+- Changes: Deleted `dist/Warden.Tray/` and `.cursor/debug-8f2974.log`; updated `.gitignore` (removed incorrect migration_lock ignore; added `.cursor/*.log`, `publish/`); added `.cursorignore`, `.cursorindexingignore`; added `CRON_SECRET` name to `apps/web/.env.example`
+- Commands: `git ls-files` for env secrets → none; `git diff --check`
+- Results: no tracked secret-bearing env files
+- Next: Phase 3 structural doc move
 
 ## Final
 

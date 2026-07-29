@@ -1,0 +1,14 @@
+﻿# Secrets and local env — never send to model context
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.local
+**/.env.*.local
+!**/.env.example
+
+# Agent paired config may contain device tokens
+**/config.json
+
+# Debug logs
+.cursor/*.log
