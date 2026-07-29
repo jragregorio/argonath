@@ -18,6 +18,10 @@ import {
   isSupabaseConfigured,
 } from "../lib/supabase";
 import {
+  getCachedSignedSnapshotUrl,
+  invalidateSignedSnapshotUrl,
+} from "../lib/signed-url-cache";
+import {
   protectedProcedure,
   parentProcedure,
   adminProcedure,
@@ -1202,10 +1206,16 @@ export const snapshotRouter = router({
           if (snapshot.status !== "ready") {
             return { ...snapshot, url: null };
           }
-          const { data } = await supabase.storage
-            .from("snapshots")
-            .createSignedUrl(snapshot.storageKey, 3600);
-          return { ...snapshot, url: data?.signedUrl ?? null };
+          const url = await getCachedSignedSnapshotUrl(
+            snapshot.storageKey,
+            async () => {
+              const { data } = await supabase.storage
+                .from("snapshots")
+                .createSignedUrl(snapshot.storageKey, 3600);
+              return data?.signedUrl ?? null;
+            }
+          );
+          return { ...snapshot, url };
         })
       );
 
@@ -1246,6 +1256,7 @@ export const snapshotRouter = router({
           .from("snapshots")
           .remove([snapshot.storageKey])
           .catch(() => {});
+        invalidateSignedSnapshotUrl(snapshot.storageKey);
       }
 
       await prisma.snapshot.delete({ where: { id: snapshot.id } });

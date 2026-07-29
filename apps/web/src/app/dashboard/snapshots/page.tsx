@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getDeviceDisplayName } from "@warden/shared";
 import { cn } from "@warden/ui";
 import { Camera, Loader2, Trash2, Video, X } from "lucide-react";
-import { POLL_LIVE_MS } from "@/lib/query-defaults";
+import { POLL_BACKGROUND_MS, POLL_LIVE_MS } from "@/lib/query-defaults";
 
 type SnapshotStatusFilter = "all" | "ready" | "pending" | "failed";
 
@@ -68,7 +68,12 @@ export default function SnapshotsPage() {
 
   const { data: children } = trpc.children.list.useQuery();
   const { data: snapshots, isLoading } = trpc.snapshot.list.useQuery(listInput, {
-    refetchInterval: POLL_LIVE_MS,
+    // Poll faster only while a capture is in flight; otherwise background cadence.
+    refetchInterval: (query) => {
+      const rows = query.state.data;
+      if (rows?.some((s) => s.status === "pending")) return POLL_LIVE_MS;
+      return POLL_BACKGROUND_MS;
+    },
   });
   const markAllViewed = trpc.snapshot.markAllViewed.useMutation({
     onSuccess: () => {
