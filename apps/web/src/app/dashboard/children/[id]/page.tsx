@@ -574,7 +574,10 @@ export default function ChildDetailPage() {
       ? "bg-destructive/35"
       : "bg-primary/30";
 
-  const renderPolicyEditor = (idPrefix: string) => (
+  const renderPolicyEditor = (
+    idPrefix: string,
+    windowsExpanded = false
+  ) => (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <input
@@ -603,6 +606,7 @@ export default function ChildDetailPage() {
       <AllowedWindowsEditor
         windows={currentWindows}
         onChange={setAllowedWindows}
+        defaultExpanded={windowsExpanded}
       />
 
       <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
@@ -799,8 +803,8 @@ export default function ChildDetailPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="order-2">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <Card className="order-2 self-start w-full">
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -846,7 +850,7 @@ export default function ChildDetailPage() {
           </CardContent>
         </Card>
 
-        <Card className="order-1">
+        <Card className="order-1 self-start w-full">
           <CardHeader>
             <CardTitle>Devices</CardTitle>
             <CardDescription>
@@ -1093,7 +1097,7 @@ export default function ChildDetailPage() {
           </p>
           <p className="mt-0.5">{formatWindowsSummary(currentWindows)}</p>
         </div>
-        {renderPolicyEditor("sheet")}
+        {renderPolicyEditor("sheet", true)}
       </BottomSheet>
 
       <BottomSheet

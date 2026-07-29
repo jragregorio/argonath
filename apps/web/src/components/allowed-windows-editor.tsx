@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import type { AllowedWindow } from "@warden/shared";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@warden/ui";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 const DAYS = [
   { value: 1, label: "Mon" },
@@ -110,15 +112,45 @@ function DayTimeline({ start, end }: { start: string; end: string }) {
   );
 }
 
+function summarizeWindows(windows: AllowedWindow[]) {
+  if (windows.length === 0) {
+    return "Allowed any time (within daily limit)";
+  }
+
+  const byRange = new Map<string, number[]>();
+  for (const window of windows) {
+    const key = `${window.start}–${window.end}`;
+    const days = byRange.get(key) ?? [];
+    days.push(window.day);
+    byRange.set(key, days);
+  }
+
+  return [...byRange.entries()]
+    .map(([range, days]) => {
+      const labels = days
+        .sort((a, b) => a - b)
+        .map(
+          (day) => DAYS.find((d) => d.value === day)?.label ?? `Day ${day}`
+        );
+      return `${labels.join(", ")} ${range}`;
+    })
+    .join(" · ");
+}
+
 type AllowedWindowsEditorProps = {
   windows: AllowedWindow[];
   onChange: (windows: AllowedWindow[]) => void;
+  /** When false (default), presets + week grid stay collapsed behind Edit schedule. */
+  defaultExpanded?: boolean;
 };
 
 export function AllowedWindowsEditor({
   windows,
   onChange,
+  defaultExpanded = false,
 }: AllowedWindowsEditorProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
   const toggleDay = (day: number, enabled: boolean) => {
     if (!enabled) {
       onChange(windows.filter((window) => window.day !== day));
@@ -179,11 +211,37 @@ export function AllowedWindowsEditor({
   })?.id;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <Label>Allowed windows</Label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setExpanded((prev) => !prev)}
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="w-4 h-4 mr-1.5" />
+              Hide schedule
+            </>
+          ) : (
+            <>
+              <ChevronDown className="w-4 h-4 mr-1.5" />
+              Edit schedule
+            </>
+          )}
+        </Button>
       </div>
 
+      {!expanded && (
+        <p className="text-sm text-muted-foreground rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+          {summarizeWindows(windows)}
+        </p>
+      )}
+
+      {expanded && (
+        <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         {PRESETS.map((preset) => (
           <button
@@ -311,6 +369,8 @@ export function AllowedWindowsEditor({
           );
         })}
       </div>
+        </div>
+      )}
     </div>
   );
 }
