@@ -62,6 +62,7 @@ export default function DashboardPage() {
   const [pendingLocks, setPendingLocks] = useState<
     Record<string, boolean | undefined>
   >({});
+  const [showAllActivity, setShowAllActivity] = useState(false);
 
   const setAdminLock = trpc.device.setAdminLock.useMutation({
     onMutate: async ({ deviceId, locked }) => {
@@ -123,12 +124,13 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-8">
-        <div className="space-y-2">
+      <div className="space-y-6 md:space-y-8">
+        <div className="hidden md:block space-y-2">
           <Skeleton className="h-9 w-48" />
           <Skeleton className="h-5 w-80 max-w-full" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Skeleton className="h-16 w-full rounded-xl md:hidden" />
+        <div className="hidden md:grid md:grid-cols-3 gap-4">
           {[0, 1, 2].map((i) => (
             <Card key={i}>
               <CardHeader>
@@ -165,17 +167,24 @@ export default function DashboardPage() {
   const children = overview?.children ?? [];
   const pendingRequests = overview?.pendingRequests ?? 0;
   const onlineCount = devices.filter((d) => d.isOnline).length;
+  const activityItems = activity ?? [];
+  const visibleActivity = showAllActivity
+    ? activityItems
+    : activityItems.slice(0, 5);
 
   return (
-    <div className="space-y-8">
-      <PageHeader
-        title="Dashboard"
-        description="Screen time, device status, and lockdowns at a glance"
-      />
+    <div className="space-y-6 md:space-y-8">
+      {/* Desktop title — mobile uses fixed top bar page title */}
+      <div className="hidden md:block">
+        <PageHeader
+          title="Dashboard"
+          description="Screen time, device status, and lockdowns at a glance"
+        />
+      </div>
 
       {pendingRequests > 0 && (
         <Card className="border-yellow-500/50 bg-yellow-500/5">
-          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 shrink-0" />
               <div>
@@ -188,8 +197,8 @@ export default function DashboardPage() {
                 </p>
               </div>
             </div>
-            <Link href="/dashboard/extensions">
-              <Button size="sm" variant="outline">
+            <Link href="/dashboard/extensions" className="w-full sm:w-auto">
+              <Button className="w-full sm:w-auto" variant="outline">
                 Review requests
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
@@ -198,7 +207,37 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Mobile compact stats strip */}
+      <div className="md:hidden grid grid-cols-3 gap-2">
+        <Link href="/dashboard/children" className="block">
+          <Card className="h-full p-3">
+            <p className="text-[11px] text-muted-foreground truncate">Children</p>
+            <p className="text-xl font-semibold tabular-nums mt-0.5">
+              {children.length}
+            </p>
+          </Card>
+        </Link>
+        <Card className="h-full p-3">
+          <p className="text-[11px] text-muted-foreground truncate">Online</p>
+          <p className="text-xl font-semibold tabular-nums mt-0.5">
+            {onlineCount}
+            <span className="text-sm text-muted-foreground font-normal">
+              /{devices.length}
+            </span>
+          </p>
+        </Card>
+        <Link href="/dashboard/extensions" className="block">
+          <Card className="h-full p-3">
+            <p className="text-[11px] text-muted-foreground truncate">Requests</p>
+            <p className="text-xl font-semibold tabular-nums mt-0.5">
+              {pendingRequests}
+            </p>
+          </Card>
+        </Link>
+      </div>
+
+      {/* Desktop summary cards */}
+      <div className="hidden md:grid md:grid-cols-3 gap-4">
         <Link href="/dashboard/children" className="block group">
           <Card className="h-full transition-colors group-hover:border-primary/40">
             <CardHeader className="relative mb-0">
@@ -244,7 +283,7 @@ export default function DashboardPage() {
             href="/dashboard/children"
             className="text-sm text-primary hover:underline"
           >
-            Manage children
+            Manage
           </Link>
         </div>
 
@@ -257,7 +296,7 @@ export default function DashboardPage() {
                 Add a child, then pair their PC with Warden.
               </p>
               <Link href="/dashboard/children">
-                <Button size="sm">Add a child</Button>
+                <Button className="w-full sm:w-auto">Add a child</Button>
               </Link>
             </CardContent>
           </Card>
@@ -347,30 +386,30 @@ export default function DashboardPage() {
                             className="flex flex-col gap-2 rounded-lg border border-border/60 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center"
                           >
                             <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
-                            <Monitor className="w-4 h-4 text-muted-foreground shrink-0" />
-                            <span className="text-sm font-medium truncate min-w-0 flex-1">
-                              {getDeviceDisplayName(device)}
-                            </span>
-                            <Badge
-                              variant={
-                                device.isOnline ? "success" : "secondary"
-                              }
-                            >
-                              {device.isOnline ? "Online" : "Offline"}
-                            </Badge>
-                            {device.isLocked && !effectiveAdminLock && (
-                              <Badge variant="secondary">Locked</Badge>
-                            )}
-                            {effectiveAdminLock && (
-                              <Badge variant="destructive">Locked down</Badge>
-                            )}
-                            {pendingLock !== undefined && (
-                              <Badge variant="secondary">
-                                {pendingLock
-                                  ? "Sending lock..."
-                                  : "Waiting for unlock..."}
+                              <Monitor className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <span className="text-sm font-medium truncate min-w-0 flex-1">
+                                {getDeviceDisplayName(device)}
+                              </span>
+                              <Badge
+                                variant={
+                                  device.isOnline ? "success" : "secondary"
+                                }
+                              >
+                                {device.isOnline ? "Online" : "Offline"}
                               </Badge>
-                            )}
+                              {device.isLocked && !effectiveAdminLock && (
+                                <Badge variant="secondary">Locked</Badge>
+                              )}
+                              {effectiveAdminLock && (
+                                <Badge variant="destructive">Locked down</Badge>
+                              )}
+                              {pendingLock !== undefined && (
+                                <Badge variant="secondary">
+                                  {pendingLock
+                                    ? "Sending lock..."
+                                    : "Waiting for unlock..."}
+                                </Badge>
+                              )}
                             </div>
                             {effectiveAdminLock ? (
                               <Button
@@ -446,7 +485,7 @@ export default function DashboardPage() {
         ) : (
           <Card className="p-0 overflow-hidden">
             <ul className="divide-y divide-border">
-              {activity.map((item) => {
+              {visibleActivity.map((item) => {
                 const detail = formatActivityDetail(item);
                 const actorName =
                   item.actor?.name?.trim() ||
@@ -456,7 +495,7 @@ export default function DashboardPage() {
                 return (
                   <li
                     key={item.id}
-                    className="flex flex-wrap items-start justify-between gap-3 px-5 py-3.5"
+                    className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 sm:px-5 sm:py-3.5"
                   >
                     <div className="min-w-0 space-y-0.5">
                       <p className="font-medium text-sm">
@@ -475,6 +514,19 @@ export default function DashboardPage() {
                 );
               })}
             </ul>
+            {activityItems.length > 5 && (
+              <div className="border-t border-border p-3">
+                <Button
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => setShowAllActivity((prev) => !prev)}
+                >
+                  {showAllActivity
+                    ? "Show less"
+                    : `Show ${activityItems.length - 5} more`}
+                </Button>
+              </div>
+            )}
           </Card>
         )}
       </div>

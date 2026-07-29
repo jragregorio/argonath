@@ -25,6 +25,8 @@ import {
   Trash2,
   Unlock,
   Video,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/dev-config";
@@ -114,6 +116,7 @@ export default function ChildDetailPage() {
       setAllowedWindows(null);
       setIsActive(null);
       setPolicySavedAt(Date.now());
+      setPolicyEditorOpen(false);
     },
   });
   const renameChild = trpc.children.rename.useMutation({
@@ -299,6 +302,7 @@ export default function ChildDetailPage() {
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [deviceNameDraft, setDeviceNameDraft] = useState("");
   const [policySavedAt, setPolicySavedAt] = useState<number | null>(null);
+  const [policyEditorOpen, setPolicyEditorOpen] = useState(false);
 
   const policy = child?.policies[0];
   const [dailyLimit, setDailyLimit] = useState<number | null>(null);
@@ -639,30 +643,37 @@ export default function ChildDetailPage() {
         )}
 
         {evaluation && (
-          <div className="flex flex-wrap items-center gap-3 mt-2">
-            <Badge
-              variant={
-                evaluation.status === "allowed" ? "success" : "warning"
-              }
-            >
-              {getPolicyStatusLabel(evaluation.status)}
-            </Badge>
-            <span className="text-muted-foreground text-sm">
-              {evaluation.usedMinutes} /{" "}
-              {evaluation.dailyLimitMinutes + evaluation.bonusMinutes} min used
-              today
-              {evaluation.bonusMinutes > 0 &&
-                ` (+${evaluation.bonusMinutes} bonus)`}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Refreshes every 10s from agent heartbeats
-            </span>
-          </div>
+          <Card className="mt-4 p-4 md:border-0 md:bg-transparent md:p-0 md:mt-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge
+                variant={
+                  evaluation.status === "allowed" ? "success" : "warning"
+                }
+              >
+                {getPolicyStatusLabel(evaluation.status)}
+              </Badge>
+              <span className="text-muted-foreground text-sm">
+                {evaluation.usedMinutes} /{" "}
+                {evaluation.dailyLimitMinutes + evaluation.bonusMinutes} min
+                used today
+                {evaluation.bonusMinutes > 0 &&
+                  ` (+${evaluation.bonusMinutes} bonus)`}
+              </span>
+              <span className="hidden md:inline text-xs text-muted-foreground">
+                Refreshes every 10s from agent heartbeats
+              </span>
+            </div>
+            {evaluation.status === "allowed" && (
+              <p className="text-sm text-muted-foreground mt-2 md:hidden">
+                {evaluation.remainingMinutes} min remaining today
+              </p>
+            )}
+          </Card>
         )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        <Card className="order-2">
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -692,6 +703,30 @@ export default function ChildDetailPage() {
               <p className="mt-0.5">{formatWindowsSummary(currentWindows)}</p>
             </div>
 
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full md:hidden"
+              onClick={() => setPolicyEditorOpen((prev) => !prev)}
+            >
+              {policyEditorOpen ? (
+                <>
+                  <ChevronUp className="w-4 h-4 mr-2" />
+                  Hide editor
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-4 h-4 mr-2" />
+                  Edit limits
+                </>
+              )}
+            </Button>
+
+            <div
+              className={`space-y-4 ${
+                policyEditorOpen ? "block" : "hidden"
+              } md:block`}
+            >
             <div className="flex items-center gap-3">
               <input
                 type="checkbox"
@@ -799,10 +834,11 @@ export default function ChildDetailPage() {
                 {updatePolicy.error.message || "Could not save policy"}
               </p>
             )}
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="order-1">
           <CardHeader>
             <CardTitle>Devices</CardTitle>
             <CardDescription>
