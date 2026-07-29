@@ -1097,7 +1097,7 @@ export default function ChildDetailPage() {
           </p>
           <p className="mt-0.5">{formatWindowsSummary(currentWindows)}</p>
         </div>
-        {renderPolicyEditor("sheet", true)}
+        {renderPolicyEditor("sheet", false)}
       </BottomSheet>
 
       <BottomSheet
