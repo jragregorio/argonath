@@ -489,7 +489,7 @@ export default function DashboardOverviewPage() {
                                 </span>
                               )}
                               <Button
-                                variant="outline"
+                                variant="attention"
                                 className="w-full sm:w-auto"
                                 onClick={() =>
                                   sendNudge.mutate({ deviceId: device.id })

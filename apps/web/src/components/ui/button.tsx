@@ -2,7 +2,13 @@ import { cn } from "@warden/ui";
 import { type ButtonHTMLAttributes, forwardRef } from "react";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "default" | "secondary" | "destructive" | "outline" | "ghost";
+  variant?:
+    | "default"
+    | "secondary"
+    | "destructive"
+    | "attention"
+    | "outline"
+    | "ghost";
   size?: "sm" | "md" | "lg";
 };
 
@@ -10,6 +16,7 @@ const variants = {
   default: "bg-primary text-primary-foreground hover:bg-accent",
   secondary: "bg-secondary text-secondary-foreground hover:bg-muted",
   destructive: "bg-destructive text-destructive-foreground hover:opacity-90",
+  attention: "bg-attention text-attention-foreground hover:opacity-90",
   outline: "border border-border bg-transparent hover:bg-secondary",
   ghost: "hover:bg-secondary",
 };
