@@ -616,11 +616,78 @@ export const extensionRouter = router({
       },
       include: {
         child: { select: { id: true, displayName: true } },
-        device: { select: { id: true, machineName: true } },
+        device: {
+          select: { id: true, machineName: true, displayName: true },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
   }),
+
+  listHistory: protectedProcedure
+    .input(
+      z
+        .object({
+          limit: z.number().int().min(1).max(100).default(50),
+        })
+        .optional()
+    )
+    .query(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const limit = input?.limit ?? 50;
+
+      const requests = await prisma.extensionRequest.findMany({
+        where: {
+          child: { familyId: family.id },
+          status: { in: ["approved", "denied"] },
+        },
+        include: {
+          child: { select: { id: true, displayName: true } },
+          device: {
+            select: { id: true, machineName: true, displayName: true },
+          },
+        },
+        orderBy: [{ resolvedAt: "desc" }, { createdAt: "desc" }],
+        take: limit,
+      });
+
+      const resolverIds = [
+        ...new Set(
+          requests
+            .map((request) => request.resolvedBy)
+            .filter((id): id is string => Boolean(id))
+        ),
+      ];
+
+      const resolvers =
+        resolverIds.length > 0
+          ? await prisma.user.findMany({
+              where: { id: { in: resolverIds } },
+              select: { id: true, name: true, email: true },
+            })
+          : [];
+
+      const resolverById = new Map(
+        resolvers.map((user) => [user.id, user] as const)
+      );
+
+      return requests.map((request) => {
+        const resolver = request.resolvedBy
+          ? resolverById.get(request.resolvedBy)
+          : undefined;
+
+        return {
+          ...request,
+          resolvedByUser: resolver
+            ? {
+                id: resolver.id,
+                name: resolver.name,
+                email: resolver.email,
+              }
+            : null,
+        };
+      });
+    }),
 
   resolve: parentProcedure
     .input(
