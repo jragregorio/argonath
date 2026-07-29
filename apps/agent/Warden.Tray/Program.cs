@@ -410,7 +410,7 @@ static class Program
         }
 
         var window = new AttentionWindow(
-            "Parent nudge",
+            "NUDGE",
             string.IsNullOrWhiteSpace(payload.Message)
                 ? "Your parent wants your attention"
                 : payload.Message,
@@ -457,10 +457,15 @@ static class Program
 
     private static void ShowTimeWarning(Warden.Core.Models.TimeWarningPayload payload)
     {
+        var allowExtensionRequest = payload.ThresholdMinutes is 10 or 5 or 1;
         var window = new AttentionWindow(
             "Time remaining",
             payload.Message,
-            okDelaySeconds: 3
+            okDelaySeconds: 3,
+            extensionMinutes: allowExtensionRequest ? [15, 30, 60] : null,
+            onExtensionRequest: allowExtensionRequest
+                ? minutes => _engine!.RequestExtensionAsync(minutes)
+                : null
         );
 
         window.Closed += (_, _) => ReleaseAttentionSlot();

@@ -25,7 +25,7 @@ public class EnforcementEngine
     private readonly HashSet<string> _nudgeShown = new();
     private readonly object _nudgeLock = new();
 
-    private static readonly int[] TimeWarningThresholds = [60, 30, 10, 1];
+    private static readonly int[] TimeWarningThresholds = [60, 30, 10, 5, 1];
     private readonly HashSet<int> _firedTimeWarnings = new();
     private int? _lastRemainingMinutes;
     private DateTime _usageDayLocal = DateTime.Today;
@@ -273,6 +273,7 @@ public class EnforcementEngine
             60 => "1 hour of screen time left",
             30 => "30 minutes of screen time left",
             10 => "10 minutes of screen time left",
+            5 => "5 minutes of screen time left",
             1 => "1 minute of screen time left",
             _ => $"{thresholdMinutes} minutes of screen time left"
         };

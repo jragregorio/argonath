@@ -17,10 +17,17 @@ public sealed class AttentionWindow : Window
 {
     private readonly DispatcherTimer? _okDelayTimer;
     private bool _closed;
+    private bool _busy;
 
     public string? Response { get; private set; }
 
-    public AttentionWindow(string title, string message, int okDelaySeconds)
+    public AttentionWindow(
+        string title,
+        string message,
+        int okDelaySeconds,
+        IReadOnlyList<int>? extensionMinutes = null,
+        Func<int, Task<bool>>? onExtensionRequest = null
+    )
     {
         Title = "Warden";
         WindowStyle = WindowStyle.None;
@@ -29,7 +36,7 @@ public sealed class AttentionWindow : Window
         Topmost = true;
         AllowsTransparency = true;
         Background = System.Windows.Media.Brushes.Transparent;
-        Width = 420;
+        Width = extensionMinutes is { Count: > 0 } ? 480 : 420;
         SizeToContent = SizeToContent.Height;
 
         var screen = System.Windows.Forms.Screen.PrimaryScreen
@@ -80,21 +87,117 @@ public sealed class AttentionWindow : Window
             }
         );
 
-        var buttons = new StackPanel
+        var hasExtensionButtons =
+            extensionMinutes is { Count: > 0 } && onExtensionRequest != null;
+
+        var buttonArea = new StackPanel
         {
-            Orientation = System.Windows.Controls.Orientation.Horizontal,
-            HorizontalAlignment = WpfHorizontalAlignment.Right
+            Orientation = System.Windows.Controls.Orientation.Vertical
         };
 
         var delay = Math.Max(0, okDelaySeconds);
+        var delayedButtons = new List<(WpfButton Button, bool Primary)>();
+
+        if (hasExtensionButtons)
+        {
+            var extensionRow = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+            for (var i = 0; i < extensionMinutes!.Count; i++)
+            {
+                extensionRow.ColumnDefinitions.Add(
+                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+                );
+            }
+
+            for (var i = 0; i < extensionMinutes.Count; i++)
+            {
+                var minutes = extensionMinutes[i];
+                var label = $"+{minutes} min";
+                var btn = UiTheme.SecondaryButton(label);
+                btn.Margin = new Thickness(i == 0 ? 0 : 8, 0, 0, 0);
+                btn.HorizontalAlignment = WpfHorizontalAlignment.Stretch;
+                var requestedMinutes = minutes;
+                btn.Click += async (_, _) =>
+                {
+                    if (_closed || _busy || !btn.IsEnabled)
+                    {
+                        return;
+                    }
+
+                    _busy = true;
+                    foreach (var (b, _) in delayedButtons)
+                    {
+                        b.IsEnabled = false;
+                    }
+
+                    btn.Content = "Requesting...";
+                    var success = false;
+                    try
+                    {
+                        success = await onExtensionRequest!(requestedMinutes);
+                    }
+                    catch
+                    {
+                        success = false;
+                    }
+
+                    if (_closed)
+                    {
+                        return;
+                    }
+
+                    if (success)
+                    {
+                        btn.Content = "Request sent!";
+                        await Task.Delay(900);
+                        CloseWithResponse($"request:{requestedMinutes}");
+                        return;
+                    }
+
+                    btn.Content = "Failed";
+                    await Task.Delay(1600);
+                    if (_closed)
+                    {
+                        return;
+                    }
+
+                    btn.Content = label;
+                    foreach (var (b, primary) in delayedButtons)
+                    {
+                        SetButtonDelayed(b, enabled: true, primary);
+                    }
+
+                    _busy = false;
+                };
+                Grid.SetColumn(btn, i);
+                extensionRow.Children.Add(btn);
+                delayedButtons.Add((btn, Primary: false));
+            }
+
+            buttonArea.Children.Add(extensionRow);
+        }
+
         var ok = UiTheme.PrimaryButton(delay > 0 ? $"OK ({delay})" : "OK");
-        ok.HorizontalAlignment = WpfHorizontalAlignment.Left;
+        ok.HorizontalAlignment = WpfHorizontalAlignment.Stretch;
         ok.MinWidth = 100;
-        ok.Click += (_, _) => CloseWithOk();
+        ok.Click += (_, _) =>
+        {
+            if (_closed || _busy || !ok.IsEnabled)
+            {
+                return;
+            }
+
+            CloseWithResponse("ok");
+        };
+        delayedButtons.Add((ok, Primary: true));
+        buttonArea.Children.Add(ok);
 
         if (delay > 0)
         {
-            SetOkDelayed(ok, enabled: false);
+            foreach (var (btn, primary) in delayedButtons)
+            {
+                SetButtonDelayed(btn, enabled: false, primary);
+            }
+
             var remaining = delay;
             _okDelayTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _okDelayTimer.Tick += (_, _) =>
@@ -104,7 +207,13 @@ public sealed class AttentionWindow : Window
                 {
                     _okDelayTimer.Stop();
                     ok.Content = "OK";
-                    SetOkDelayed(ok, enabled: true);
+                    if (!_busy)
+                    {
+                        foreach (var (btn, primary) in delayedButtons)
+                        {
+                            SetButtonDelayed(btn, enabled: true, primary);
+                        }
+                    }
                 }
                 else
                 {
@@ -114,8 +223,7 @@ public sealed class AttentionWindow : Window
             _okDelayTimer.Start();
         }
 
-        buttons.Children.Add(ok);
-        stack.Children.Add(buttons);
+        stack.Children.Add(buttonArea);
         card.Child = stack;
         Content = card;
 
@@ -138,29 +246,42 @@ public sealed class AttentionWindow : Window
         };
     }
 
-    private static void SetOkDelayed(WpfButton ok, bool enabled)
+    private static void SetButtonDelayed(WpfButton btn, bool enabled, bool primary)
     {
-        ok.IsEnabled = enabled;
+        btn.IsEnabled = enabled;
         if (enabled)
         {
-            ok.Opacity = 1;
-            ok.Background = UiTheme.AccentBrush;
-            ok.Foreground = UiTheme.TextBrush;
-            ok.Cursor = System.Windows.Input.Cursors.Hand;
+            btn.Opacity = 1;
+            if (primary)
+            {
+                btn.Background = UiTheme.AccentBrush;
+                btn.Foreground = UiTheme.TextBrush;
+                btn.BorderBrush = System.Windows.Media.Brushes.Transparent;
+                btn.BorderThickness = new Thickness(0);
+            }
+            else
+            {
+                btn.Background = UiTheme.CardBrush;
+                btn.Foreground = UiTheme.TextBrush;
+                btn.BorderBrush = UiTheme.BorderBrush;
+                btn.BorderThickness = new Thickness(1);
+            }
+
+            btn.Cursor = System.Windows.Input.Cursors.Hand;
         }
         else
         {
-            ok.Opacity = 0.55;
-            ok.Background = UiTheme.BorderBrush;
-            ok.Foreground = UiTheme.MutedBrush;
-            ok.Cursor = System.Windows.Input.Cursors.Arrow;
+            btn.Opacity = 0.55;
+            btn.Background = UiTheme.BorderBrush;
+            btn.Foreground = UiTheme.MutedBrush;
+            btn.Cursor = System.Windows.Input.Cursors.Arrow;
         }
     }
 
-    private void CloseWithOk()
+    private void CloseWithResponse(string response)
     {
         if (_closed) return;
-        Response = "ok";
+        Response = response;
         _okDelayTimer?.Stop();
         try
         {
