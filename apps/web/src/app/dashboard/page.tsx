@@ -7,23 +7,53 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Monitor, AlertCircle, Lock, Unlock, Users, Clock } from "lucide-react";
+import {
+  Monitor,
+  AlertCircle,
+  Lock,
+  Unlock,
+  Users,
+  Clock,
+  ArrowRight,
+} from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { getDeviceDisplayName } from "@warden/shared";
+import {
+  getDeviceDisplayName,
+  getPolicyStatusLabel,
+  type PolicyStatus,
+} from "@warden/shared";
 import {
   optimisticAdminLock,
   rollbackAdminLock,
 } from "@/lib/device-cache";
 
+function usagePercent(used: number, limit: number) {
+  if (limit <= 0) return used > 0 ? 100 : 0;
+  return Math.min(100, Math.round((used / limit) * 100));
+}
+
+function progressBarClass(status: PolicyStatus) {
+  if (status === "blocked") return "bg-destructive";
+  if (status === "outside_window") return "bg-yellow-500";
+  return "bg-primary";
+}
+
+function statusBadgeVariant(status: PolicyStatus) {
+  if (status === "allowed") return "success" as const;
+  if (status === "blocked") return "destructive" as const;
+  return "warning" as const;
+}
+
 export default function DashboardPage() {
   const utils = trpc.useUtils();
-  const { data: children, isLoading } = trpc.children.list.useQuery();
-  const { data: devices } = trpc.device.list.useQuery(undefined, {
-    refetchInterval: 5000,
+  const { data: overview, isLoading } = trpc.dashboard.overview.useQuery(undefined, {
+    refetchInterval: 10_000,
   });
-  const { data: pendingRequests } = trpc.extension.listPending.useQuery();
-  const [pendingLocks, setPendingLocks] = useState<Record<string, boolean | undefined>>({});
+  const [pendingLocks, setPendingLocks] = useState<
+    Record<string, boolean | undefined>
+  >({});
+
   const setAdminLock = trpc.device.setAdminLock.useMutation({
     onMutate: async ({ deviceId, locked }) => {
       setPendingLocks((prev) => ({ ...prev, [deviceId]: locked }));
@@ -38,40 +68,44 @@ export default function DashboardPage() {
       });
     },
     onSettled: () => {
+      void utils.dashboard.overview.invalidate();
       void utils.device.list.invalidate();
       void utils.children.list.invalidate();
     },
   });
 
+  const devices = overview?.children.flatMap((child) => child.devices) ?? [];
+
   useEffect(() => {
-    if (!devices?.length) return;
+    if (!overview?.children.length) return;
     setPendingLocks((prev) => {
       let changed = false;
       const next = { ...prev };
 
-      for (const device of devices) {
-        const pending = prev[device.id];
-        if (pending === undefined) continue;
+      for (const child of overview.children) {
+        for (const device of child.devices) {
+          const pending = prev[device.id];
+          if (pending === undefined) continue;
 
-        const confirmed = pending
-          ? device.adminLock && device.isLocked
-          : !device.adminLock && !device.isLocked;
+          const confirmed = pending
+            ? device.adminLock && device.isLocked
+            : !device.adminLock && !device.isLocked;
 
-        if (confirmed) {
-          delete next[device.id];
-          changed = true;
+          if (confirmed) {
+            delete next[device.id];
+            changed = true;
+          }
         }
       }
 
       return changed ? next : prev;
     });
-  }, [devices]);
+  }, [overview]);
 
-  const deviceIds = devices?.map((d) => d.id) ?? [];
+  const deviceIds = devices.map((d) => d.id);
 
   useFamilyRealtime(deviceIds, () => {
-    utils.children.list.invalidate();
-    utils.device.list.invalidate();
+    utils.dashboard.overview.invalidate();
     utils.extension.listPending.invalidate();
     utils.dashboard.navBadges.invalidate();
   });
@@ -95,18 +129,19 @@ export default function DashboardPage() {
         </div>
         <div>
           <Skeleton className="h-7 w-28 mb-4" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {[0, 1].map((i) => (
               <Card key={i}>
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <Skeleton className="h-6 w-40" />
-                    <Skeleton className="h-5 w-16 rounded-full" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
                   </div>
-                  <Skeleton className="h-4 w-28 mt-2" />
+                  <Skeleton className="h-2 w-full mt-4 rounded-full" />
+                  <Skeleton className="h-4 w-36 mt-2" />
                 </CardHeader>
                 <CardContent>
-                  <Skeleton className="h-8 w-32" />
+                  <Skeleton className="h-10 w-full" />
                 </CardContent>
               </Card>
             ))}
@@ -116,169 +151,268 @@ export default function DashboardPage() {
     );
   }
 
+  const children = overview?.children ?? [];
+  const pendingRequests = overview?.pendingRequests ?? 0;
+  const onlineCount = devices.filter((d) => d.isOnline).length;
+
   return (
     <div className="space-y-8">
       <PageHeader
         title="Dashboard"
-        description="Monitor your family's screen time at a glance"
+        description="Screen time, device status, and lockdowns at a glance"
       />
 
-      {pendingRequests && pendingRequests.length > 0 && (
+      {pendingRequests > 0 && (
         <Card className="border-yellow-500/50 bg-yellow-500/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-yellow-400" />
-              Pending extension requests
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-3">
-              {pendingRequests.length} request(s) waiting for your approval
-            </p>
-            <Link
-              href="/dashboard/extensions"
-              className="text-primary hover:underline text-sm"
-            >
-              Review requests →
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium">
+                  {pendingRequests} extension request
+                  {pendingRequests === 1 ? "" : "s"} waiting
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Review and approve or deny extra screen time
+                </p>
+              </div>
+            </div>
+            <Link href="/dashboard/extensions">
+              <Button size="sm" variant="outline">
+                Review requests
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
             </Link>
           </CardContent>
         </Card>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Link href="/dashboard/children" className="block group">
+          <Card className="h-full transition-colors group-hover:border-primary/40">
+            <CardHeader className="relative mb-0">
+              <div className="absolute top-0 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <Users className="w-5 h-5 text-primary" />
+              </div>
+              <CardDescription>Children</CardDescription>
+              <CardTitle className="text-3xl">{children.length}</CardTitle>
+            </CardHeader>
+          </Card>
+        </Link>
         <Card>
-          <CardHeader className="relative">
-            <div className="absolute top-0 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-              <Users className="w-5 h-5 text-primary" />
-            </div>
-            <CardDescription>Children</CardDescription>
-            <CardTitle className="text-3xl">{children?.length ?? 0}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="relative">
+          <CardHeader className="relative mb-0">
             <div className="absolute top-0 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
               <Monitor className="w-5 h-5 text-primary" />
             </div>
             <CardDescription>Devices online</CardDescription>
             <CardTitle className="text-3xl">
-              {devices?.filter((d) => d.isOnline).length ?? 0}
+              {onlineCount}
               <span className="text-lg text-muted-foreground font-normal">
-                /{devices?.length ?? 0}
+                /{devices.length}
               </span>
             </CardTitle>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="relative">
-            <div className="absolute top-0 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-              <Clock className="w-5 h-5 text-primary" />
-            </div>
-            <CardDescription>Pending requests</CardDescription>
-            <CardTitle className="text-3xl">
-              {pendingRequests?.length ?? 0}
-            </CardTitle>
-          </CardHeader>
-        </Card>
+        <Link href="/dashboard/extensions" className="block group">
+          <Card className="h-full transition-colors group-hover:border-primary/40">
+            <CardHeader className="relative mb-0">
+              <div className="absolute top-0 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <Clock className="w-5 h-5 text-primary" />
+              </div>
+              <CardDescription>Pending requests</CardDescription>
+              <CardTitle className="text-3xl">{pendingRequests}</CardTitle>
+            </CardHeader>
+          </Card>
+        </Link>
       </div>
 
       <div>
-        <h2 className="text-xl font-semibold mb-4">Devices</h2>
-        {devices && devices.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {devices.map((device) => {
-              const pendingLock = pendingLocks[device.id];
-              const effectiveAdminLock =
-                pendingLock !== undefined ? pendingLock : device.adminLock;
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h2 className="text-xl font-semibold">Children</h2>
+          <Link
+            href="/dashboard/children"
+            className="text-sm text-primary hover:underline"
+          >
+            Manage children
+          </Link>
+        </div>
 
-              return (
-              <Card key={device.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <Monitor className="w-5 h-5" />
-                      {getDeviceDisplayName(device)}
-                    </CardTitle>
-                    <Badge variant={device.isOnline ? "success" : "secondary"}>
-                      {device.isOnline ? "Online" : "Offline"}
-                    </Badge>
-                  </div>
-                  <CardDescription className="flex flex-wrap items-center gap-2">
-                    <span>{device.child.displayName}</span>
-                    <span className="text-muted-foreground">
-                      · Agent v{device.agentVersion ?? "?"}
-                    </span>
-                    {device.isLocked && <Badge variant="secondary">Locked</Badge>}
-                    {effectiveAdminLock && (
-                      <Badge variant="destructive">Locked down</Badge>
-                    )}
-                    {pendingLock !== undefined && (
-                      <Badge variant="secondary">
-                        {pendingLock ? "Sending lock..." : "Waiting for unlock..."}
-                      </Badge>
-                    )}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-wrap items-center gap-3">
-                  {effectiveAdminLock ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setAdminLock.mutate({
-                          deviceId: device.id,
-                          locked: false,
-                        })
-                      }
-                    >
-                      <Unlock className="w-4 h-4 mr-2" />
-                      Release lockdown
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() =>
-                        setAdminLock.mutate({
-                          deviceId: device.id,
-                          locked: true,
-                        })
-                      }
-                      disabled={!device.deviceToken}
-                      title={
-                        !device.deviceToken
-                          ? "Device must be paired first"
-                          : undefined
-                      }
-                    >
-                      <Lock className="w-4 h-4 mr-2" />
-                      LOCK DOWN
-                    </Button>
-                  )}
-                  <Link
-                    href={`/dashboard/children/${device.child.id}`}
-                    className="text-primary hover:underline text-sm"
-                  >
-                    Manage →
-                  </Link>
-                </CardContent>
-              </Card>
-              );
-            })}
-          </div>
-        ) : (
+        {children.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
-              <Monitor className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No devices paired yet.</p>
-              <Link
-                href="/dashboard/children"
-                className="text-primary hover:underline text-sm mt-2 inline-block"
-              >
-                Add a child and pair a device →
+              <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p className="mb-1">No children yet.</p>
+              <p className="text-sm mb-4">
+                Add a child, then pair their PC with Warden.
+              </p>
+              <Link href="/dashboard/children">
+                <Button size="sm">Add a child</Button>
               </Link>
             </CardContent>
           </Card>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {children.map((child) => {
+              const { evaluation } = child;
+              const effectiveLimit =
+                evaluation.dailyLimitMinutes + evaluation.bonusMinutes;
+              const percent = usagePercent(
+                evaluation.usedMinutes,
+                effectiveLimit
+              );
+              const onlineDevices = child.devices.filter((d) => d.isOnline)
+                .length;
+
+              return (
+                <Card key={child.id}>
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <CardTitle className="truncate">
+                          {child.displayName}
+                        </CardTitle>
+                        <CardDescription className="mt-1">
+                          {child.devices.length === 0
+                            ? "No devices paired"
+                            : `${onlineDevices}/${child.devices.length} device${
+                                child.devices.length === 1 ? "" : "s"
+                              } online`}
+                        </CardDescription>
+                      </div>
+                      <Badge variant={statusBadgeVariant(evaluation.status)}>
+                        {getPolicyStatusLabel(evaluation.status)}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      <div className="flex items-baseline justify-between gap-2 text-sm">
+                        <span className="text-muted-foreground">
+                          Today&apos;s screen time
+                        </span>
+                        <span className="font-medium tabular-nums">
+                          {evaluation.usedMinutes} / {effectiveLimit} min
+                          {evaluation.bonusMinutes > 0 && (
+                            <span className="text-muted-foreground font-normal">
+                              {" "}
+                              (+{evaluation.bonusMinutes})
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-[width] ${progressBarClass(
+                            evaluation.status
+                          )}`}
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {evaluation.status === "allowed"
+                          ? `${evaluation.remainingMinutes} min remaining`
+                          : evaluation.message ??
+                            getPolicyStatusLabel(evaluation.status)}
+                      </p>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="space-y-3">
+                    {child.devices.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Pair a device from this child&apos;s page to monitor
+                        usage and lockdown.
+                      </p>
+                    ) : (
+                      child.devices.map((device) => {
+                        const pendingLock = pendingLocks[device.id];
+                        const effectiveAdminLock =
+                          pendingLock !== undefined
+                            ? pendingLock
+                            : device.adminLock;
+
+                        return (
+                          <div
+                            key={device.id}
+                            className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 px-3 py-2.5"
+                          >
+                            <Monitor className="w-4 h-4 text-muted-foreground shrink-0" />
+                            <span className="text-sm font-medium truncate min-w-0 flex-1">
+                              {getDeviceDisplayName(device)}
+                            </span>
+                            <Badge
+                              variant={
+                                device.isOnline ? "success" : "secondary"
+                              }
+                            >
+                              {device.isOnline ? "Online" : "Offline"}
+                            </Badge>
+                            {device.isLocked && !effectiveAdminLock && (
+                              <Badge variant="secondary">Locked</Badge>
+                            )}
+                            {effectiveAdminLock && (
+                              <Badge variant="destructive">Locked down</Badge>
+                            )}
+                            {pendingLock !== undefined && (
+                              <Badge variant="secondary">
+                                {pendingLock
+                                  ? "Sending lock..."
+                                  : "Waiting for unlock..."}
+                              </Badge>
+                            )}
+                            {effectiveAdminLock ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="ml-auto"
+                                onClick={() =>
+                                  setAdminLock.mutate({
+                                    deviceId: device.id,
+                                    locked: false,
+                                  })
+                                }
+                              >
+                                <Unlock className="w-4 h-4 mr-1.5" />
+                                Release
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="ml-auto"
+                                onClick={() =>
+                                  setAdminLock.mutate({
+                                    deviceId: device.id,
+                                    locked: true,
+                                  })
+                                }
+                                disabled={!device.deviceToken}
+                                title={
+                                  !device.deviceToken
+                                    ? "Device must be paired first"
+                                    : undefined
+                                }
+                              >
+                                <Lock className="w-4 h-4 mr-1.5" />
+                                Lock down
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+
+                    <Link
+                      href={`/dashboard/children/${child.id}`}
+                      className="inline-flex items-center text-sm text-primary hover:underline"
+                    >
+                      Manage {child.displayName}
+                      <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    </Link>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

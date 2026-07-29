@@ -720,6 +720,107 @@ export const dashboardRouter = router({
 
     return { pendingRequests, unviewedSnapshots };
   }),
+
+  /** Family overview: children with today's usage, policy status, and devices. */
+  overview: protectedProcedure.query(async ({ ctx }) => {
+    const family = await getFamilyForUser(ctx);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+
+    const [children, pendingRequests, usageLogs] = await Promise.all([
+      prisma.child.findMany({
+        where: { familyId: family.id },
+        include: {
+          devices: true,
+          policies: { where: { isActive: true }, take: 1 },
+          extensionOverrides: {
+            where: { expiresAt: { gt: now } },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.extensionRequest.count({
+        where: {
+          child: { familyId: family.id },
+          status: "pending",
+        },
+      }),
+      prisma.usageLog.findMany({
+        where: {
+          date: today,
+          device: { child: { familyId: family.id } },
+        },
+        select: {
+          activeMinutes: true,
+          device: { select: { childId: true } },
+        },
+      }),
+    ]);
+
+    const usedByChild = new Map<string, number>();
+    for (const log of usageLogs) {
+      const childId = log.device.childId;
+      usedByChild.set(
+        childId,
+        (usedByChild.get(childId) ?? 0) + log.activeMinutes
+      );
+    }
+
+    const liveDevices = await withLiveOnlineStatus(
+      children.flatMap((child) => child.devices)
+    );
+    const devicesByChild = new Map<string, typeof liveDevices>();
+    for (const device of liveDevices) {
+      const list = devicesByChild.get(device.childId) ?? [];
+      list.push(device);
+      devicesByChild.set(device.childId, list);
+    }
+
+    return {
+      pendingRequests,
+      children: children.map((child) => {
+        const policy = child.policies[0];
+        const usedMinutes = usedByChild.get(child.id) ?? 0;
+        const evaluation = evaluatePolicy(
+          policy
+            ? {
+                dailyLimitMinutes: policy.dailyLimitMinutes,
+                allowedWindows: policy.allowedWindows as AllowedWindow[],
+                isActive: policy.isActive,
+              }
+            : {
+                dailyLimitMinutes: 120,
+                allowedWindows: [],
+                isActive: true,
+              },
+          usedMinutes,
+          child.extensionOverrides.map((o) => ({
+            extraMinutes: o.extraMinutes,
+            expiresAt: o.expiresAt,
+          }))
+        );
+
+        const devices = devicesByChild.get(child.id) ?? [];
+
+        return {
+          id: child.id,
+          displayName: child.displayName,
+          evaluation,
+          devices: devices.map((device) => ({
+            id: device.id,
+            displayName: device.displayName,
+            machineName: device.machineName,
+            isOnline: device.isOnline,
+            isLocked: device.isLocked,
+            adminLock: device.adminLock,
+            deviceToken: device.deviceToken,
+            agentVersion: device.agentVersion,
+          })),
+        };
+      }),
+    };
+  }),
 });
 
 export const snapshotRouter = router({

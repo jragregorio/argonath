@@ -23,12 +23,14 @@ export async function optimisticAdminLock(
 ) {
   await utils.device.list.cancel();
   await utils.children.list.cancel();
+  await utils.dashboard.overview.cancel();
   if (childId) {
     await utils.children.get.cancel({ childId });
   }
 
   const prevDevices = utils.device.list.getData();
   const prevChildren = utils.children.list.getData();
+  const prevOverview = utils.dashboard.overview.getData();
   const prevChild = childId
     ? utils.children.get.getData({ childId })
     : undefined;
@@ -44,6 +46,18 @@ export async function optimisticAdminLock(
     }))
   );
 
+  utils.dashboard.overview.setData(undefined, (old) =>
+    old
+      ? {
+          ...old,
+          children: old.children.map((child) => ({
+            ...child,
+            devices: child.devices.map((d) => patchDevice(d, deviceId, locked)),
+          })),
+        }
+      : old
+  );
+
   if (childId) {
     utils.children.get.setData({ childId }, (old) =>
       old
@@ -55,7 +69,7 @@ export async function optimisticAdminLock(
     );
   }
 
-  return { prevDevices, prevChildren, prevChild, childId };
+  return { prevDevices, prevChildren, prevOverview, prevChild, childId };
 }
 
 export function rollbackAdminLock(
@@ -63,6 +77,7 @@ export function rollbackAdminLock(
   context?: {
     prevDevices: ReturnType<Utils["device"]["list"]["getData"]>;
     prevChildren: ReturnType<Utils["children"]["list"]["getData"]>;
+    prevOverview?: ReturnType<Utils["dashboard"]["overview"]["getData"]>;
     prevChild?: ReturnType<Utils["children"]["get"]["getData"]>;
     childId?: string;
   }
@@ -70,6 +85,9 @@ export function rollbackAdminLock(
   if (!context) return;
   utils.device.list.setData(undefined, context.prevDevices);
   utils.children.list.setData(undefined, context.prevChildren);
+  if (context.prevOverview !== undefined) {
+    utils.dashboard.overview.setData(undefined, context.prevOverview);
+  }
   if (context.childId) {
     utils.children.get.setData({ childId: context.childId }, context.prevChild);
   }
