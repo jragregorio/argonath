@@ -8,10 +8,10 @@ import {
   Camera,
   Clock,
   Settings,
-  Menu,
-  X,
   LogOut,
   ChevronDown,
+  MoreHorizontal,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -35,11 +35,14 @@ const navItems = allNavItems.filter(
   (item) => !item.requiresSupabase || isSupabaseConfigured()
 );
 
+const primaryTabs = navItems.filter(
+  (item) => item.href !== "/dashboard/settings"
+);
+
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
-  const pathname = usePathname();
+function useNavBadges() {
   const utils = trpc.useUtils();
   const { data: badges } = trpc.dashboard.navBadges.useQuery(undefined, {
     refetchInterval: 5000,
@@ -65,20 +68,42 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
     return 0;
   };
 
+  return { badgeFor };
+}
+
+function isNavActive(pathname: string, href: string) {
+  return (
+    pathname === href ||
+    (href !== "/dashboard" && pathname.startsWith(href))
+  );
+}
+
+function pageTitle(pathname: string) {
+  if (pathname.startsWith("/dashboard/children/")) return "Child";
+  if (pathname.startsWith("/dashboard/children")) return "Children";
+  if (pathname.startsWith("/dashboard/extensions")) return "Requests";
+  if (pathname.startsWith("/dashboard/snapshots")) return "Snapshots";
+  if (pathname.startsWith("/dashboard/settings")) return "Settings";
+  if (pathname === "/dashboard") return "Overview";
+  return "Warden";
+}
+
+function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+  const pathname = usePathname();
+  const { badgeFor } = useNavBadges();
+
   return (
     <nav className="flex-1 space-y-1">
       {navItems.map(({ href, label, icon: Icon }) => {
-        const isActive =
-          pathname === href ||
-          (href !== "/dashboard" && pathname.startsWith(href));
+        const active = isNavActive(pathname, href);
         const count = badgeFor(href);
         return (
           <Link
             key={href}
             href={href}
             onClick={onNavigate}
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${focusRing} ${
-              isActive
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors min-h-11 ${focusRing} ${
+              active
                 ? "bg-primary/20 text-primary"
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary"
             }`}
@@ -88,7 +113,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             {count > 0 && (
               <span
                 className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold leading-none ${
-                  isActive
+                  active
                     ? "bg-primary text-primary-foreground"
                     : "bg-primary/90 text-primary-foreground"
                 }`}
@@ -103,7 +128,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function NavFooter() {
+function NavFooter({ onNavigate }: { onNavigate?: () => void }) {
   const router = useRouter();
   const utils = trpc.useUtils();
   const meQuery = trpc.auth.me.useQuery(undefined, {
@@ -166,7 +191,8 @@ function NavFooter() {
         <div className="space-y-2">
           <Link
             href="/dashboard/settings"
-            className={`block rounded-lg border border-border bg-secondary px-3 py-2 text-sm hover:bg-secondary/80 ${focusRing}`}
+            onClick={onNavigate}
+            className={`block rounded-lg border border-border bg-secondary px-3 py-3 text-sm hover:bg-secondary/80 min-h-11 ${focusRing}`}
           >
             <div className="font-medium truncate">{displayName}</div>
             <div className="text-xs text-muted-foreground truncate">
@@ -177,7 +203,7 @@ function NavFooter() {
             <span className="text-xs text-muted-foreground px-1">Family</span>
             <div className="relative">
               <select
-                className="w-full appearance-none rounded-lg border border-border bg-secondary px-3 py-2 pr-8 text-sm"
+                className="w-full appearance-none rounded-lg border border-border bg-secondary px-3 py-3 pr-8 text-sm min-h-11"
                 value={meQuery.data?.familyId ?? ""}
                 disabled={switching || meQuery.isLoading}
                 onChange={(e) => switchFamily(e.target.value)}
@@ -195,7 +221,8 @@ function NavFooter() {
       ) : (
         <Link
           href="/dashboard/settings"
-          className={`block rounded-lg border border-border bg-secondary px-3 py-2 text-sm hover:bg-secondary/80 ${focusRing}`}
+          onClick={onNavigate}
+          className={`block rounded-lg border border-border bg-secondary px-3 py-3 text-sm hover:bg-secondary/80 min-h-11 ${focusRing}`}
         >
           <div className="font-medium truncate">{displayName}</div>
           <div className="text-xs text-muted-foreground truncate">
@@ -212,7 +239,7 @@ function NavFooter() {
         type="button"
         onClick={logout}
         disabled={loggingOut}
-        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground ${focusRing}`}
+        className={`flex w-full items-center gap-2 rounded-lg px-3 py-3 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground min-h-11 ${focusRing}`}
       >
         <LogOut className="w-4 h-4" />
         {loggingOut ? "Signing out…" : "Sign out"}
@@ -221,64 +248,176 @@ function NavFooter() {
   );
 }
 
-function Brand() {
+function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="flex items-center gap-2 px-2">
-      <Shield className="w-7 h-7 text-primary" />
-      <span className="text-lg font-bold">Warden</span>
-      <span className="text-sm font-medium text-muted-foreground">
-        v{APP_VERSION}
+    <div className={`flex items-center gap-2 ${compact ? "" : "px-2"}`}>
+      <Shield className={`${compact ? "w-6 h-6" : "w-7 h-7"} text-primary`} />
+      <span className={`${compact ? "text-base" : "text-lg"} font-bold`}>
+        Warden
       </span>
+      {!compact && (
+        <span className="text-sm font-medium text-muted-foreground">
+          v{APP_VERSION}
+        </span>
+      )}
     </div>
+  );
+}
+
+function MobileBottomTabs({
+  moreOpen,
+  onMoreToggle,
+}: {
+  moreOpen: boolean;
+  onMoreToggle: () => void;
+}) {
+  const pathname = usePathname();
+  const { badgeFor } = useNavBadges();
+  const settingsActive = isNavActive(pathname, "/dashboard/settings");
+
+  return (
+    <nav
+      className="md:hidden fixed bottom-0 inset-x-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      aria-label="Primary"
+    >
+      <div className="flex items-stretch justify-around px-1 pt-1 pb-1">
+        {primaryTabs.map(({ href, label, icon: Icon }) => {
+          const active = !moreOpen && isNavActive(pathname, href);
+          const count = badgeFor(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 min-h-14 px-1 py-1.5 text-[11px] font-medium transition-colors ${focusRing} ${
+                active ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <span className="relative">
+                <Icon className="w-5 h-5" />
+                {count > 0 && (
+                  <span className="absolute -top-1.5 -right-2.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">
+                    {count > 9 ? "9+" : count}
+                  </span>
+                )}
+              </span>
+              <span className="truncate max-w-full">{label}</span>
+            </Link>
+          );
+        })}
+        <button
+          type="button"
+          onClick={onMoreToggle}
+          className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 min-h-14 px-1 py-1.5 text-[11px] font-medium transition-colors ${focusRing} ${
+            moreOpen || settingsActive
+              ? "text-primary"
+              : "text-muted-foreground"
+          }`}
+          aria-label="More"
+          aria-expanded={moreOpen}
+        >
+          <MoreHorizontal className="w-5 h-5" />
+          <span>More</span>
+        </button>
+      </div>
+    </nav>
+  );
+}
+
+function MobileMoreSheet({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        className="md:hidden fixed inset-0 z-50 bg-black/50"
+        aria-label="Close more menu"
+        onClick={onClose}
+      />
+      <div
+        className="md:hidden fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border border-border bg-background p-4 shadow-xl"
+        style={{
+          paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))",
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="More"
+      >
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="font-semibold">More</p>
+            <p className="text-xs text-muted-foreground">
+              Account &amp; settings · v{APP_VERSION}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className={`inline-flex items-center justify-center rounded-lg p-2 min-h-11 min-w-11 hover:bg-secondary ${focusRing}`}
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <Link
+          href="/dashboard/settings"
+          onClick={onClose}
+          className={`flex items-center gap-3 rounded-lg px-3 py-3 min-h-11 text-sm hover:bg-secondary mb-2 ${focusRing}`}
+        >
+          <Settings className="w-5 h-5 text-primary" />
+          <span className="font-medium">Settings</span>
+        </Link>
+
+        <NavFooter onNavigate={onClose} />
+      </div>
+    </>
   );
 }
 
 export function DashboardNav() {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
-    setOpen(false);
+    setMoreOpen(false);
   }, [pathname]);
 
   return (
     <>
       {/* Mobile top bar */}
-      <div className="md:hidden sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-border bg-background px-4 py-3">
-        <Brand />
-        <button
-          type="button"
-          onClick={() => setOpen((prev) => !prev)}
-          className={`inline-flex items-center justify-center rounded-lg p-2 text-foreground hover:bg-secondary ${focusRing}`}
-          aria-label={open ? "Close menu" : "Open menu"}
-          aria-expanded={open}
-        >
-          {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
+      <div
+        className="md:hidden sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-border bg-background px-4 py-3"
+        style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
+      >
+        <Brand compact />
+        <span className="text-sm font-medium text-muted-foreground truncate">
+          {pageTitle(pathname)}
+        </span>
       </div>
 
-      {/* Mobile backdrop */}
-      {open && (
-        <button
-          type="button"
-          className="md:hidden fixed inset-0 z-40 bg-black/50"
-          aria-label="Close menu"
-          onClick={() => setOpen(false)}
-        />
-      )}
-
-      {/* Mobile slide-over drawer */}
-      <aside
-        className={`md:hidden fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] border-r border-border bg-background p-4 flex flex-col transition-transform duration-200 ease-out ${
-          open ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <div className="mb-8">
-          <Brand />
-        </div>
-        <NavLinks onNavigate={() => setOpen(false)} />
-        <NavFooter />
-      </aside>
+      <MobileBottomTabs
+        moreOpen={moreOpen}
+        onMoreToggle={() => setMoreOpen((prev) => !prev)}
+      />
+      <MobileMoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
 
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-64 shrink-0 border-r border-border h-dvh sticky top-0 p-4 flex-col overflow-y-auto">

@@ -344,8 +344,9 @@ export default function DashboardPage() {
                         return (
                           <div
                             key={device.id}
-                            className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 px-3 py-2.5"
+                            className="flex flex-col gap-2 rounded-lg border border-border/60 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center"
                           >
+                            <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
                             <Monitor className="w-4 h-4 text-muted-foreground shrink-0" />
                             <span className="text-sm font-medium truncate min-w-0 flex-1">
                               {getDeviceDisplayName(device)}
@@ -370,11 +371,11 @@ export default function DashboardPage() {
                                   : "Waiting for unlock..."}
                               </Badge>
                             )}
+                            </div>
                             {effectiveAdminLock ? (
                               <Button
                                 variant="outline"
-                                size="sm"
-                                className="ml-auto"
+                                className="w-full sm:ml-auto sm:w-auto"
                                 onClick={() =>
                                   setAdminLock.mutate({
                                     deviceId: device.id,
@@ -388,8 +389,7 @@ export default function DashboardPage() {
                             ) : (
                               <Button
                                 variant="destructive"
-                                size="sm"
-                                className="ml-auto"
+                                className="w-full sm:ml-auto sm:w-auto"
                                 onClick={() =>
                                   setAdminLock.mutate({
                                     deviceId: device.id,

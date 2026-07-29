@@ -106,8 +106,9 @@ export default function ExtensionsPage() {
                         {formatWhen(request.createdAt)}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="flex gap-3">
+                    <CardContent className="flex flex-col sm:flex-row gap-3">
                       <Button
+                        className="w-full sm:w-auto"
                         onClick={() =>
                           resolve.mutate({
                             requestId: request.id,
@@ -121,6 +122,7 @@ export default function ExtensionsPage() {
                       </Button>
                       <Button
                         variant="destructive"
+                        className="w-full sm:w-auto"
                         onClick={() =>
                           resolve.mutate({
                             requestId: request.id,

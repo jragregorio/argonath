@@ -774,8 +774,9 @@ export default function ChildDetailPage() {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
               <Button
+                className="w-full sm:w-auto"
                 onClick={handleSavePolicy}
                 disabled={updatePolicy.isPending || !policyDirty}
               >
@@ -785,7 +786,7 @@ export default function ChildDetailPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
+                  className="w-full sm:w-auto"
                   onClick={discardPolicyChanges}
                   disabled={updatePolicy.isPending}
                 >
@@ -906,11 +907,11 @@ export default function ChildDetailPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
                     {effectiveAdminLock ? (
                       <Button
                         variant="outline"
-                        size="sm"
+                        className="w-full sm:w-auto"
                         onClick={() =>
                           setAdminLock.mutate({
                             deviceId: device.id,
@@ -924,7 +925,7 @@ export default function ChildDetailPage() {
                     ) : (
                       <Button
                         variant="destructive"
-                        size="sm"
+                        className="w-full sm:w-auto"
                         onClick={() =>
                           setAdminLock.mutate({
                             deviceId: device.id,
@@ -947,7 +948,7 @@ export default function ChildDetailPage() {
                       <>
                         <Button
                           variant="outline"
-                          size="sm"
+                          className="w-full sm:w-auto"
                           onClick={() =>
                             requestCapture.mutate({
                               deviceId: device.id,
@@ -961,7 +962,7 @@ export default function ChildDetailPage() {
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
+                          className="w-full sm:w-auto"
                           onClick={() =>
                             requestCapture.mutate({
                               deviceId: device.id,
@@ -978,7 +979,7 @@ export default function ChildDetailPage() {
 
                     <Button
                       variant="outline"
-                      size="sm"
+                      className="w-full sm:w-auto"
                       onClick={() => confirmDeleteDevice(device)}
                       disabled={deleteDevice.isPending}
                       title="Remove device"
@@ -1013,10 +1014,10 @@ export default function ChildDetailPage() {
                 <p className="text-xs text-muted-foreground mb-3">
                   {new Date(pairingCode.expiresAt).toLocaleTimeString()}
                 </p>
-                <div className="flex flex-wrap items-center justify-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-center gap-2">
                   <Button
                     variant="outline"
-                    size="sm"
+                    className="w-full sm:w-auto"
                     onClick={() => {
                       void navigator.clipboard.writeText(pairingCode.code);
                       setCopied(true);
@@ -1028,7 +1029,7 @@ export default function ChildDetailPage() {
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
+                    className="w-full sm:w-auto"
                     onClick={() => setPairingCode(null)}
                   >
                     Dismiss
@@ -1038,6 +1039,7 @@ export default function ChildDetailPage() {
             ) : (
               <Button
                 variant="outline"
+                className="w-full sm:w-auto"
                 onClick={async () => {
                   const result = await generateCode.mutateAsync({ childId });
                   setPairingNotice(null);
