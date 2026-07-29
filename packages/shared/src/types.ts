@@ -96,7 +96,7 @@ export const DEVICE_ONLINE_THRESHOLD_SECONDS = HEARTBEAT_INTERVAL_SECONDS * 3;
 export const IDLE_THRESHOLD_SECONDS = 300;
 
 /** Product / dashboard version (keep in sync with Warden.Tray `<Version>`). */
-export const APP_VERSION = "0.3.3";
+export const APP_VERSION = "0.3.4";
 
 export function isDeviceRecentlySeen(
   lastSeenAt: Date | string | null | undefined,

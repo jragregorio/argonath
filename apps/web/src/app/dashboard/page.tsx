@@ -495,13 +495,13 @@ export default function DashboardPage() {
                                   sendNudge.mutate({ deviceId: device.id })
                                 }
                                 disabled={
-                                  !device.deviceToken ||
+                                  !device.isPaired ||
                                   !device.isOnline ||
                                   Boolean(nudgeByDevice[device.id]?.nudgeId) ||
                                   sendNudge.isPending
                                 }
                                 title={
-                                  !device.deviceToken
+                                  !device.isPaired
                                     ? "Device must be paired first"
                                     : !device.isOnline
                                       ? "Device is offline"
@@ -535,9 +535,9 @@ export default function DashboardPage() {
                                       locked: true,
                                     })
                                   }
-                                  disabled={!device.deviceToken}
+                                  disabled={!device.isPaired}
                                   title={
-                                    !device.deviceToken
+                                    !device.isPaired
                                       ? "Device must be paired first"
                                       : undefined
                                   }

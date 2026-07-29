@@ -489,7 +489,7 @@ export default function ChildDetailPage() {
   useEffect(() => {
     if (!pairingCode || !child) return;
     const device = child.devices.find((d) => d.id === pairingCode.deviceId);
-    if (device?.deviceToken) {
+    if (device?.isPaired) {
       setPairingCode(null);
       setPairingNotice("Device paired successfully");
     }
@@ -1073,13 +1073,13 @@ export default function ChildDetailPage() {
                       className="w-full sm:w-auto"
                       onClick={() => sendNudge.mutate({ deviceId: device.id })}
                       disabled={
-                        !device.deviceToken ||
+                        !device.isPaired ||
                         !device.isOnline ||
                         Boolean(nudgeByDevice[device.id]?.nudgeId) ||
                         sendNudge.isPending
                       }
                       title={
-                        !device.deviceToken
+                        !device.isPaired
                           ? "Device must be paired first"
                           : !device.isOnline
                             ? "Device is offline"
@@ -1113,9 +1113,9 @@ export default function ChildDetailPage() {
                             locked: true,
                           })
                         }
-                        disabled={!device.deviceToken}
+                        disabled={!device.isPaired}
                         title={
-                          !device.deviceToken
+                          !device.isPaired
                             ? "Device must be paired first"
                             : "Immediately lock this device"
                         }

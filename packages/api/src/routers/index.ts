@@ -36,38 +36,61 @@ async function getFamilyForUser(ctx: { userId: string; familyId: string }) {
   return requireFamilyAccess(ctx.userId, ctx.familyId);
 }
 
-type DeviceOnlineFields = {
+/** Fields safe to expose to the parent dashboard (no deviceToken). */
+const deviceClientSelect = {
+  id: true,
+  childId: true,
+  displayName: true,
+  machineName: true,
+  platform: true,
+  agentVersion: true,
+  lastSeenAt: true,
+  isOnline: true,
+  isLocked: true,
+  adminLock: true,
+  pairingCode: true,
+  pairingExpiresAt: true,
+  createdAt: true,
+  updatedAt: true,
+  // Selected only to derive isPaired; stripped before return.
+  deviceToken: true,
+} satisfies Prisma.DeviceSelect;
+
+type DeviceClientSource = {
   id: string;
-  isOnline: boolean;
+  childId: string;
+  displayName: string | null;
+  machineName: string | null;
+  platform: string;
+  agentVersion: string | null;
   lastSeenAt: Date | null;
+  isOnline: boolean;
+  isLocked: boolean;
+  adminLock: boolean;
+  pairingCode: string | null;
+  pairingExpiresAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  deviceToken: string | null;
 };
 
-async function withLiveOnlineStatus<T extends DeviceOnlineFields>(
-  devices: T[]
-): Promise<T[]> {
+function toDeviceClientViews(devices: DeviceClientSource[]) {
   const now = new Date();
-  const staleIds = devices
-    .filter((device) => device.isOnline && !isDeviceRecentlySeen(device.lastSeenAt, now))
-    .map((device) => device.id);
-
-  if (staleIds.length > 0) {
-    await prisma.device.updateMany({
-      where: { id: { in: staleIds } },
-      data: { isOnline: false },
-    });
-  }
-
-  return devices.map((device) => ({
-    ...device,
-    isOnline: isDeviceRecentlySeen(device.lastSeenAt, now),
-  }));
+  return devices.map((device) => {
+    const { deviceToken, ...rest } = device;
+    return {
+      ...rest,
+      isOnline: isDeviceRecentlySeen(device.lastSeenAt, now),
+      isPaired: Boolean(deviceToken),
+    };
+  });
 }
 
 async function getChildForFamily(childId: string, familyId: string) {
   const child = await prisma.child.findFirst({
     where: { id: childId, familyId },
     include: {
-      devices: true,
+      devices: { select: deviceClientSelect },
       policies: { where: { isActive: true }, take: 1 },
       extensionOverrides: {
         where: { expiresAt: { gt: new Date() } },
@@ -81,7 +104,7 @@ async function getChildForFamily(childId: string, familyId: string) {
 
   return {
     ...child,
-    devices: await withLiveOnlineStatus(child.devices),
+    devices: toDeviceClientViews(child.devices),
   };
 }
 
@@ -297,18 +320,16 @@ export const childrenRouter = router({
     const children = await prisma.child.findMany({
       where: { familyId: family.id },
       include: {
-        devices: true,
+        devices: { select: deviceClientSelect },
         policies: { where: { isActive: true }, take: 1 },
       },
       orderBy: { createdAt: "asc" },
     });
 
-    return Promise.all(
-      children.map(async (child) => ({
-        ...child,
-        devices: await withLiveOnlineStatus(child.devices),
-      }))
-    );
+    return children.map((child) => ({
+      ...child,
+      devices: toDeviceClientViews(child.devices),
+    }));
   }),
 
   create: parentProcedure
@@ -327,12 +348,18 @@ export const childrenRouter = router({
             },
           },
         },
-        include: { policies: true, devices: true },
+        include: {
+          policies: true,
+          devices: { select: deviceClientSelect },
+        },
       });
       await logAudit(family.id, ctx.userId, "child_created", {
         childId: child.id,
       });
-      return child;
+      return {
+        ...child,
+        devices: toDeviceClientViews(child.devices),
+      };
     }),
 
   get: protectedProcedure
@@ -505,10 +532,21 @@ export const deviceRouter = router({
     const family = await getFamilyForUser(ctx);
     const devices = await prisma.device.findMany({
       where: { child: { familyId: family.id } },
-      include: { child: { select: { id: true, displayName: true } } },
+      select: {
+        ...deviceClientSelect,
+        child: { select: { id: true, displayName: true } },
+      },
       orderBy: { lastSeenAt: "desc" },
     });
-    return withLiveOnlineStatus(devices);
+    return devices.map((device) => {
+      const { child, deviceToken, ...rest } = device;
+      return {
+        ...rest,
+        isOnline: isDeviceRecentlySeen(device.lastSeenAt),
+        isPaired: Boolean(deviceToken),
+        child,
+      };
+    });
   }),
 
   rename: parentProcedure
@@ -954,7 +992,7 @@ export const dashboardRouter = router({
       prisma.child.findMany({
         where: { familyId: family.id },
         include: {
-          devices: true,
+          devices: { select: deviceClientSelect },
           policies: { where: { isActive: true }, take: 1 },
           extensionOverrides: {
             where: { expiresAt: { gt: now } },
@@ -989,16 +1027,6 @@ export const dashboardRouter = router({
       );
     }
 
-    const liveDevices = await withLiveOnlineStatus(
-      children.flatMap((child) => child.devices)
-    );
-    const devicesByChild = new Map<string, typeof liveDevices>();
-    for (const device of liveDevices) {
-      const list = devicesByChild.get(device.childId) ?? [];
-      list.push(device);
-      devicesByChild.set(device.childId, list);
-    }
-
     return {
       pendingRequests,
       children: children.map((child) => {
@@ -1023,7 +1051,7 @@ export const dashboardRouter = router({
           }))
         );
 
-        const devices = devicesByChild.get(child.id) ?? [];
+        const devices = toDeviceClientViews(child.devices);
 
         return {
           id: child.id,
@@ -1036,7 +1064,7 @@ export const dashboardRouter = router({
             isOnline: device.isOnline,
             isLocked: device.isLocked,
             adminLock: device.adminLock,
-            deviceToken: device.deviceToken,
+            isPaired: device.isPaired,
             agentVersion: device.agentVersion,
           })),
         };
