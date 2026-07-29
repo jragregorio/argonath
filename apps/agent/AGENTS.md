@@ -17,10 +17,10 @@
 cd apps/agent
 dotnet build
 dotnet run --project Warden.Tray
-dotnet publish Warden.Tray -c Release -r win-x64 --self-contained false
+dotnet publish Warden.Tray -c Release -r win-x64 --self-contained true
 ```
 
-Publish output: `Warden.Tray/bin/Release/net8.0-windows/win-x64/publish/`. Edit `warden.json` `apiBaseUrl` before deploying to a child PC.
+Publish output: `Warden.Tray/bin/Release/net8.0-windows/win-x64/publish/`. Copy the whole folder (bundles .NET 8). Edit `warden.json` `apiBaseUrl` before deploying to a child PC.
 
 ## Config
 

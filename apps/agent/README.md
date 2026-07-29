@@ -44,12 +44,15 @@ Closing the window keeps Warden running in the tray. Exit requires the parent PI
 ## Publish for a child PC
 
 ```bash
-dotnet publish Warden.Tray -c Release -r win-x64 --self-contained false
+# Self-contained: includes the .NET runtime (no separate install on the child PC)
+dotnet publish Warden.Tray -c Release -r win-x64 --self-contained true
 ```
 
 Published binary:
 
 `Warden.Tray/bin/Release/net8.0-windows/win-x64/publish/Warden.Tray.exe`
+
+Copy the **entire** publish folder (not just the `.exe`). Self-contained output is larger because it bundles .NET 8.
 
 Before copying to a child machine, edit `warden.json` in the publish folder and set your live dashboard URL:
 

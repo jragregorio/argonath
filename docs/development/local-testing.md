@@ -84,14 +84,15 @@ Then restart the agent (`Warden.Tray`), set a **1–2 minute** daily limit on a 
 
 ## 7. Test extension request + approval
 
-1. On the **locked PC:** click **+15 min**
+1. On the **locked PC:** click **Request +15 min**
 2. On the **dashboard:** **Requests** → **Approve**
 3. Within ~10 seconds the agent polls while locked, picks up bonus minutes, and unlocks.
+4. On the child page, **Clear bonus** removes active bonus minutes (limit returns to the base daily value).
 
 ## 8. Test parent PIN shutdown (onsite)
 
 1. In the dashboard **Settings**, set a parent PIN (4–8 chars) and wait for a heartbeat (~15s) or use tray **Refresh policy now**
-2. When locked, on the **primary** monitor enter the PIN and click **Shut down Warden**
+2. When locked, on the **primary** monitor click **Shut down**, enter the PIN, then click **Shut down Warden**
 3. All overlays dismiss and the agent exits completely (no more enforcement until you start it again)
 
 No Supabase Realtime required for this flow.

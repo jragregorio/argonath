@@ -988,6 +988,53 @@ export const extensionRouter = router({
 
       return { status };
     }),
+
+  clearBonus: parentProcedure
+    .input(z.object({ childId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const child = await getChildForFamily(input.childId, family.id);
+      const now = new Date();
+
+      const activeOverrides = child.extensionOverrides;
+      const clearedMinutes = activeOverrides.reduce(
+        (sum, o) => sum + o.extraMinutes,
+        0
+      );
+
+      if (activeOverrides.length === 0) {
+        return { ok: true, clearedMinutes: 0, clearedCount: 0 };
+      }
+
+      await prisma.extensionOverride.updateMany({
+        where: {
+          childId: child.id,
+          expiresAt: { gt: now },
+        },
+        data: { expiresAt: now },
+      });
+
+      await logAudit(family.id, ctx.userId, "bonus_cleared", {
+        childId: child.id,
+        minutes: clearedMinutes,
+        count: activeOverrides.length,
+      });
+
+      // Best-effort: tray polls agent.getPolicy and also handles policy:updated.
+      for (const device of child.devices) {
+        void broadcastToDevice(device.id, {
+          type: "policy:updated",
+          deviceId: device.id,
+          timestamp: new Date().toISOString(),
+        }).catch(() => {});
+      }
+
+      return {
+        ok: true,
+        clearedMinutes,
+        clearedCount: activeOverrides.length,
+      };
+    }),
 });
 
 export const dashboardRouter = router({

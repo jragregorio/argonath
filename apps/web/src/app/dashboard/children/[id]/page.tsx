@@ -155,6 +155,14 @@ export default function ChildDetailPage() {
       setPolicyEditorOpen(false);
     },
   });
+  const clearBonus = trpc.extension.clearBonus.useMutation({
+    onSuccess: () => {
+      void utils.policy.getEvaluation.invalidate({ childId });
+      void utils.children.get.invalidate({ childId });
+      void utils.dashboard.overview.invalidate();
+      void utils.dashboard.activity.invalidate();
+    },
+  });
   const renameChild = trpc.children.rename.useMutation({
     onSuccess: () => {
       utils.children.get.invalidate({ childId });
@@ -658,6 +666,14 @@ export default function ChildDetailPage() {
     if (ok) deleteChild.mutate({ childId });
   };
 
+  const confirmClearBonus = () => {
+    if (!evaluation || evaluation.bonusMinutes <= 0) return;
+    const ok = window.confirm(
+      `Clear +${evaluation.bonusMinutes} bonus minutes for ${child.displayName}? Their daily limit returns to ${evaluation.dailyLimitMinutes} min. If they've already used more than that, devices will lock.`
+    );
+    if (ok) clearBonus.mutate({ childId });
+  };
+
   const startRenameDevice = (device: {
     id: string;
     displayName?: string | null;
@@ -915,6 +931,18 @@ export default function ChildDetailPage() {
                   {evaluation.bonusMinutes > 0 &&
                     ` (+${evaluation.bonusMinutes} bonus)`}
                 </span>
+                {evaluation.bonusMinutes > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={confirmClearBonus}
+                    disabled={clearBonus.isPending}
+                  >
+                    {clearBonus.isPending ? "Clearing…" : "Clear bonus"}
+                  </Button>
+                )}
                 <span className="hidden md:inline text-xs text-muted-foreground">
                   Refreshes every 30s from agent heartbeats (realtime updates sooner)
                 </span>

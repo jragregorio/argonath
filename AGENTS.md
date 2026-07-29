@@ -52,7 +52,7 @@ npm run test:reset       # scripts/reset-usage.mjs
 cd apps/agent
 dotnet build
 dotnet run --project Warden.Tray
-dotnet publish Warden.Tray -c Release -r win-x64 --self-contained false
+dotnet publish Warden.Tray -c Release -r win-x64 --self-contained true
 ```
 
 ## Environment (names only)

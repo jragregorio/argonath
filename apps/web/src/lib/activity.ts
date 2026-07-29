@@ -7,6 +7,7 @@ const ACTION_LABELS: Record<string, string> = {
   snapshot_deleted: "Deleted a snapshot",
   extension_approved: "Approved extra screen time",
   extension_denied: "Denied extra screen time",
+  bonus_cleared: "Cleared bonus screen time",
   policy_updated: "Updated screen time policy",
   child_created: "Added a child",
   child_renamed: "Renamed a child",
@@ -40,10 +41,15 @@ export function formatActivityDetail(item: {
 
   if (
     item.action === "extension_approved" ||
-    item.action === "extension_denied"
+    item.action === "extension_denied" ||
+    item.action === "bonus_cleared"
   ) {
     const minutes = item.metadata?.minutes;
-    if (typeof minutes === "number") parts.push(`+${minutes} min`);
+    if (typeof minutes === "number") {
+      parts.push(
+        item.action === "bonus_cleared" ? `−${minutes} min` : `+${minutes} min`
+      );
+    }
   }
 
   return parts.length > 0 ? parts.join(" · ") : null;

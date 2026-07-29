@@ -10,7 +10,7 @@
 
 ## Windows agent
 
-1. `dotnet publish Warden.Tray -c Release -r win-x64 --self-contained false` from `apps/agent`
+1. `dotnet publish Warden.Tray -c Release -r win-x64 --self-contained true` from `apps/agent`
 2. Set `apiBaseUrl` in publish-folder `warden.json` to the live dashboard URL
 3. Copy publish folder to child PC; pair with dashboard code; enable Start with Windows from tray
 
