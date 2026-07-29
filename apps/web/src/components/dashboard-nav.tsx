@@ -364,7 +364,7 @@ function MobileMoreSheet({
           <div>
             <p className="font-semibold">More</p>
             <p className="text-xs text-muted-foreground">
-              Account &amp; settings · v{APP_VERSION}
+              Account &amp; settings
             </p>
           </div>
           <button
@@ -387,6 +387,10 @@ function MobileMoreSheet({
         </Link>
 
         <NavFooter onNavigate={onClose} />
+
+        <p className="pt-4 text-center text-[11px] text-muted-foreground/70">
+          Made by JRAG · v{APP_VERSION}
+        </p>
       </div>
     </>
   );
