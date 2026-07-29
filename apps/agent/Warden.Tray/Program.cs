@@ -22,6 +22,8 @@ static class Program
     private static readonly HashSet<string> _activeNudgeWindows = new();
     private static readonly object _nudgeUiLock = new();
 
+    private static DateTime _lastNudgePollAt = DateTime.MinValue;
+
     [STAThread]
     static void Main()
     {
@@ -176,13 +178,18 @@ static class Program
         _tickTimer.Start();
 
         // Independent of heartbeat so missed realtime events are picked up within ~1s.
+        // Nudges poll every 5s to avoid saturating the API/DB connection pool.
         _captureTimer = new System.Windows.Forms.Timer { Interval = 1000 };
         _captureTimer.Tick += async (_, _) =>
         {
             try
             {
                 await PollPendingCapturesAsync();
-                await PollPendingNudgesAsync();
+                if ((DateTime.UtcNow - _lastNudgePollAt).TotalSeconds >= 5)
+                {
+                    _lastNudgePollAt = DateTime.UtcNow;
+                    await PollPendingNudgesAsync();
+                }
             }
             catch (DeviceUnpairedException ex)
             {
@@ -352,9 +359,24 @@ static class Program
         {
             if (!_activeNudgeWindows.Add(payload.NudgeId))
             {
+                // #region agent log
+                DebugSessionLog.Write("D", "Program.ShowNudge", "UI skipped duplicate window", new
+                {
+                    payload.NudgeId
+                });
+                // #endregion
                 return;
             }
         }
+
+        // #region agent log
+        DebugSessionLog.Write("D", "Program.ShowNudge", "showing nudge window", new
+        {
+            payload.NudgeId,
+            payload.AutoDismissSeconds,
+            payload.Message
+        });
+        // #endregion
 
         var window = new NudgeWindow(
             payload.NudgeId,
@@ -367,10 +389,22 @@ static class Program
             try
             {
                 await _engine.AckNudgeAsync(payload.NudgeId, "delivered");
+                // #region agent log
+                DebugSessionLog.Write("B", "Program.ShowNudge", "delivered ack ok", new
+                {
+                    payload.NudgeId
+                });
+                // #endregion
             }
-            catch
+            catch (Exception ex)
             {
-                // Delivery ack is best-effort; poll/realtime still show the UI.
+                // #region agent log
+                DebugSessionLog.Write("B", "Program.ShowNudge", "delivered ack failed", new
+                {
+                    payload.NudgeId,
+                    error = ex.Message
+                });
+                // #endregion
             }
         });
 
@@ -385,15 +419,40 @@ static class Program
 
             var status = window.Expired ? "expired" : "seen";
             var response = window.Response;
+            // #region agent log
+            DebugSessionLog.Write("A", "Program.ShowNudge.Closed", "closing nudge → ack", new
+            {
+                payload.NudgeId,
+                status,
+                response,
+                windowExpired = window.Expired
+            });
+            // #endregion
             _ = Task.Run(async () =>
             {
                 try
                 {
                     await _engine.AckNudgeAsync(payload.NudgeId, status, response);
+                    // #region agent log
+                    DebugSessionLog.Write("B", "Program.ShowNudge.Closed", "final ack ok", new
+                    {
+                        payload.NudgeId,
+                        status,
+                        response
+                    });
+                    // #endregion
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Best-effort.
+                    // #region agent log
+                    DebugSessionLog.Write("B", "Program.ShowNudge.Closed", "final ack failed", new
+                    {
+                        payload.NudgeId,
+                        status,
+                        response,
+                        error = ex.Message
+                    });
+                    // #endregion
                 }
             });
         };

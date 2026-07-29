@@ -237,6 +237,24 @@ public class WardenApiClient
         HandleUnpairedResponse(response);
         if (!response.IsSuccessStatusCode)
         {
+            // #region agent log
+            try
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                var logPath = @"c:\DEV\Guardian\debug-8f2974.log";
+                var line = JsonSerializer.Serialize(new
+                {
+                    sessionId = "8f2974",
+                    hypothesisId = "D",
+                    location = "WardenApiClient.GetPendingNudgesAsync",
+                    message = "pendingNudges HTTP failed",
+                    data = new { http = (int)response.StatusCode, body },
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                });
+                File.AppendAllText(logPath, line + Environment.NewLine);
+            }
+            catch { }
+            // #endregion
             return [];
         }
 
@@ -259,6 +277,30 @@ public class WardenApiClient
         );
 
         var body = await response.Content.ReadAsStringAsync();
+        // #region agent log
+        try
+        {
+            var logPath = @"c:\DEV\Guardian\debug-8f2974.log";
+            var line = JsonSerializer.Serialize(new
+            {
+                sessionId = "8f2974",
+                hypothesisId = "B",
+                location = "WardenApiClient.AckNudgeAsync",
+                message = "ackNudge HTTP response",
+                data = new
+                {
+                    nudgeId,
+                    sentStatus = status,
+                    sentResponse = responseLabel,
+                    http = (int)response.StatusCode,
+                    body
+                },
+                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            });
+            File.AppendAllText(logPath, line + Environment.NewLine);
+        }
+        catch { }
+        // #endregion
         HandleUnpairedResponse(response);
         if (!response.IsSuccessStatusCode)
         {

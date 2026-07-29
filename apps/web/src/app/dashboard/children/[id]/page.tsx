@@ -209,6 +209,9 @@ export default function ChildDetailPage() {
       }));
     },
     onSuccess: (data, { deviceId }) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8f2974'},body:JSON.stringify({sessionId:'8f2974',location:'children/[id]/page.tsx:sendNudge',message:'nudge created',data:{deviceId,nudgeId:data.id,expiresAt:data.expiresAt,autoDismissSeconds:data.autoDismissSeconds,status:data.status},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
       setNudgeByDevice((prev) => ({
         ...prev,
         [deviceId]: { nudgeId: data.id, label: "Waiting…" },
@@ -235,6 +238,10 @@ export default function ChildDetailPage() {
             nudgeId: state.nudgeId,
           });
           if (cancelled) return;
+
+          // #region agent log
+          fetch('http://127.0.0.1:7764/ingest/6998f640-5197-44a4-94e8-0f0d80575bef',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8f2974'},body:JSON.stringify({sessionId:'8f2974',location:'children/[id]/page.tsx:poll',message:'getNudge poll',data:{deviceId,nudgeId:state.nudgeId,status:nudge.status,response:nudge.response,expiresAt:nudge.expiresAt,createdAt:nudge.createdAt,msToExpiry:nudge.expiresAt?new Date(nudge.expiresAt).getTime()-Date.now():null},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+          // #endregion
 
           let label = state.label;
           if (nudge.status === "delivered") label = "Delivered";

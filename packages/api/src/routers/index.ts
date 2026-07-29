@@ -660,8 +660,10 @@ export const deviceRouter = router({
         });
       }
 
+      // UI auto-dismiss is 45s from show; server TTL is longer so late poll/realtime
+      // delivery can still present the nudge and accept a Seen ack.
       const autoDismissSeconds = 45;
-      const expiresAt = new Date(now.getTime() + autoDismissSeconds * 1000);
+      const expiresAt = new Date(now.getTime() + 3 * 60 * 1000);
       const message =
         input.message?.trim() || "Your parent wants your attention";
 
@@ -1700,15 +1702,8 @@ export const agentRouter = router({
 
   pendingNudges: agentProcedure.query(async ({ ctx }) => {
     const now = new Date();
-    await prisma.nudge.updateMany({
-      where: {
-        deviceId: ctx.device.id,
-        status: { in: ["pending", "delivered"] },
-        expiresAt: { lte: now },
-      },
-      data: { status: "expired" },
-    });
-
+    // Read-only: do not updateMany on every poll (was exhausting the Prisma pool
+    // when polled every ~1s alongside captures/heartbeats).
     const pending = await prisma.nudge.findMany({
       where: {
         deviceId: ctx.device.id,
@@ -1725,14 +1720,12 @@ export const agentRouter = router({
       },
     });
 
-    return pending.map((nudge) => {
-      const remainingMs = Math.max(0, nudge.expiresAt.getTime() - now.getTime());
-      return {
-        nudgeId: nudge.id,
-        message: nudge.message,
-        autoDismissSeconds: Math.max(5, Math.ceil(remainingMs / 1000)),
-      };
-    });
+    return pending.map((nudge) => ({
+      nudgeId: nudge.id,
+      message: nudge.message,
+      // Always give the full gentle window from the moment the tray shows it.
+      autoDismissSeconds: 45,
+    }));
   }),
 
   ackNudge: agentProcedure
@@ -1755,6 +1748,34 @@ export const agentRouter = router({
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
+      // Seen from the child always wins (even if parent/getNudge already expired it).
+      if (input.status === "seen") {
+        if (nudge.status === "seen") {
+          return { ok: true, status: "seen", response: nudge.response };
+        }
+
+        const updated = await prisma.nudge.update({
+          where: { id: nudge.id },
+          data: {
+            status: "seen",
+            response: input.response ?? "ok",
+            seenAt: new Date(),
+          },
+        });
+
+        void broadcastToDevice(ctx.device.id, {
+          type: "nudge:seen",
+          deviceId: ctx.device.id,
+          payload: {
+            nudgeId: updated.id,
+            response: updated.response,
+          },
+          timestamp: new Date().toISOString(),
+        }).catch(() => {});
+
+        return { ok: true, status: "seen", response: updated.response };
+      }
+
       if (nudge.status === "seen" || nudge.status === "expired") {
         return { ok: true, status: nudge.status };
       }
@@ -1769,34 +1790,11 @@ export const agentRouter = router({
         return { ok: true, status: "delivered" };
       }
 
-      if (input.status === "expired") {
-        await prisma.nudge.update({
-          where: { id: nudge.id },
-          data: { status: "expired" },
-        });
-        return { ok: true, status: "expired" };
-      }
-
-      const updated = await prisma.nudge.update({
+      await prisma.nudge.update({
         where: { id: nudge.id },
-        data: {
-          status: "seen",
-          response: input.response ?? "ok",
-          seenAt: new Date(),
-        },
+        data: { status: "expired" },
       });
-
-      void broadcastToDevice(ctx.device.id, {
-        type: "nudge:seen",
-        deviceId: ctx.device.id,
-        payload: {
-          nudgeId: updated.id,
-          response: updated.response,
-        },
-        timestamp: new Date().toISOString(),
-      }).catch(() => {});
-
-      return { ok: true, status: "seen", response: updated.response };
+      return { ok: true, status: "expired" };
     }),
 
   setLocked: agentProcedure
