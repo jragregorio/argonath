@@ -91,13 +91,14 @@ export const PAIRING_CODE_LENGTH = 6;
 export const PAIRING_CODE_EXPIRY_MINUTES = 15;
 export const CAPTURE_RATE_LIMIT_PER_HOUR = 10;
 export const SNAPSHOT_RETENTION_DAYS = 7;
-export const HEARTBEAT_INTERVAL_SECONDS = 60;
-/** Device is considered online if a heartbeat arrived within this window. */
+/** How often the Windows agent posts heartbeats (Tray/Agent tick). */
+export const HEARTBEAT_INTERVAL_SECONDS = 5;
+/** Online if a heartbeat arrived within this many missed intervals. */
 export const DEVICE_ONLINE_THRESHOLD_SECONDS = HEARTBEAT_INTERVAL_SECONDS * 3;
 export const IDLE_THRESHOLD_SECONDS = 300;
 
 /** Product / dashboard version (keep in sync with Warden.Tray `<Version>`). */
-export const APP_VERSION = "0.5.2";
+export const APP_VERSION = "0.5.3";
 
 export function isDeviceRecentlySeen(
   lastSeenAt: Date | string | null | undefined,
