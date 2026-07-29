@@ -4,7 +4,7 @@ namespace Warden.Core;
 
 public static class AgentVersionInfo
 {
-    public const string Fallback = "0.1.5";
+    public const string Fallback = "0.1.6";
 
     public static string Current
     {

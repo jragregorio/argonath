@@ -888,23 +888,154 @@ export const dashboardRouter = router({
       }),
     };
   }),
+
+  /** Recent family audit events for the Overview activity feed. */
+  activity: protectedProcedure
+    .input(
+      z
+        .object({
+          limit: z.number().int().min(1).max(100).default(30),
+        })
+        .optional()
+    )
+    .query(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const limit = input?.limit ?? 30;
+
+      const logs = await prisma.auditLog.findMany({
+        where: { familyId: family.id },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      });
+
+      const actorIds = [
+        ...new Set(
+          logs
+            .map((log) => log.userId)
+            .filter((id) => id !== "agent" && Boolean(id))
+        ),
+      ];
+
+      const actors =
+        actorIds.length > 0
+          ? await prisma.user.findMany({
+              where: { id: { in: actorIds } },
+              select: { id: true, name: true, email: true },
+            })
+          : [];
+      const actorById = new Map(actors.map((user) => [user.id, user] as const));
+
+      const childIds = new Set<string>();
+      const deviceIds = new Set<string>();
+      for (const log of logs) {
+        const meta = asAuditMetadata(log.metadata);
+        if (typeof meta.childId === "string") childIds.add(meta.childId);
+        if (typeof meta.deviceId === "string") deviceIds.add(meta.deviceId);
+      }
+
+      const [children, devices] = await Promise.all([
+        childIds.size > 0
+          ? prisma.child.findMany({
+              where: { familyId: family.id, id: { in: [...childIds] } },
+              select: { id: true, displayName: true },
+            })
+          : Promise.resolve([]),
+        deviceIds.size > 0
+          ? prisma.device.findMany({
+              where: {
+                id: { in: [...deviceIds] },
+                child: { familyId: family.id },
+              },
+              select: {
+                id: true,
+                displayName: true,
+                machineName: true,
+                childId: true,
+              },
+            })
+          : Promise.resolve([]),
+      ]);
+
+      const childById = new Map(
+        children.map((child) => [child.id, child] as const)
+      );
+      const deviceById = new Map(
+        devices.map((device) => [device.id, device] as const)
+      );
+
+      return logs.map((log) => {
+        const meta = asAuditMetadata(log.metadata);
+        const device =
+          typeof meta.deviceId === "string"
+            ? deviceById.get(meta.deviceId)
+            : undefined;
+        const childId =
+          typeof meta.childId === "string"
+            ? meta.childId
+            : device?.childId;
+        const child = childId ? childById.get(childId) : undefined;
+        const actor =
+          log.userId === "agent"
+            ? null
+            : actorById.get(log.userId) ?? null;
+
+        return {
+          id: log.id,
+          action: log.action,
+          createdAt: log.createdAt,
+          metadata: meta,
+          actor: actor
+            ? { id: actor.id, name: actor.name, email: actor.email }
+            : null,
+          childName: child?.displayName ?? null,
+          deviceName: device
+            ? device.displayName?.trim() ||
+              device.machineName?.trim() ||
+              null
+            : null,
+        };
+      });
+    }),
 });
+
+function asAuditMetadata(
+  value: Prisma.JsonValue | null | undefined
+): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
+}
 
 export const snapshotRouter = router({
   list: protectedProcedure
-    .input(z.object({ childId: z.string().optional() }))
+    .input(
+      z.object({
+        childId: z.string().optional(),
+        status: z
+          .enum(["ready", "pending", "failed", "all"])
+          .default("all"),
+      })
+    )
     .query(async ({ ctx, input }) => {
       const family = await getFamilyForUser(ctx);
+      const statusFilter =
+        input.status === "all"
+          ? { in: ["ready", "pending", "failed"] }
+          : input.status;
+
       const snapshots = await prisma.snapshot.findMany({
         where: {
           child: { familyId: family.id },
           ...(input.childId ? { childId: input.childId } : {}),
-          status: "ready",
+          status: statusFilter,
           OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
         },
         include: {
-          child: { select: { displayName: true } },
-          device: { select: { machineName: true } },
+          child: { select: { id: true, displayName: true } },
+          device: {
+            select: { id: true, machineName: true, displayName: true },
+          },
         },
         orderBy: { capturedAt: "desc" },
         take: 50,
@@ -917,6 +1048,9 @@ export const snapshotRouter = router({
       const supabase = getSupabaseAdmin();
       const withUrls = await Promise.all(
         snapshots.map(async (snapshot) => {
+          if (snapshot.status !== "ready") {
+            return { ...snapshot, url: null };
+          }
           const { data } = await supabase.storage
             .from("snapshots")
             .createSignedUrl(snapshot.storageKey, 3600);
@@ -939,6 +1073,41 @@ export const snapshotRouter = router({
     });
     return { updated: result.count };
   }),
+
+  delete: parentProcedure
+    .input(z.object({ snapshotId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const snapshot = await prisma.snapshot.findFirst({
+        where: {
+          id: input.snapshotId,
+          child: { familyId: family.id },
+        },
+      });
+
+      if (!snapshot) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      if (isSupabaseConfigured() && snapshot.storageKey) {
+        const supabase = getSupabaseAdmin();
+        await supabase.storage
+          .from("snapshots")
+          .remove([snapshot.storageKey])
+          .catch(() => {});
+      }
+
+      await prisma.snapshot.delete({ where: { id: snapshot.id } });
+
+      await logAudit(family.id, ctx.userId, "snapshot_deleted", {
+        snapshotId: snapshot.id,
+        childId: snapshot.childId,
+        deviceId: snapshot.deviceId,
+        type: snapshot.type,
+      });
+
+      return { ok: true };
+    }),
 
   getStatus: protectedProcedure
     .input(z.object({ snapshotId: z.string() }))

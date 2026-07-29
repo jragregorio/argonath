@@ -42,6 +42,7 @@ export default function ExtensionsPage() {
       utils.children.list.invalidate();
       utils.dashboard.navBadges.invalidate();
       utils.dashboard.overview.invalidate();
+      utils.dashboard.activity.invalidate();
     },
   });
 

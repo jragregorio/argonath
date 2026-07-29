@@ -15,6 +15,7 @@ import {
   Users,
   Clock,
   ArrowRight,
+  Activity,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,10 @@ import {
   optimisticAdminLock,
   rollbackAdminLock,
 } from "@/lib/device-cache";
+import {
+  formatActivityDetail,
+  getActivityLabel,
+} from "@/lib/activity";
 
 function usagePercent(used: number, limit: number) {
   if (limit <= 0) return used > 0 ? 100 : 0;
@@ -50,6 +55,10 @@ export default function DashboardPage() {
   const { data: overview, isLoading } = trpc.dashboard.overview.useQuery(undefined, {
     refetchInterval: 10_000,
   });
+  const { data: activity } = trpc.dashboard.activity.useQuery(
+    { limit: 20 },
+    { refetchInterval: 15_000 }
+  );
   const [pendingLocks, setPendingLocks] = useState<
     Record<string, boolean | undefined>
   >({});
@@ -69,6 +78,7 @@ export default function DashboardPage() {
     },
     onSettled: () => {
       void utils.dashboard.overview.invalidate();
+      void utils.dashboard.activity.invalidate();
       void utils.device.list.invalidate();
       void utils.children.list.invalidate();
     },
@@ -106,6 +116,7 @@ export default function DashboardPage() {
 
   useFamilyRealtime(deviceIds, () => {
     utils.dashboard.overview.invalidate();
+    utils.dashboard.activity.invalidate();
     utils.extension.listPending.invalidate();
     utils.dashboard.navBadges.invalidate();
   });
@@ -413,6 +424,58 @@ export default function DashboardPage() {
               );
             })}
           </div>
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h2 className="text-xl font-semibold">Recent activity</h2>
+        </div>
+
+        {!activity || activity.length === 0 ? (
+          <Card>
+            <CardContent className="py-10 text-center text-muted-foreground">
+              <Activity className="w-10 h-10 mx-auto mb-3 opacity-50" />
+              <p>No activity yet</p>
+              <p className="text-sm mt-1">
+                Lockdowns, captures, approvals, and policy changes will show
+                here
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="p-0 overflow-hidden">
+            <ul className="divide-y divide-border">
+              {activity.map((item) => {
+                const detail = formatActivityDetail(item);
+                const actorName =
+                  item.actor?.name?.trim() ||
+                  item.actor?.email ||
+                  (item.actor ? null : "Agent");
+
+                return (
+                  <li
+                    key={item.id}
+                    className="flex flex-wrap items-start justify-between gap-3 px-5 py-3.5"
+                  >
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="font-medium text-sm">
+                        {getActivityLabel(item.action)}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {[detail, actorName ? `by ${actorName}` : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground tabular-nums shrink-0">
+                      {new Date(item.createdAt).toLocaleString()}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
         )}
       </div>
     </div>
