@@ -21,6 +21,9 @@ static class Program
     private static bool _capturePollInFlight;
     private static readonly HashSet<string> _activeNudgeWindows = new();
     private static readonly object _nudgeUiLock = new();
+    private static bool _attentionBusy;
+    private static readonly Queue<Action> _attentionQueue = new();
+    private static readonly object _attentionLock = new();
 
     private static DateTime _lastNudgePollAt = DateTime.MinValue;
 
@@ -114,7 +117,14 @@ static class Program
 
         _engine.NudgeRequested += payload =>
         {
-            _ = app.Dispatcher.InvokeAsync(() => ShowNudge(payload));
+            _ = app.Dispatcher.InvokeAsync(() => EnqueueAttention(() => ShowNudge(payload)));
+        };
+
+        _engine.TimeWarningRequested += payload =>
+        {
+            _ = app.Dispatcher.InvokeAsync(() =>
+                EnqueueAttention(() => ShowTimeWarning(payload))
+            );
         };
 
         _realtime = new RealtimeService(_configStore, evt => _engine!.HandleRealtimeEvent(evt));
@@ -338,6 +348,40 @@ static class Program
         }
     }
 
+    private static void EnqueueAttention(Action show)
+    {
+        lock (_attentionLock)
+        {
+            if (_attentionBusy)
+            {
+                _attentionQueue.Enqueue(show);
+                return;
+            }
+
+            _attentionBusy = true;
+        }
+
+        show();
+    }
+
+    private static void ReleaseAttentionSlot()
+    {
+        Action? next = null;
+        lock (_attentionLock)
+        {
+            if (_attentionQueue.Count > 0)
+            {
+                next = _attentionQueue.Dequeue();
+            }
+            else
+            {
+                _attentionBusy = false;
+            }
+        }
+
+        next?.Invoke();
+    }
+
     private static async Task PollPendingNudgesAsync()
     {
         if (_engine == null)
@@ -352,6 +396,7 @@ static class Program
     {
         if (_engine == null || string.IsNullOrWhiteSpace(payload.NudgeId))
         {
+            ReleaseAttentionSlot();
             return;
         }
 
@@ -359,14 +404,17 @@ static class Program
         {
             if (!_activeNudgeWindows.Add(payload.NudgeId))
             {
+                ReleaseAttentionSlot();
                 return;
             }
         }
 
-        var window = new NudgeWindow(
-            payload.NudgeId,
-            payload.Message,
-            payload.AutoDismissSeconds
+        var window = new AttentionWindow(
+            "Parent nudge",
+            string.IsNullOrWhiteSpace(payload.Message)
+                ? "Your parent wants your attention"
+                : payload.Message,
+            okDelaySeconds: 5
         );
 
         _ = Task.Run(async () =>
@@ -389,22 +437,33 @@ static class Program
             }
 
             // Keep engine _nudgeShown so poll does not re-open this nudge before ack lands.
-
-            var status = window.Expired ? "expired" : "seen";
-            var response = window.Response;
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    await _engine.AckNudgeAsync(payload.NudgeId, status, response);
+                    await _engine.AckNudgeAsync(payload.NudgeId, "seen", "ok");
                 }
                 catch
                 {
                     // Best-effort.
                 }
             });
+
+            ReleaseAttentionSlot();
         };
 
+        window.Show();
+    }
+
+    private static void ShowTimeWarning(Warden.Core.Models.TimeWarningPayload payload)
+    {
+        var window = new AttentionWindow(
+            "Time remaining",
+            payload.Message,
+            okDelaySeconds: 3
+        );
+
+        window.Closed += (_, _) => ReleaseAttentionSlot();
         window.Show();
     }
 

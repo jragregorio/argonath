@@ -25,12 +25,18 @@ public class EnforcementEngine
     private readonly HashSet<string> _nudgeShown = new();
     private readonly object _nudgeLock = new();
 
+    private static readonly int[] TimeWarningThresholds = [60, 30, 10, 1];
+    private readonly HashSet<int> _firedTimeWarnings = new();
+    private int? _lastRemainingMinutes;
+    private DateTime _usageDayLocal = DateTime.Today;
+
     public event Action<PolicyEvaluation>? PolicyChanged;
     public event Action? LockRequired;
     public event Action? UnlockRequired;
     public event Action<RealtimeEvent>? RealtimeEventReceived;
     public event Action<CapturePayload, string>? CaptureRequested;
     public event Action<NudgePayload>? NudgeRequested;
+    public event Action<TimeWarningPayload>? TimeWarningRequested;
 
     public bool IsLocked => _isLocked;
     public bool IsAdminLocked => _currentPolicy?.AdminLock ?? false;
@@ -152,6 +158,14 @@ public class EnforcementEngine
         // Ignore tiny jitter and huge gaps (sleep/hibernate).
         if (elapsedSeconds <= 0 || elapsedSeconds > 120) return;
 
+        var today = DateTime.Today;
+        if (today != _usageDayLocal)
+        {
+            _usageDayLocal = today;
+            _firedTimeWarnings.Clear();
+            _lastRemainingMinutes = null;
+        }
+
         if (IdleTimeDetector.IsUserActive())
         {
             _activeSecondsToday += elapsedSeconds;
@@ -189,6 +203,7 @@ public class EnforcementEngine
 
         CurrentEvaluation = evaluation;
         PolicyChanged?.Invoke(evaluation);
+        MaybeEmitTimeWarnings(evaluation);
 
         var shouldLock = _currentPolicy.AdminLock || PolicyEngine.ShouldLock(evaluation);
 
@@ -205,6 +220,62 @@ public class EnforcementEngine
             _ = _api.SetLockedAsync(false);
         }
     }
+
+    private void MaybeEmitTimeWarnings(PolicyEvaluation evaluation)
+    {
+        // Only warn during normal allowed screen time with a real remaining budget.
+        if (
+            evaluation.Status != "allowed"
+            || evaluation.RemainingMinutes <= 0
+            || evaluation.RemainingMinutes >= 999
+        )
+        {
+            _lastRemainingMinutes = evaluation.RemainingMinutes;
+            return;
+        }
+
+        var remaining = evaluation.RemainingMinutes;
+
+        if (_lastRemainingMinutes is int previous)
+        {
+            if (remaining > previous)
+            {
+                foreach (var threshold in TimeWarningThresholds)
+                {
+                    if (remaining > threshold)
+                    {
+                        _firedTimeWarnings.Remove(threshold);
+                    }
+                }
+            }
+
+            foreach (var threshold in TimeWarningThresholds)
+            {
+                if (previous > threshold && remaining <= threshold && _firedTimeWarnings.Add(threshold))
+                {
+                    TimeWarningRequested?.Invoke(
+                        new TimeWarningPayload
+                        {
+                            ThresholdMinutes = threshold,
+                            Message = FormatTimeWarningMessage(threshold)
+                        }
+                    );
+                }
+            }
+        }
+
+        _lastRemainingMinutes = remaining;
+    }
+
+    private static string FormatTimeWarningMessage(int thresholdMinutes) =>
+        thresholdMinutes switch
+        {
+            60 => "1 hour of screen time left",
+            30 => "30 minutes of screen time left",
+            10 => "10 minutes of screen time left",
+            1 => "1 minute of screen time left",
+            _ => $"{thresholdMinutes} minutes of screen time left"
+        };
 
     public async Task SendHeartbeatAsync()
     {

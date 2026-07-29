@@ -128,10 +128,8 @@ export default function DashboardOverviewPage() {
 
           let label = state.label;
           if (nudge.status === "delivered") label = "Delivered";
-          else if (nudge.status === "seen") {
-            label =
-              nudge.response === "on_my_way" ? "Seen · On my way" : "Seen · OK";
-          } else if (nudge.status === "expired") label = "Expired";
+          else if (nudge.status === "seen") label = "Seen";
+          else if (nudge.status === "expired") label = "Expired";
           else if (nudge.status === "pending") label = "Waiting…";
 
           setNudgeByDevice((prev) => {
