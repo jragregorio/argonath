@@ -962,7 +962,7 @@ export default function ChildDetailPage() {
                 </span>
               </div>
               <div className="mt-3 max-w-md space-y-2">
-                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                <div className="hidden h-2 w-full overflow-hidden rounded-full bg-muted md:block">
                   <div
                     className={`h-full rounded-full transition-[width] ${progressBarClass(
                       evaluation.status
