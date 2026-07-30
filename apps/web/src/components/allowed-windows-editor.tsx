@@ -1,11 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import type { AllowedWindow } from "@warden/shared";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { cn } from "@warden/ui";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { formatTime12, formatTimeRange12 } from "@/lib/time-format";
 
 const DAYS = [
   { value: 1, label: "Mon" },
@@ -38,7 +36,7 @@ type Preset = {
 const PRESETS: Preset[] = [
   {
     id: "weekdays",
-    label: "Weekdays 15:00–20:00",
+    label: `Weekdays ${formatTimeRange12("15:00", "20:00")}`,
     windows: [1, 2, 3, 4, 5].map((day) => ({
       day,
       start: "15:00",
@@ -47,7 +45,7 @@ const PRESETS: Preset[] = [
   },
   {
     id: "weekends",
-    label: "Weekends 09:00–21:00",
+    label: `Weekends ${formatTimeRange12("09:00", "21:00")}`,
     windows: [6, 7].map((day) => ({
       day,
       start: "09:00",
@@ -56,7 +54,7 @@ const PRESETS: Preset[] = [
   },
   {
     id: "school-nights",
-    label: "School nights 15:00–20:00",
+    label: `School nights ${formatTimeRange12("15:00", "20:00")}`,
     windows: [1, 2, 3, 4].map((day) => ({
       day,
       start: "15:00",
@@ -103,7 +101,7 @@ function DayTimeline({ start, end }: { start: string; end: string }) {
     (Math.max(1, Math.abs(endMin - startMin)) / (24 * 60)) * 100;
 
   return (
-    <div className="relative h-2 w-full rounded-full bg-muted overflow-hidden">
+    <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
       <div
         className="absolute inset-y-0 rounded-full bg-primary/70"
         style={{ left: `${left}%`, width: `${width}%` }}
@@ -112,45 +110,15 @@ function DayTimeline({ start, end }: { start: string; end: string }) {
   );
 }
 
-function summarizeWindows(windows: AllowedWindow[]) {
-  if (windows.length === 0) {
-    return "Allowed any time (within daily limit)";
-  }
-
-  const byRange = new Map<string, number[]>();
-  for (const window of windows) {
-    const key = `${window.start}–${window.end}`;
-    const days = byRange.get(key) ?? [];
-    days.push(window.day);
-    byRange.set(key, days);
-  }
-
-  return [...byRange.entries()]
-    .map(([range, days]) => {
-      const labels = days
-        .sort((a, b) => a - b)
-        .map(
-          (day) => DAYS.find((d) => d.value === day)?.label ?? `Day ${day}`
-        );
-      return `${labels.join(", ")} ${range}`;
-    })
-    .join(" · ");
-}
-
 type AllowedWindowsEditorProps = {
   windows: AllowedWindow[];
   onChange: (windows: AllowedWindow[]) => void;
-  /** When false (default), presets + week grid stay collapsed behind Edit schedule. */
-  defaultExpanded?: boolean;
 };
 
 export function AllowedWindowsEditor({
   windows,
   onChange,
-  defaultExpanded = false,
 }: AllowedWindowsEditorProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-
   const toggleDay = (day: number, enabled: boolean) => {
     if (!enabled) {
       onChange(windows.filter((window) => window.day !== day));
@@ -161,9 +129,7 @@ export function AllowedWindowsEditor({
     if (existing.length > 0) return;
 
     onChange(
-      replaceDayWindows(windows, day, [
-        { day, start: "15:00", end: "20:00" },
-      ])
+      replaceDayWindows(windows, day, [{ day, start: "15:00", end: "20:00" }])
     );
   };
 
@@ -211,37 +177,7 @@ export function AllowedWindowsEditor({
   })?.id;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <Label>Allowed windows</Label>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setExpanded((prev) => !prev)}
-        >
-          {expanded ? (
-            <>
-              <ChevronUp className="w-4 h-4 mr-1.5" />
-              Hide schedule
-            </>
-          ) : (
-            <>
-              <ChevronDown className="w-4 h-4 mr-1.5" />
-              Edit schedule
-            </>
-          )}
-        </Button>
-      </div>
-
-      {!expanded && (
-        <p className="text-sm text-muted-foreground rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-          {summarizeWindows(windows)}
-        </p>
-      )}
-
-      {expanded && (
-        <div className="space-y-4">
+    <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         {PRESETS.map((preset) => (
           <button
@@ -252,7 +188,7 @@ export function AllowedWindowsEditor({
               "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               activePresetId === preset.id
                 ? "border-primary bg-primary/20 text-primary"
-                : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground hover:bg-secondary"
+                : "border-border bg-secondary/40 text-muted-foreground hover:bg-secondary hover:text-foreground"
             )}
           >
             {preset.label}
@@ -261,13 +197,13 @@ export function AllowedWindowsEditor({
       </div>
 
       {windows.length === 0 ? (
-        <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border px-3 py-3">
+        <p className="rounded-lg border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
           No windows set — allowed any time (within daily limit). Turn on days
           below or pick a preset.
         </p>
       ) : null}
 
-      <div className="space-y-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {DAYS.map((day) => {
           const dayWindows = windowsForDay(windows, day.value);
           const enabled = dayWindows.length > 0;
@@ -276,12 +212,12 @@ export function AllowedWindowsEditor({
             <div
               key={day.value}
               className={cn(
-                "rounded-lg border border-border/70 px-3 py-2.5 space-y-2",
+                "space-y-2 rounded-lg border border-border/70 px-3 py-2.5",
                 enabled ? "bg-card" : "bg-muted/10"
               )}
             >
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 min-w-[4.5rem] cursor-pointer">
+              <div className="flex items-start gap-3">
+                <label className="flex min-w-[3.5rem] cursor-pointer items-center gap-2 pt-1">
                   <input
                     type="checkbox"
                     checked={enabled}
@@ -292,12 +228,16 @@ export function AllowedWindowsEditor({
                 </label>
 
                 {enabled ? (
-                  <div className="flex-1 min-w-0 space-y-2">
+                  <div className="min-w-0 flex-1 space-y-2">
                     {dayWindows.map((window, index) => (
-                      <div key={`${day.value}-${index}`} className="space-y-1.5">
+                      <div
+                        key={`${day.value}-${index}`}
+                        className="space-y-1.5"
+                      >
                         <div className="flex flex-wrap items-center gap-2">
                           <select
                             value={window.start}
+                            aria-label={`${day.label} start time`}
                             onChange={(e) =>
                               updateDayWindow(
                                 day.value,
@@ -306,19 +246,20 @@ export function AllowedWindowsEditor({
                                 e.target.value
                               )
                             }
-                            className="h-10 rounded-lg border border-border bg-background px-2 text-sm min-w-[5.5rem]"
+                            className="h-10 min-w-[7rem] rounded-lg border border-border bg-background px-2 text-sm"
                           >
                             {ensureTimeOption(window.start).map((time) => (
                               <option key={time} value={time}>
-                                {time}
+                                {formatTime12(time)}
                               </option>
                             ))}
                           </select>
-                          <span className="text-muted-foreground text-sm">
+                          <span className="text-sm text-muted-foreground">
                             to
                           </span>
                           <select
                             value={window.end}
+                            aria-label={`${day.label} end time`}
                             onChange={(e) =>
                               updateDayWindow(
                                 day.value,
@@ -327,11 +268,11 @@ export function AllowedWindowsEditor({
                                 e.target.value
                               )
                             }
-                            className="h-10 rounded-lg border border-border bg-background px-2 text-sm min-w-[5.5rem]"
+                            className="h-10 min-w-[7rem] rounded-lg border border-border bg-background px-2 text-sm"
                           >
                             {ensureTimeOption(window.end).map((time) => (
                               <option key={time} value={time}>
-                                {time}
+                                {formatTime12(time)}
                               </option>
                             ))}
                           </select>
@@ -340,6 +281,7 @@ export function AllowedWindowsEditor({
                               type="button"
                               variant="ghost"
                               size="sm"
+                              aria-label={`Remove ${day.label} window ${index + 1}`}
                               onClick={() => removeDayWindow(day.value, index)}
                             >
                               ×
@@ -358,7 +300,7 @@ export function AllowedWindowsEditor({
                     </button>
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground flex-1">
+                  <p className="flex-1 pt-1 text-xs text-muted-foreground">
                     {windows.length === 0
                       ? "Follows any-time policy"
                       : "No access this day"}
@@ -369,8 +311,6 @@ export function AllowedWindowsEditor({
           );
         })}
       </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -25,6 +25,7 @@ import {
   getPolicyStatusLabel,
   type PolicyStatus,
 } from "@warden/shared";
+import { formatClockInText } from "@/lib/time-format";
 import {
   optimisticAdminLock,
   rollbackAdminLock,
@@ -391,12 +392,16 @@ export default function DashboardOverviewPage() {
                   : evaluation.status === "outside_window"
                     ? evaluation.nextWindowStart &&
                       evaluation.dailyRemainingMinutes > 0
-                      ? `Available again: ${evaluation.nextWindowStart} — ${evaluation.dailyRemainingMinutes} min of today's budget left`
-                      : (evaluation.message ??
-                        getPolicyStatusLabel(evaluation.status))
+                      ? `Available again: ${formatClockInText(evaluation.nextWindowStart)} — ${evaluation.dailyRemainingMinutes} min of today's budget left`
+                      : formatClockInText(
+                          evaluation.message ??
+                            getPolicyStatusLabel(evaluation.status)
+                        )
                     : evaluation.status === "blocked"
-                      ? (evaluation.message ??
-                        getPolicyStatusLabel(evaluation.status))
+                      ? formatClockInText(
+                          evaluation.message ??
+                            getPolicyStatusLabel(evaluation.status)
+                        )
                       : evaluation.limitingFactor === "window"
                         ? `${evaluation.remainingMinutes} min left now (allowed hours ending) · ${evaluation.dailyRemainingMinutes} min of daily budget left`
                         : `${evaluation.remainingMinutes} min left now`;

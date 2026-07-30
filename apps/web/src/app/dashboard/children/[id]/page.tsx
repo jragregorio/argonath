@@ -45,6 +45,10 @@ import {
 } from "@/lib/device-cache";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
+import {
+  formatClockInText,
+  formatWindowsSummary,
+} from "@/lib/time-format";
 
 const AllowedWindowsEditor = dynamic(
   () =>
@@ -55,6 +59,14 @@ const AllowedWindowsEditor = dynamic(
     ssr: false,
     loading: () => <Skeleton className="h-40 w-full" />,
   }
+);
+
+const AllowedWindowsDialog = dynamic(
+  () =>
+    import("@/components/allowed-windows-dialog").then(
+      (mod) => mod.AllowedWindowsDialog
+    ),
+  { ssr: false }
 );
 
 const DAYS = [
@@ -156,31 +168,6 @@ function progressBarClass(status: PolicyStatus) {
   if (status === "blocked") return "bg-destructive";
   if (status === "outside_window") return "bg-yellow-500";
   return "bg-primary";
-}
-
-function formatWindowsSummary(windows: AllowedWindow[]) {
-  if (windows.length === 0) {
-    return "Allowed any time (within daily limit)";
-  }
-
-  const byRange = new Map<string, number[]>();
-  for (const window of windows) {
-    const key = `${window.start}–${window.end}`;
-    const days = byRange.get(key) ?? [];
-    days.push(window.day);
-    byRange.set(key, days);
-  }
-
-  return [...byRange.entries()]
-    .map(([range, days]) => {
-      const labels = days
-        .sort((a, b) => a - b)
-        .map(
-          (day) => DAYS.find((d) => d.value === day)?.label ?? `Day ${day}`
-        );
-      return `${labels.join(", ")} ${range}`;
-    })
-    .join(" · ");
 }
 
 function formatCountdown(ms: number) {
@@ -534,6 +521,7 @@ export default function ChildDetailPage() {
   const deviceMoreRef = useRef<HTMLDivElement | null>(null);
   const [policySavedAt, setPolicySavedAt] = useState<number | null>(null);
   const [policyEditorOpen, setPolicyEditorOpen] = useState(false);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
 
   const policy = child?.policies[0];
   const [dailyLimit, setDailyLimit] = useState<number | null>(null);
@@ -828,12 +816,16 @@ export default function ChildDetailPage() {
       const next = evaluation.nextWindowStart;
       const daily = evaluation.dailyRemainingMinutes;
       if (next && daily > 0) {
-        return `Available again: ${next} — ${daily} min of today's budget left`;
+        return `Available again: ${formatClockInText(next)} — ${daily} min of today's budget left`;
       }
-      return evaluation.message ?? getPolicyStatusLabel(evaluation.status);
+      return formatClockInText(
+        evaluation.message ?? getPolicyStatusLabel(evaluation.status)
+      );
     }
     if (evaluation.status === "blocked") {
-      return evaluation.message ?? getPolicyStatusLabel(evaluation.status);
+      return formatClockInText(
+        evaluation.message ?? getPolicyStatusLabel(evaluation.status)
+      );
     }
     if (evaluation.limitingFactor === "window") {
       return `${evaluation.remainingMinutes} min left now (allowed hours ending) · ${evaluation.dailyRemainingMinutes} min of daily budget left`;
@@ -841,10 +833,7 @@ export default function ChildDetailPage() {
     return `${evaluation.remainingMinutes} min left now`;
   })();
 
-  const renderPolicyEditor = (
-    idPrefix: string,
-    windowsExpanded = false
-  ) => (
+  const renderPolicyEditor = (idPrefix: string, mode: "card" | "sheet") => (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <input
@@ -870,14 +859,38 @@ export default function ChildDetailPage() {
         />
       </div>
 
-      <AllowedWindowsEditor
-        windows={currentWindows}
-        onChange={setAllowedWindows}
-        defaultExpanded={windowsExpanded}
-      />
+      {mode === "card" ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <Label>Allowed windows</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setScheduleDialogOpen(true)}
+            >
+              Edit schedule
+            </Button>
+          </div>
+          <p
+            className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground"
+            aria-live="polite"
+          >
+            {formatWindowsSummary(currentWindows)}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Label>Allowed windows</Label>
+          <AllowedWindowsEditor
+            windows={currentWindows}
+            onChange={setAllowedWindows}
+          />
+        </div>
+      )}
 
       {showReachAdvisory && policyReach.minWindowedCapacityMinutes !== null && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 space-y-2">
+        <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
           <p className="text-sm text-foreground">
             {formatReachAdvisory(
               policyReach.constrainedDays,
@@ -903,26 +916,28 @@ export default function ChildDetailPage() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
-        <Button
-          className="w-full sm:w-auto"
-          onClick={handleSavePolicy}
-          disabled={updatePolicy.isPending || !policyDirty}
-        >
-          {updatePolicy.isPending ? "Saving..." : "Save policy"}
-        </Button>
-        {policyDirty && (
+      {mode === "card" && (
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <Button
-            type="button"
-            variant="ghost"
             className="w-full sm:w-auto"
-            onClick={discardPolicyChanges}
-            disabled={updatePolicy.isPending}
+            onClick={handleSavePolicy}
+            disabled={updatePolicy.isPending || !policyDirty}
           >
-            Discard
+            {updatePolicy.isPending ? "Saving..." : "Save policy"}
           </Button>
-        )}
-      </div>
+          {policyDirty && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full sm:w-auto"
+              onClick={discardPolicyChanges}
+              disabled={updatePolicy.isPending}
+            >
+              Discard
+            </Button>
+          )}
+        </div>
+      )}
       {updatePolicy.isError && (
         <p className="text-sm text-destructive">
           {updatePolicy.error.message || "Could not save policy"}
@@ -1154,7 +1169,7 @@ export default function ChildDetailPage() {
             </Button>
 
             <div className="hidden md:block space-y-4">
-              {renderPolicyEditor("desktop")}
+              {renderPolicyEditor("desktop", "card")}
             </div>
           </CardContent>
         </Card>
@@ -1513,18 +1528,57 @@ export default function ChildDetailPage() {
         onClose={() => setPolicyEditorOpen(false)}
         title="Edit limits"
         description="Daily limit and allowed time windows"
+        showDone={false}
+        footer={
+          <div className="flex flex-col gap-2">
+            <Button
+              className="w-full"
+              onClick={handleSavePolicy}
+              disabled={updatePolicy.isPending || !policyDirty}
+            >
+              {updatePolicy.isPending ? "Saving..." : "Save policy"}
+            </Button>
+            {policyDirty ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={discardPolicyChanges}
+                disabled={updatePolicy.isPending}
+              >
+                Discard
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={() => setPolicyEditorOpen(false)}
+              >
+                Done
+              </Button>
+            )}
+          </div>
+        }
       >
-        <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground mb-4">
+        <div className="mb-4 rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
           <p>
-            <span className="text-foreground font-medium">
+            <span className="font-medium text-foreground">
               {currentLimit} min/day
             </span>
             {currentActive ? "" : " · policy off"}
           </p>
           <p className="mt-0.5">{formatWindowsSummary(currentWindows)}</p>
         </div>
-        {renderPolicyEditor("sheet", false)}
+        {renderPolicyEditor("sheet", "sheet")}
       </BottomSheet>
+
+      <AllowedWindowsDialog
+        open={scheduleDialogOpen}
+        windows={currentWindows}
+        onApply={setAllowedWindows}
+        onClose={() => setScheduleDialogOpen(false)}
+      />
 
       <BottomSheet
         open={Boolean(pairingCode)}
