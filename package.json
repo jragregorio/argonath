@@ -19,7 +19,8 @@
     "db:validate": "npm run db:validate -w @warden/db",
     "db:up": "docker compose up -d",
     "test:core": "node scripts/verify-core-flow.mjs",
-    "test:reset": "node scripts/reset-usage.mjs"
+    "test:reset": "node scripts/reset-usage.mjs",
+    "publish:agent": "node scripts/publish-agent-release.mjs"
   },
   "devDependencies": {
     "turbo": "^2.5.4",

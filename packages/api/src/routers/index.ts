@@ -3,6 +3,7 @@ import type { Prisma } from "@warden/db";
 import {
   CAPTURE_RATE_LIMIT_PER_HOUR,
   DEFAULT_TIME_ZONE,
+  compareAgentVersions,
   evaluatePolicy,
   generateDeviceToken,
   generatePairingCode,
@@ -153,6 +154,100 @@ function toFamilyClientView<T extends { parentPin?: string | null }>(family: T) 
     ...rest,
     hasParentPin: Boolean(parentPin && parentPin.length > 0),
   };
+}
+
+const AGENT_RELEASES_BUCKET = "agent-releases";
+const agentReleaseChannelSchema = z.enum(["stable", "test"]);
+
+type AgentReleaseRow = {
+  version: string;
+  sha256: string;
+  sizeBytes: number;
+  mandatory: boolean;
+  publishedAt: Date;
+  storageKey: string;
+};
+
+async function findLatestAgentRelease(
+  channel: "stable" | "test"
+): Promise<AgentReleaseRow | null> {
+  return prisma.agentRelease.findFirst({
+    where: { channel },
+    orderBy: { publishedAt: "desc" },
+    select: {
+      version: true,
+      sha256: true,
+      sizeBytes: true,
+      mandatory: true,
+      publishedAt: true,
+      storageKey: true,
+    },
+  });
+}
+
+async function createAgentReleaseSignedUrl(
+  storageKey: string,
+  expiresInSeconds: number
+): Promise<string | null> {
+  if (!isSupabaseConfigured()) {
+    return null;
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase.storage
+    .from(AGENT_RELEASES_BUCKET)
+    .createSignedUrl(storageKey, expiresInSeconds);
+
+  if (error || !data?.signedUrl) {
+    return null;
+  }
+
+  return data.signedUrl;
+}
+
+/** Best-effort update hint for agents; never throws. */
+async function getHeartbeatUpdateHint(
+  agentVersion: string
+): Promise<{
+  version: string;
+  sha256: string;
+  sizeBytes: number;
+  mandatory: boolean;
+  downloadUrl: string;
+} | null> {
+  try {
+    if (!isSupabaseConfigured()) {
+      return null;
+    }
+
+    const latest = await findLatestAgentRelease("stable");
+    if (!latest) {
+      return null;
+    }
+
+    if (compareAgentVersions(latest.version, agentVersion) <= 0) {
+      return null;
+    }
+
+    const downloadUrl = await createAgentReleaseSignedUrl(
+      latest.storageKey,
+      30 * 60
+    );
+    if (!downloadUrl) {
+      return null;
+    }
+
+    return {
+      version: latest.version,
+      sha256: latest.sha256,
+      sizeBytes: latest.sizeBytes,
+      mandatory: latest.mandatory,
+      downloadUrl,
+    };
+  } catch (error) {
+    console.error("[agentRelease] heartbeat update lookup failed", error);
+    return null;
+  }
 }
 
 const allowedWindowSchema = z.object({
@@ -1734,7 +1829,8 @@ export const agentRouter = router({
         }).catch(() => {});
       }
 
-      return { ok: true };
+      const update = await getHeartbeatUpdateHint(input.agentVersion);
+      return update ? { ok: true as const, update } : { ok: true as const };
     }),
 
   getPolicy: agentProcedure.query(async ({ ctx }) => {
@@ -2111,6 +2207,51 @@ export const agentRouter = router({
   }),
 });
 
+export const agentReleaseRouter = router({
+  latest: parentProcedure
+    .input(
+      z
+        .object({
+          channel: agentReleaseChannelSchema.default("stable"),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const channel = input?.channel ?? "stable";
+
+      try {
+        if (!isSupabaseConfigured()) {
+          return null;
+        }
+
+        const latest = await findLatestAgentRelease(channel);
+        if (!latest) {
+          return null;
+        }
+
+        const downloadUrl = await createAgentReleaseSignedUrl(
+          latest.storageKey,
+          3600
+        );
+        if (!downloadUrl) {
+          return null;
+        }
+
+        return {
+          version: latest.version,
+          sha256: latest.sha256,
+          sizeBytes: latest.sizeBytes,
+          mandatory: latest.mandatory,
+          publishedAt: latest.publishedAt,
+          downloadUrl,
+        };
+      } catch (error) {
+        console.error("[agentRelease] latest lookup failed", error);
+        return null;
+      }
+    }),
+});
+
 export const appRouter = router({
   auth: authRouter,
   family: familyRouter,
@@ -2121,6 +2262,7 @@ export const appRouter = router({
   dashboard: dashboardRouter,
   snapshot: snapshotRouter,
   agent: agentRouter,
+  agentRelease: agentReleaseRouter,
 });
 
 export type AppRouter = typeof appRouter;

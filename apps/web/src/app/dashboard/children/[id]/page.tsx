@@ -31,6 +31,7 @@ import {
   Video,
   ChevronDown,
   Bell,
+  Download,
 } from "lucide-react";
 import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/dev-config";
@@ -149,6 +150,13 @@ export default function ChildDetailPage() {
       refetchInterval: POLL_HEARTBEAT_MS,
     }
   );
+  // Re-enable after Supabase plan upgrade (Free plan caps Storage objects at 50MB;
+  // the MSI is ~84MB). Publish with: npm run publish:agent -- --msi …
+  const INSTALLER_DOWNLOAD_ENABLED = false;
+  const { data: latestRelease, isLoading: latestReleaseLoading } =
+    trpc.agentRelease.latest.useQuery(undefined, {
+      enabled: INSTALLER_DOWNLOAD_ENABLED,
+    });
   const updatePolicy = trpc.policy.update.useMutation({
     onSuccess: () => {
       utils.policy.getEvaluation.invalidate({ childId });
@@ -1298,6 +1306,61 @@ export default function ChildDetailPage() {
                   : "Generate pairing code"}
               </Button>
             )}
+
+            <div className="space-y-2 pt-1 border-t border-border">
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto"
+                disabled={
+                  !INSTALLER_DOWNLOAD_ENABLED ||
+                  !latestRelease?.downloadUrl ||
+                  latestReleaseLoading
+                }
+                onClick={() => {
+                  if (
+                    !INSTALLER_DOWNLOAD_ENABLED ||
+                    !latestRelease?.downloadUrl
+                  ) {
+                    return;
+                  }
+                  window.open(
+                    latestRelease.downloadUrl,
+                    "_blank",
+                    "noopener,noreferrer"
+                  );
+                }}
+                title={
+                  !INSTALLER_DOWNLOAD_ENABLED
+                    ? "Temporarily unavailable"
+                    : latestRelease
+                      ? `Download Warden ${latestRelease.version} for Windows`
+                      : "Installer not published yet"
+                }
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download for Windows
+              </Button>
+              {!INSTALLER_DOWNLOAD_ENABLED ? (
+                <p className="text-xs text-muted-foreground">
+                  Temporarily unavailable
+                </p>
+              ) : latestReleaseLoading ? (
+                <p className="text-xs text-muted-foreground">
+                  Checking for installer…
+                </p>
+              ) : latestRelease ? (
+                <p className="text-xs text-muted-foreground">
+                  v{latestRelease.version}
+                  {latestRelease.sizeBytes > 0
+                    ? ` · ~${(latestRelease.sizeBytes / (1024 * 1024)).toFixed(0)} MB`
+                    : ""}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Installer not published yet
+                </p>
+              )}
+            </div>
 
             {pairingNotice && (
               <p

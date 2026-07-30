@@ -42,3 +42,7 @@ yarn-error.log*
 
 # Agent local config
 apps/agent/**/appsettings.Development.json
+
+# Agent installer outputs
+apps/agent/artifacts/
+apps/agent/Warden.Installer/obj/bootstrap/

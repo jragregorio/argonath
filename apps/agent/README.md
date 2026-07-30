@@ -2,21 +2,47 @@
 
 .NET 8 Windows app for system-wide screen time enforcement.
 
-## Recommended install: `Warden.Tray`
+## Recommended install: MSI (`Warden.Installer`)
 
-Use **`Warden.Tray`** on child devices. It is the full desktop app:
+On child PCs, prefer the **per-machine MSI** (installs to `C:\Program Files\Warden\`). See [ADR-0003](../../docs/decisions/0003-per-machine-wix-msi-logon-task.md).
 
-- Shows a **time remaining** countdown the child can open any time
-- Runs in the system tray after the window is closed
-- Enforces screen-time limits and parent lockdown
-- Handles realtime commands (lock, capture, policy updates)
+### Build the MSI
 
-The child can see time left in two places:
+Requires WiX Toolset SDK restore via NuGet (no separate WiX install). From `apps/agent`:
 
-1. **Warden window** — large `HH:MM:SS` countdown plus used/limit minutes
-2. **Tray icon tooltip** — hover the shield icon for a quick `Xm YYs left` summary
+```powershell
+.\build-installer.ps1
+# Optional staging override:
+.\build-installer.ps1 -ApiBaseUrl https://staging.example
+```
 
-Use tray **Open Warden** or double-click the tray icon to reopen the status window.
+Output: `apps/agent/artifacts/Warden-<version>-x64.msi` (script prints SHA-256 and size).
+
+`Warden.Installer` is **not** in `Warden.sln` on purpose — harvesting the ~256 MB self-contained publish would slow every `dotnet build`. Only build it via `build-installer.ps1`.
+
+The dashboard URL baked into install-time `warden.json` comes from **`Warden.Tray/warden.json`** (`apiBaseUrl`) by default. `-ApiBaseUrl` / MSBuild `WardenApiBaseUrl` are staging overrides only. Release MSI builds **fail** if the effective URL is empty, still the placeholder, or not an absolute `http(s)` URI. After pairing, `%LOCALAPPDATA%\Warden\config.json` wins over `warden.json`.
+
+On first install, pass `CHILDUSER` explicitly (persisted to `HKLM\SOFTWARE\Warden\ChildUser` for later unattended upgrades). Under UAC, default `LogonUser` is often the elevating admin — not the child.
+
+Optional future signing: `-p:SignMsi=true -p:CertificateThumbprint=...` (hook is in the `.wixproj`; unsigned by default).
+
+### Install on a child PC (elevated)
+
+```powershell
+msiexec /i Warden-0.5.11-x64.msi CHILDUSER="CHILDPC\ChildAccount"
+```
+
+`CHILDUSER` is the Windows account that should get the logon scheduled task. Under UAC, the default `LogonUser` is often the **elevating admin**, not the child — always pass `CHILDUSER` explicitly on family PCs.
+
+The installer:
+
+- Installs per-machine to `C:\Program Files\Warden\`
+- Creates a Start Menu shortcut (no desktop shortcut)
+- Registers a SYSTEM-created logon task for `CHILDUSER` (LeastPrivilege)
+- Best-effort removes a legacy HKCU `Run\Warden` value if reachable
+- Does **not** touch `%LOCALAPPDATA%\Warden\config.json` (pairing survives upgrade and uninstall)
+
+When the installer-managed task exists, the tray **Start with Windows** item is checked and disabled.
 
 ## Projects
 
@@ -26,10 +52,11 @@ Use tray **Open Warden** or double-click the tray icon to reopen the status wind
 | `Warden.Core` | Shared logic: API client, policy engine, idle detection, capture |
 | `Warden.LockUI` | Full-screen WPF lock overlay |
 | `Warden.Agent` | Optional Windows Service (no child UI; advanced/headless use only) |
+| `Warden.Installer` | WiX 6 MSI (build via `build-installer.ps1` only; not in `Warden.sln`) |
 
 ## Prerequisites
 
-- .NET 8 SDK (to build) or a published `Warden.Tray.exe`
+- .NET 8 SDK (to build) or the MSI / published `Warden.Tray.exe`
 - Windows 10/11
 
 ## Development
@@ -41,7 +68,7 @@ dotnet run --project Warden.Tray
 
 Closing the window keeps Warden running in the tray. Exit requires the parent PIN.
 
-## Publish for a child PC
+## Manual publish (dev / zip fallback)
 
 ```bash
 # Self-contained: includes the .NET runtime (no separate install on the child PC)
@@ -62,7 +89,7 @@ Before copying to a child machine, edit `warden.json` in the publish folder and 
 }
 ```
 
-Copy the whole publish folder to the child PC (for example `C:\Program Files\Warden\`), run `Warden.Tray.exe` once to pair, then enable **Start with Windows** from the tray menu.
+Prefer the MSI for real child PCs. Zip/copy remains useful for local debugging.
 
 ## Pairing
 

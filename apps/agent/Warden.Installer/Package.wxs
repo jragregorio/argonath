@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Warden per-machine MSI authoring (WiX 6).
+
+  UpgradeCode below is STABLE product identity for major upgrades.
+  NEVER change UpgradeCode across releases or Windows Installer will treat
+  new builds as a different product and upgrades will silently fail to replace
+  the old install.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Package
+    Name="Warden"
+    Manufacturer="Warden"
+    Version="$(ProductVersion)"
+    UpgradeCode="A26D27AF-3996-49CE-A7EF-138FB23851BA"
+    Scope="perMachine"
+    InstallerVersion="500"
+    Compressed="yes"
+    Language="1033">
+
+    <SummaryInformation Description="Warden parental screen-time agent" />
+
+    <MajorUpgrade
+      Schedule="afterInstallInitialize"
+      AllowSameVersionUpgrades="yes"
+      DowngradeErrorMessage="A newer version of Warden is already installed. Downgrading is not supported. Remove the newer version first, or install a newer build." />
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Close running agent processes before upgrade/uninstall.
+         Note: hard terminate skips tray ClearAdminLockAsync — if locked mid-upgrade,
+         the dashboard may show a stale lock until Phase 3/4 handles graceful shutdown. -->
+    <util:CloseApplication
+      Id="CloseWardenTray"
+      Target="Warden.Tray.exe"
+      CloseMessage="yes"
+      TerminateProcess="1"
+      RebootPrompt="no"
+      Timeout="5" />
+    <util:CloseApplication
+      Id="CloseWardenAgent"
+      Target="Warden.Agent.exe"
+      CloseMessage="yes"
+      TerminateProcess="1"
+      RebootPrompt="no"
+      Timeout="5" />
+
+    <!-- ARP -->
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Icon Id="Warden.exe" SourceFile="..\Warden.Tray\warden_icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="Warden.exe" />
+
+    <!--
+      CHILDUSER resolution (Phase 3 upgrade-safe):
+        1) explicit msiexec command line
+        2) persisted HKLM\SOFTWARE\Warden\ChildUser (via CHILDUSER_REG AppSearch)
+        3) [LogonUser] fallback
+      RegistrySearch must NOT write CHILDUSER directly or it would overwrite cmdline.
+    -->
+    <Property Id="CHILDUSER" Secure="yes" />
+    <Property Id="CHILDUSER_REG" Secure="yes">
+      <RegistrySearch
+        Id="FindPersistedChildUser"
+        Root="HKLM"
+        Key="SOFTWARE\Warden"
+        Name="ChildUser"
+        Type="raw"
+        Bitness="always64" />
+    </Property>
+    <SetProperty
+      Id="CHILDUSER"
+      Action="SetChildUserFromReg"
+      Value="[CHILDUSER_REG]"
+      After="AppSearch"
+      Sequence="first"
+      Condition="NOT CHILDUSER AND CHILDUSER_REG" />
+    <SetProperty
+      Id="CHILDUSER"
+      Action="SetChildUserFromLogon"
+      Value="[LogonUser]"
+      After="SetChildUserFromReg"
+      Sequence="first"
+      Condition="NOT CHILDUSER" />
+
+    <Feature Id="Main" Title="Warden" Level="1">
+      <ComponentGroupRef Id="HarvestedPublishFiles" />
+      <ComponentGroupRef Id="InstallerExtras" />
+    </Feature>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Warden" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Warden" />
+    </StandardDirectory>
+
+  </Package>
+
+  <!--
+    Pairing state lives at %LOCALAPPDATA%\Warden\config.json (per-user, outside
+    this package). No component targets LocalAppDataFolder and no custom action
+    deletes it, so config.json survives major upgrade AND full uninstall.
+  -->
+
+  <Fragment>
+    <ComponentGroup Id="HarvestedPublishFiles" Directory="INSTALLFOLDER">
+      <!-- WiX v5+/v6 auto-harvest (not heat.exe). Exclude publish-folder warden.json
+           and Warden.Tray.exe (hand-authored below for advertised Start Menu shortcut). -->
+      <Files Include="$(PublishDir)**">
+        <Exclude Files="$(PublishDir)warden.json" />
+        <Exclude Files="$(PublishDir)Warden.Tray.exe" />
+      </Files>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="InstallerExtras" Directory="INSTALLFOLDER">
+      <Component Id="BootstrapWardenJson" Guid="0B94B373-4DC8-4FAE-AE00-AC4A4CD2D6B0">
+        <File Id="BootstrapWardenJsonFile" Source="$(BootstrapJsonDir)warden.json" KeyPath="yes" />
+      </Component>
+
+      <Component Id="RegisterStartupScript" Guid="8BE294C0-EACF-4340-84D3-8CF3CA3DEC0A">
+        <File Source="assets\Register-WardenStartup.ps1" KeyPath="yes" />
+      </Component>
+
+      <Component Id="UnregisterStartupScript" Guid="03960AA6-A8BB-4090-AB6B-0E2197BF6A9A">
+        <File Source="assets\Unregister-WardenStartup.ps1" KeyPath="yes" />
+      </Component>
+
+      <!-- Persist resolved CHILDUSER for unattended/SYSTEM upgrades (Phase 3). -->
+      <Component Id="PersistedChildUser" Guid="C4E8F1A2-6B3D-4E9F-A0C1-2D3E4F5A6B7C">
+        <RegistryValue
+          Root="HKLM"
+          Key="SOFTWARE\Warden"
+          Name="ChildUser"
+          Type="string"
+          Value="[CHILDUSER]"
+          KeyPath="yes" />
+      </Component>
+
+      <!--
+        Per-machine Start Menu shortcut: KeyPath is the exe under Program Files.
+        Non-advertised + HKLM KeyPath fails ICE43/ICE57 on WiX 6 even when the
+        component Directory is INSTALLFOLDER. Advertise="yes" is the ICE-clean
+        per-machine pattern (refcount follows the machine-wide File, not HKCU).
+      -->
+      <Component Id="WardenTrayExe" Guid="A65FE122-EA32-4016-A7D9-8A458DA95FCE">
+        <File Id="WardenTrayExeFile" Source="$(PublishDir)Warden.Tray.exe" KeyPath="yes">
+          <Shortcut
+            Id="WardenStartMenuShortcut"
+            Name="Warden"
+            Description="Warden screen-time agent"
+            Advertise="yes"
+            Directory="ApplicationProgramsFolder"
+            WorkingDirectory="INSTALLFOLDER"
+            Icon="Warden.exe"
+            IconIndex="0" />
+        </File>
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <!-- Deferred SYSTEM actions: register / remove logon task for CHILDUSER. -->
+    <SetProperty
+      Id="CreateWardenTask"
+      Value="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]Register-WardenStartup.ps1&quot; -ExePath &quot;[INSTALLFOLDER]Warden.Tray.exe&quot; -UserId &quot;[CHILDUSER]&quot; -TaskName &quot;Warden\WardenTray&quot;"
+      Before="CreateWardenTask"
+      Sequence="execute"
+      Condition="NOT REMOVE" />
+
+    <CustomAction
+      Id="CreateWardenTask"
+      BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+      DllEntry="WixQuietExec"
+      Execute="deferred"
+      Impersonate="no"
+      Return="check" />
+
+    <SetProperty
+      Id="DeleteWardenTask"
+      Value="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]Unregister-WardenStartup.ps1&quot; -TaskName &quot;Warden\WardenTray&quot;"
+      Before="DeleteWardenTask"
+      Sequence="execute" />
+
+    <CustomAction
+      Id="DeleteWardenTask"
+      BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+      DllEntry="WixQuietExec"
+      Execute="deferred"
+      Impersonate="no"
+      Return="ignore" />
+
+    <SetProperty
+      Id="RollbackWardenTask"
+      Value="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]Unregister-WardenStartup.ps1&quot; -TaskName &quot;Warden\WardenTray&quot;"
+      Before="RollbackWardenTask"
+      Sequence="execute"
+      Condition="NOT REMOVE" />
+
+    <CustomAction
+      Id="RollbackWardenTask"
+      BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+      DllEntry="WixQuietExec"
+      Execute="rollback"
+      Impersonate="no"
+      Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="CreateWardenTask" After="InstallFiles" Condition="NOT REMOVE" />
+      <Custom Action="RollbackWardenTask" Before="CreateWardenTask" Condition="NOT REMOVE" />
+      <!-- On full uninstall, delete task while files (script) still present. -->
+      <Custom Action="DeleteWardenTask" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+  </Fragment>
+
+</Wix>

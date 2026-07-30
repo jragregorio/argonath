@@ -266,3 +266,19 @@ model CaptureRateLimit {
   @@unique([deviceId, hourStart])
   @@index([deviceId])
 }
+
+/// Published Windows agent MSI metadata (artifact lives in Supabase Storage `agent-releases`).
+model AgentRelease {
+  id          String   @id @default(cuid())
+  version     String // semver-ish "0.5.11" (Major.Minor.Build as used by agent)
+  channel     String   @default("stable") // "stable" | "test"
+  storageKey  String // e.g. releases/stable/Warden-0.5.11-x64.msi
+  sha256      String // lowercase hex
+  sizeBytes   Int
+  mandatory   Boolean  @default(false)
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@unique([channel, version])
+  @@index([channel, publishedAt])
+}

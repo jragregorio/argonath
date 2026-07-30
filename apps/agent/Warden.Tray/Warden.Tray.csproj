@@ -8,8 +8,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
     <RootNamespace>Warden.Tray</RootNamespace>
-    <Version>0.5.11</Version>
-    <ApplicationIcon />
+    <ApplicationIcon>warden_icon.ico</ApplicationIcon>
     <StartupObject>Warden.Tray.Program</StartupObject>
   </PropertyGroup>
 
@@ -24,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="warden_icon.ico" LogicalName="Warden.Tray.warden_icon.ico" />
     <None Update="warden.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

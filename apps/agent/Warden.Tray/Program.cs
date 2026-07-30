@@ -15,6 +15,7 @@ static class Program
     private static System.Windows.Forms.Timer? _tickTimer;
     private static System.Windows.Forms.Timer? _captureTimer;
     private static NotifyIcon? _trayIcon;
+    private static Icon? _trayIconOwned;
     private static MainWindow? _mainWindow;
     private static DateTime _lastHeartbeatAt = DateTime.UtcNow;
     private static ConfigStore? _configStore;
@@ -41,6 +42,19 @@ static class Program
         _configStore = new ConfigStore();
         var http = new HttpClient();
         var api = new WardenApiClient(http, _configStore);
+
+        // Touch config early so corrupt/empty files are discarded before pairing checks.
+        _ = _configStore.Load();
+        if (_configStore.ConsumeCorruptConfigRecovery())
+        {
+            MessageBox.Show(
+                "The local Warden configuration was missing or damaged, so this device needs to be paired again.\n\n"
+                    + "Open the parent dashboard, generate a pairing code, and enter it on the next screen.",
+                "Warden",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning
+            );
+        }
 
         if (!_configStore.IsPaired())
         {
@@ -236,44 +250,76 @@ static class Program
         app.Run();
     }
 
+    private static Icon? TryLoadEmbeddedTrayIcon()
+    {
+        try
+        {
+            var asm = typeof(Program).Assembly;
+            using var stream = asm.GetManifestResourceStream("Warden.Tray.warden_icon.ico");
+            if (stream is null)
+            {
+                return null;
+            }
+
+            // Clone so the icon outlives the stream; request 16px for the tray.
+            using var loaded = new Icon(stream, 16, 16);
+            return (Icon)loaded.Clone();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static void SetupTray()
     {
+        _trayIconOwned = TryLoadEmbeddedTrayIcon();
         _trayIcon = new NotifyIcon
         {
-            Icon = SystemIcons.Shield,
+            Icon = _trayIconOwned ?? SystemIcons.Shield,
             Text = "Warden",
             Visible = true
         };
         UpdateTrayStatusText();
 
         var menu = new ContextMenuStrip();
+        menu.ShowItemToolTips = true;
         menu.Items.Add(
             "Open Warden",
             null,
             (_, _) => _mainWindow?.Dispatcher.Invoke(() => _mainWindow.ShowFromTray())
         );
+        var installerManagedStartup = StartupHelper.IsInstallerManaged();
         var startupItem = new ToolStripMenuItem("Start with Windows")
         {
-            Checked = StartupHelper.IsEnabled(),
-            CheckOnClick = true
+            Checked = installerManagedStartup || StartupHelper.IsEnabled(),
+            CheckOnClick = !installerManagedStartup,
+            Enabled = !installerManagedStartup,
         };
-        startupItem.Click += (_, _) =>
+        if (installerManagedStartup)
         {
-            try
+            startupItem.ToolTipText = "Startup is managed by the Warden installer.";
+        }
+        else
+        {
+            startupItem.Click += (_, _) =>
             {
-                StartupHelper.SetEnabled(startupItem.Checked);
-            }
-            catch (Exception ex)
-            {
-                startupItem.Checked = StartupHelper.IsEnabled();
-                MessageBox.Show(
-                    ex.Message,
-                    "Warden",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning
-                );
-            }
-        };
+                try
+                {
+                    StartupHelper.SetEnabled(startupItem.Checked);
+                }
+                catch (Exception ex)
+                {
+                    startupItem.Checked = StartupHelper.IsEnabled();
+                    MessageBox.Show(
+                        ex.Message,
+                        "Warden",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning
+                    );
+                }
+            };
+        }
         menu.Items.Add(startupItem);
         menu.Items.Add(
             "Refresh policy",
@@ -547,6 +593,12 @@ static class Program
                 _trayIcon.Visible = false;
                 _trayIcon.Dispose();
                 _trayIcon = null;
+            }
+
+            if (_trayIconOwned != null)
+            {
+                _trayIconOwned.Dispose();
+                _trayIconOwned = null;
             }
 
             try

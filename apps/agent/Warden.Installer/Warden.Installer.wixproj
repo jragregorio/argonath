@@ -1,0 +1,67 @@
+<Project Sdk="WixToolset.Sdk/6.0.2">
+
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <OutputName>Warden</OutputName>
+    <Platform>x64</Platform>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <!-- Unsigned for now. Later: set SignMsi=true and CertificateThumbprint (or SignToolArgs). -->
+    <SignMsi Condition="'$(SignMsi)' == ''">false</SignMsi>
+    <!-- WardenApiBaseUrl: staging override. build-installer.ps1 normally reads
+         apps/agent/Warden.Tray/warden.json (single source of truth) and passes it here.
+         Obviously-wrong default; Release builds fail if left as-is. -->
+    <WardenApiBaseUrl Condition="'$(WardenApiBaseUrl)' == ''">https://WARDEN_API_BASE_URL_NOT_SET.invalid</WardenApiBaseUrl>
+    <!-- PublishDir must be absolute and end with a trailing slash. Passed by build-installer.ps1. -->
+    <PublishDir Condition="'$(PublishDir)' == ''">$([MSBuild]::EnsureTrailingSlash($([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\Warden.Tray\bin\Release\net8.0-windows\win-x64\publish'))))</PublishDir>
+    <BootstrapJsonDir>$([MSBuild]::EnsureTrailingSlash($([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)obj\bootstrap'))))</BootstrapJsonDir>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Escape backslashes for preprocessor DefineConstants. -->
+    <DefineConstants>ProductVersion=$(Version);PublishDir=$(PublishDir.Replace('\', '\\'));BootstrapJsonDir=$(BootstrapJsonDir.Replace('\', '\\'))</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" Version="6.0.2" />
+  </ItemGroup>
+
+  <!--
+    NOT referenced from Warden.sln on purpose: harvesting a ~256 MB self-contained
+    publish would wreck the inner-loop `dotnet build Warden.sln`. Build via
+    apps/agent/build-installer.ps1 only.
+  -->
+
+  <Target Name="ValidatePublishDir" BeforeTargets="BeforeBuild">
+    <Error
+      Condition="!Exists('$(PublishDir)Warden.Tray.exe')"
+      Text="PublishDir does not contain Warden.Tray.exe: '$(PublishDir)'. Run apps/agent/build-installer.ps1 (or publish Tray first) and pass -p:PublishDir=..." />
+    <Error
+      Condition="'$(Configuration)' == 'Release' AND ($(WardenApiBaseUrl.Contains('WARDEN_API_BASE_URL_NOT_SET')) OR '$(WardenApiBaseUrl)' == '')"
+      Text="WardenApiBaseUrl must be set to the live dashboard URL for Release MSI builds. Example: -p:WardenApiBaseUrl=https://your-app.vercel.app" />
+  </Target>
+
+  <Target Name="WriteBootstrapWardenJson" AfterTargets="ValidatePublishDir" BeforeTargets="BeforeBuild">
+    <MakeDir Directories="$(BootstrapJsonDir)" />
+    <PropertyGroup>
+      <_BootstrapJson>{&#10;  "apiBaseUrl": "$(WardenApiBaseUrl)"&#10;}&#10;</_BootstrapJson>
+    </PropertyGroup>
+    <WriteLinesToFile
+      File="$(BootstrapJsonDir)warden.json"
+      Lines="$(_BootstrapJson)"
+      Overwrite="true"
+      Encoding="UTF-8" />
+  </Target>
+
+  <!-- Optional Authenticode signing hook (no-op unless SignMsi=true). -->
+  <Target Name="SignMsiOutput" AfterTargets="Build" Condition="'$(SignMsi)' == 'true'">
+    <Error
+      Condition="'$(CertificateThumbprint)' == '' AND '$(SignToolArgs)' == ''"
+      Text="SignMsi=true requires CertificateThumbprint or SignToolArgs." />
+    <PropertyGroup>
+      <_SignArgs Condition="'$(SignToolArgs)' != ''">$(SignToolArgs)</_SignArgs>
+      <_SignArgs Condition="'$(SignToolArgs)' == ''">sign /fd SHA256 /sha1 $(CertificateThumbprint) /tr http://timestamp.digicert.com /td SHA256</_SignArgs>
+    </PropertyGroup>
+    <Exec Command="signtool $(_SignArgs) &quot;$(TargetPath)&quot;" />
+  </Target>
+
+</Project>

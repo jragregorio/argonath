@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <Version>0.5.11</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+    <Company>Warden</Company>
+    <Product>Warden</Product>
+    <Authors>Warden</Authors>
+  </PropertyGroup>
+</Project>
