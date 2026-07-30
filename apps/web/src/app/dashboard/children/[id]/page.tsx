@@ -222,6 +222,7 @@ export default function ChildDetailPage() {
       setIsActive(null);
       setPolicySavedAt(Date.now());
       setPolicyEditorOpen(false);
+      setScheduleDialogOpen(false);
     },
   });
   const clearBonus = trpc.extension.clearBonus.useMutation({
@@ -707,6 +708,32 @@ export default function ChildDetailPage() {
     });
   };
 
+  const handleSaveSchedule = (windows: AllowedWindow[]) => {
+    updatePolicy.mutate({
+      childId,
+      dailyLimitMinutes: currentLimit,
+      allowedWindows: windows,
+      isActive: currentActive,
+    });
+  };
+
+  const scheduleAlsoSavingNote = (() => {
+    const notes: string[] = [];
+    if (currentLimit !== savedLimit) {
+      notes.push(`daily limit (${currentLimit} min)`);
+    }
+    if (currentActive !== savedActive) {
+      notes.push(`policy ${currentActive ? "on" : "off"}`);
+    }
+    if (notes.length === 0) return null;
+    return `Also saves your unsaved ${notes.join(" and ")}`;
+  })();
+
+  const openScheduleDialog = () => {
+    updatePolicy.reset();
+    setScheduleDialogOpen(true);
+  };
+
   const discardPolicyChanges = () => {
     setDailyLimit(null);
     setAllowedWindows(null);
@@ -867,7 +894,7 @@ export default function ChildDetailPage() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setScheduleDialogOpen(true)}
+              onClick={openScheduleDialog}
             >
               Edit schedule
             </Button>
@@ -1576,8 +1603,15 @@ export default function ChildDetailPage() {
       <AllowedWindowsDialog
         open={scheduleDialogOpen}
         windows={currentWindows}
-        onApply={setAllowedWindows}
+        onSave={handleSaveSchedule}
         onClose={() => setScheduleDialogOpen(false)}
+        saving={updatePolicy.isPending}
+        errorMessage={
+          scheduleDialogOpen && updatePolicy.isError
+            ? updatePolicy.error.message || "Could not save schedule"
+            : null
+        }
+        alsoSavingNote={scheduleAlsoSavingNote}
       />
 
       <BottomSheet
