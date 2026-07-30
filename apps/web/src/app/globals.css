@@ -102,6 +102,33 @@ body {
   animation: home-glow 8s ease-in-out infinite;
 }
 
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-foreground) 12%, transparent) 45%,
+    color-mix(in srgb, var(--color-foreground) 22%, transparent) 55%,
+    transparent 100%
+  );
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .home-rise,
   .home-rise-delay-1,
@@ -109,6 +136,10 @@ body {
   .home-rise-delay-3,
   .home-fade,
   .home-glow {
+    animation: none;
+  }
+
+  .skeleton-shimmer::after {
     animation: none;
   }
 }

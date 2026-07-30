@@ -107,12 +107,13 @@ export default function SettingsPage() {
   const isAdmin = me?.role === "Admin";
 
   return (
-    <div className="space-y-8 max-w-xl">
+    <div className="space-y-8 max-w-5xl">
       <PageHeader
         title="Settings"
         description="Account, family, and security settings"
       />
 
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
       <Card>
         <CardHeader>
           <CardTitle>Account</CardTitle>
@@ -489,6 +490,7 @@ export default function SettingsPage() {
           </form>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
