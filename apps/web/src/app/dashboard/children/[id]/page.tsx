@@ -15,7 +15,11 @@ import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChildDetailSkeleton } from "@/components/dashboard-skeletons";
 import type { AllowedWindow, PolicyStatus } from "@warden/shared";
-import { getDeviceDisplayName, getPolicyStatusLabel } from "@warden/shared";
+import {
+  getDeviceDisplayName,
+  getPolicyReach,
+  getPolicyStatusLabel,
+} from "@warden/shared";
 import {
   ArrowLeft,
   Camera,
@@ -82,6 +86,70 @@ function windowsEqual(a: AllowedWindow[], b: AllowedWindow[]) {
       window.start === b[i].start &&
       window.end === b[i].end
   );
+}
+
+function formatDayRange(days: number[]): string {
+  if (days.length === 0) return "";
+  const sorted = [...days].sort((a, b) => a - b);
+  const labels = sorted.map(
+    (day) => DAYS.find((d) => d.value === day)?.label ?? `Day ${day}`
+  );
+  // Collapse contiguous runs: Mon,Tue,Wed,Thu,Fri → Mon-Fri
+  const ranges: string[] = [];
+  let start = 0;
+  for (let i = 1; i <= sorted.length; i++) {
+    const contiguous =
+      i < sorted.length && sorted[i] === sorted[i - 1] + 1;
+    if (!contiguous) {
+      if (i - 1 === start) {
+        ranges.push(labels[start]);
+      } else if (i - 1 === start + 1) {
+        ranges.push(`${labels[start]}, ${labels[i - 1]}`);
+      } else {
+        ranges.push(`${labels[start]}-${labels[i - 1]}`);
+      }
+      start = i;
+    }
+  }
+  return ranges.join(", ");
+}
+
+/** Group constrained days by capacity for accurate advisory copy. */
+function formatReachAdvisory(
+  constrainedDays: number[],
+  byDay: { day: number; capacityMinutes: number }[],
+  dailyLimitMinutes: number
+): string {
+  const capacityByDay = new Map(
+    byDay.map((d) => [d.day, d.capacityMinutes] as const)
+  );
+  const byCapacity = new Map<number, number[]>();
+  for (const day of constrainedDays) {
+    const capacity = capacityByDay.get(day) ?? 0;
+    const list = byCapacity.get(capacity) ?? [];
+    list.push(day);
+    byCapacity.set(capacity, list);
+  }
+  // Tightest first so the common single-group case matches prior wording.
+  const groups = [...byCapacity.entries()].sort((a, b) => a[0] - b[0]);
+
+  if (groups.length === 1) {
+    const [capacity, days] = groups[0];
+    return `On ${formatDayRange(days)} these hours only allow ${capacity} of the ${dailyLimitMinutes} minutes/day you've set.`;
+  }
+
+  const clauses = groups.map(([capacity, days], index) => {
+    const range = formatDayRange(days);
+    if (index === 0) {
+      return `On ${range} these hours allow only ${capacity} min`;
+    }
+    return `on ${range} ${capacity} min`;
+  });
+  const joined =
+    clauses.length === 2
+      ? `${clauses[0]}, and ${clauses[1]}`
+      : `${clauses.slice(0, -1).join(", ")}, and ${clauses[clauses.length - 1]}`;
+  return `${joined}, of the ${dailyLimitMinutes} minutes/day you've set.`;
 }
 
 function progressBarClass(status: PolicyStatus) {
@@ -721,19 +789,57 @@ export default function ChildDetailPage() {
   const effectiveLimit = evaluation
     ? evaluation.dailyLimitMinutes + evaluation.bonusMinutes
     : 0;
+  const dailyRemaining = evaluation?.dailyRemainingMinutes ?? 0;
   const remainingFraction =
     !evaluation || effectiveLimit <= 0
       ? 0
-      : Math.min(
-          1,
-          Math.max(0, evaluation.remainingMinutes / effectiveLimit)
-        );
+      : Math.min(1, Math.max(0, dailyRemaining / effectiveLimit));
   const usageFillClass =
     !evaluation ||
-    evaluation.status !== "allowed" ||
+    evaluation.status === "blocked" ||
     remainingFraction <= 0.2
       ? "bg-destructive/35"
-      : "bg-primary/30";
+      : evaluation.status === "outside_window"
+        ? "bg-yellow-500/35"
+        : "bg-primary/30";
+
+  const policyReach = getPolicyReach({
+    dailyLimitMinutes: currentLimit,
+    allowedWindows: currentWindows,
+  });
+  const showReachAdvisory =
+    policyReach.constrainedDays.length > 0 &&
+    policyReach.minWindowedCapacityMinutes !== null;
+  const hasRoomierScheduledDays = new Set(
+    policyReach.byDay
+      .filter((d) => policyReach.constrainedDays.includes(d.day))
+      .map((d) => d.capacityMinutes)
+  ).size > 1;
+
+  const evaluationStatusText = (() => {
+    if (!evaluation) return null;
+    if (
+      evaluation.limitingFactor === "none" ||
+      evaluation.remainingMinutes >= 999
+    ) {
+      return "Limits paused";
+    }
+    if (evaluation.status === "outside_window") {
+      const next = evaluation.nextWindowStart;
+      const daily = evaluation.dailyRemainingMinutes;
+      if (next && daily > 0) {
+        return `Available again: ${next} — ${daily} min of today's budget left`;
+      }
+      return evaluation.message ?? getPolicyStatusLabel(evaluation.status);
+    }
+    if (evaluation.status === "blocked") {
+      return evaluation.message ?? getPolicyStatusLabel(evaluation.status);
+    }
+    if (evaluation.limitingFactor === "window") {
+      return `${evaluation.remainingMinutes} min left now (allowed hours ending) · ${evaluation.dailyRemainingMinutes} min of daily budget left`;
+    }
+    return `${evaluation.remainingMinutes} min left now`;
+  })();
 
   const renderPolicyEditor = (
     idPrefix: string,
@@ -769,6 +875,33 @@ export default function ChildDetailPage() {
         onChange={setAllowedWindows}
         defaultExpanded={windowsExpanded}
       />
+
+      {showReachAdvisory && policyReach.minWindowedCapacityMinutes !== null && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 space-y-2">
+          <p className="text-sm text-foreground">
+            {formatReachAdvisory(
+              policyReach.constrainedDays,
+              policyReach.byDay,
+              currentLimit
+            )}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {hasRoomierScheduledDays
+              ? `The button below matches the daily limit to the tightest scheduled day, so days with longer windows are capped at ${policyReach.minWindowedCapacityMinutes} min too.`
+              : `The button below matches the daily limit to these hours, so the full window can be used.`}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setDailyLimit(policyReach.minWindowedCapacityMinutes!)
+            }
+          >
+            Set daily limit to {policyReach.minWindowedCapacityMinutes} min
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
         <Button
@@ -971,10 +1104,7 @@ export default function ChildDetailPage() {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {evaluation.status === "allowed"
-                    ? `${evaluation.remainingMinutes} min remaining`
-                    : evaluation.message ??
-                      getPolicyStatusLabel(evaluation.status)}
+                  {evaluationStatusText}
                 </p>
               </div>
             </div>

@@ -37,6 +37,11 @@ public class PinWindow : Window
         );
 
         _pinBox = UiTheme.PasswordField();
+        _pinBox.FontFamily = new System.Windows.Media.FontFamily("Consolas");
+        _pinBox.FontSize = 22;
+        _pinBox.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
+        _pinBox.Template = CreateCenteredPasswordTemplate();
+        _pinBox.MaxLength = 8;
         _pinBox.Margin = new Thickness(0, 8, 0, 16);
         root.Children.Add(_pinBox);
 
@@ -82,5 +87,55 @@ public class PinWindow : Window
                 Close();
             }
         };
+    }
+
+    /// <summary>
+    /// Default PasswordBox templates ignore HorizontalContentAlignment; this hosts
+    /// PART_ContentHost centered so the masked PIN matches the pairing code field.
+    /// </summary>
+    private static ControlTemplate CreateCenteredPasswordTemplate()
+    {
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(
+            Border.BackgroundProperty,
+            new TemplateBindingExtension(BackgroundProperty)
+        );
+        border.SetValue(
+            Border.BorderBrushProperty,
+            new TemplateBindingExtension(BorderBrushProperty)
+        );
+        border.SetValue(
+            Border.BorderThicknessProperty,
+            new TemplateBindingExtension(BorderThicknessProperty)
+        );
+        border.SetValue(Border.SnapsToDevicePixelsProperty, true);
+
+        var host = new FrameworkElementFactory(typeof(ScrollViewer));
+        host.Name = "PART_ContentHost";
+        host.SetValue(
+            FrameworkElement.MarginProperty,
+            new TemplateBindingExtension(PaddingProperty)
+        );
+        host.SetValue(
+            FrameworkElement.HorizontalAlignmentProperty,
+            System.Windows.HorizontalAlignment.Center
+        );
+        host.SetValue(
+            FrameworkElement.VerticalAlignmentProperty,
+            VerticalAlignment.Center
+        );
+        host.SetValue(UIElement.FocusableProperty, false);
+        host.SetValue(
+            ScrollViewer.HorizontalScrollBarVisibilityProperty,
+            ScrollBarVisibility.Hidden
+        );
+        host.SetValue(
+            ScrollViewer.VerticalScrollBarVisibilityProperty,
+            ScrollBarVisibility.Hidden
+        );
+
+        border.AppendChild(host);
+
+        return new ControlTemplate(typeof(PasswordBox)) { VisualTree = border };
     }
 }

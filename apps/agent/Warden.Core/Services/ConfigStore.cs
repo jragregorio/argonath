@@ -6,6 +6,7 @@ namespace Warden.Core.Services;
 public class ConfigStore
 {
     private readonly string _configPath;
+    private bool _recoveredFromCorruptConfig;
 
     public ConfigStore()
     {
@@ -26,6 +27,20 @@ public class ConfigStore
         }
     }
 
+    /// <summary>
+    /// True after a corrupt/empty config.json was discarded. Cleared when consumed.
+    /// </summary>
+    public bool ConsumeCorruptConfigRecovery()
+    {
+        if (!_recoveredFromCorruptConfig)
+        {
+            return false;
+        }
+
+        _recoveredFromCorruptConfig = false;
+        return true;
+    }
+
     public AgentConfig Load()
     {
         AgentConfig config;
@@ -36,8 +51,25 @@ public class ConfigStore
         }
         else
         {
-            var json = File.ReadAllText(_configPath);
-            config = JsonSerializer.Deserialize<AgentConfig>(json) ?? new AgentConfig();
+            try
+            {
+                var json = File.ReadAllText(_configPath);
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    DiscardCorruptConfig();
+                    config = new AgentConfig();
+                }
+                else
+                {
+                    config = JsonSerializer.Deserialize<AgentConfig>(json) ?? new AgentConfig();
+                }
+            }
+            catch (Exception)
+            {
+                // Empty, truncated, or unreadable config must not crash the tray app.
+                DiscardCorruptConfig();
+                config = new AgentConfig();
+            }
         }
 
         config.ApiBaseUrl = AgentBootstrap.ResolveApiBaseUrl(config);
@@ -60,5 +92,21 @@ public class ConfigStore
     {
         if (File.Exists(_configPath))
             File.Delete(_configPath);
+    }
+
+    private void DiscardCorruptConfig()
+    {
+        _recoveredFromCorruptConfig = true;
+        try
+        {
+            if (File.Exists(_configPath))
+            {
+                File.Delete(_configPath);
+            }
+        }
+        catch
+        {
+            // Best-effort cleanup; Load already falls back to unpaired defaults.
+        }
     }
 }

@@ -183,7 +183,12 @@ public class EnforcementEngine
 
         if (IdleTimeDetector.IsUserActive())
         {
-            _activeSecondsToday += elapsedSeconds;
+            // Do not burn daily budget while the lock screen is up (mouse jiggling, etc.).
+            // Still evaluate every tick so a window opening can unlock.
+            if (!_isLocked)
+            {
+                _activeSecondsToday += elapsedSeconds;
+            }
             _wasActive = true;
         }
         else if (_wasActive)
@@ -214,6 +219,8 @@ public class EnforcementEngine
         {
             evaluation.Status = "blocked";
             evaluation.RemainingMinutes = 0;
+            evaluation.DailyRemainingMinutes = 0;
+            evaluation.LimitingFactor = "daily_limit";
             evaluation.Message = "Locked down by parent";
         }
 
@@ -273,7 +280,7 @@ public class EnforcementEngine
                         new TimeWarningPayload
                         {
                             ThresholdMinutes = threshold,
-                            Message = FormatTimeWarningMessage(threshold)
+                            Message = FormatTimeWarningMessage(threshold, evaluation.LimitingFactor)
                         }
                     );
                 }
@@ -283,8 +290,22 @@ public class EnforcementEngine
         _lastRemainingMinutes = remaining;
     }
 
-    private static string FormatTimeWarningMessage(int thresholdMinutes) =>
-        thresholdMinutes switch
+    private static string FormatTimeWarningMessage(int thresholdMinutes, string limitingFactor)
+    {
+        if (limitingFactor == "window")
+        {
+            return thresholdMinutes switch
+            {
+                60 => "1 hour left before allowed hours end",
+                30 => "30 minutes left before allowed hours end",
+                10 => "10 minutes left before allowed hours end",
+                5 => "5 minutes left before allowed hours end",
+                1 => "1 minute left before allowed hours end",
+                _ => $"{thresholdMinutes} minutes left before allowed hours end"
+            };
+        }
+
+        return thresholdMinutes switch
         {
             60 => "1 hour of screen time left",
             30 => "30 minutes of screen time left",
@@ -293,6 +314,7 @@ public class EnforcementEngine
             1 => "1 minute of screen time left",
             _ => $"{thresholdMinutes} minutes of screen time left"
         };
+    }
 
     public async Task SendHeartbeatAsync()
     {

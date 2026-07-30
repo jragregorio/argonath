@@ -27,6 +27,7 @@ internal static class TrayStatusText
             0,
             (int)Math.Floor(limitSeconds - engine.UsedSecondsToday)
         );
+        remainingSeconds = Math.Min(remainingSeconds, Math.Max(0, eval.RemainingMinutes) * 60);
 
         if (remainingSeconds <= 0)
         {

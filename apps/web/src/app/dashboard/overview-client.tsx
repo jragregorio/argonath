@@ -378,11 +378,28 @@ export default function DashboardOverviewPage() {
               const effectiveLimit =
                 evaluation.dailyLimitMinutes + evaluation.bonusMinutes;
               const percent = remainingPercent(
-                evaluation.remainingMinutes,
+                evaluation.dailyRemainingMinutes,
                 effectiveLimit
               );
               const onlineDevices = child.devices.filter((d) => d.isOnline)
                 .length;
+
+              const statusText =
+                evaluation.limitingFactor === "none" ||
+                evaluation.remainingMinutes >= 999
+                  ? "Limits paused"
+                  : evaluation.status === "outside_window"
+                    ? evaluation.nextWindowStart &&
+                      evaluation.dailyRemainingMinutes > 0
+                      ? `Available again: ${evaluation.nextWindowStart} — ${evaluation.dailyRemainingMinutes} min of today's budget left`
+                      : (evaluation.message ??
+                        getPolicyStatusLabel(evaluation.status))
+                    : evaluation.status === "blocked"
+                      ? (evaluation.message ??
+                        getPolicyStatusLabel(evaluation.status))
+                      : evaluation.limitingFactor === "window"
+                        ? `${evaluation.remainingMinutes} min left now (allowed hours ending) · ${evaluation.dailyRemainingMinutes} min of daily budget left`
+                        : `${evaluation.remainingMinutes} min left now`;
 
               return (
                 <Card key={child.id}>
@@ -429,10 +446,7 @@ export default function DashboardOverviewPage() {
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {evaluation.status === "allowed"
-                          ? `${evaluation.remainingMinutes} min remaining`
-                          : evaluation.message ??
-                            getPolicyStatusLabel(evaluation.status)}
+                        {statusText}
                       </p>
                     </div>
                   </CardHeader>

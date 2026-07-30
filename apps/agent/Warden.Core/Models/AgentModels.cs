@@ -15,7 +15,7 @@ public class PairingRequest
 {
     public string Code { get; set; } = "";
     public string MachineName { get; set; } = "";
-    public string AgentVersion { get; set; } = "0.5.12";
+    public string AgentVersion { get; set; } = "0.5.13";
 }
 
 public class PairingResponse
@@ -34,7 +34,7 @@ public class HeartbeatRequest
     public int ActiveMinutesToday { get; set; }
     public int IdleMinutesToday { get; set; }
     public bool IsLocked { get; set; }
-    public string AgentVersion { get; set; } = "0.5.12";
+    public string AgentVersion { get; set; } = "0.5.13";
     public string MachineName { get; set; } = "";
 }
 
@@ -70,7 +70,13 @@ public class PolicyInfo
 public class PolicyEvaluation
 {
     public string Status { get; set; } = "allowed";
+    /// <summary>Session remaining: min(daily, window) when allowed; 0 blocked/outside; 999 inactive.</summary>
     public int RemainingMinutes { get; set; }
+    public int DailyRemainingMinutes { get; set; }
+    public int? WindowRemainingMinutes { get; set; }
+    /// <summary>"daily_limit" | "window" | "none"</summary>
+    public string LimitingFactor { get; set; } = "daily_limit";
+    public int ReachableMinutesToday { get; set; }
     public int UsedMinutes { get; set; }
     public int DailyLimitMinutes { get; set; }
     public int BonusMinutes { get; set; }

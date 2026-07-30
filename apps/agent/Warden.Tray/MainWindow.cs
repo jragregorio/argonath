@@ -303,6 +303,8 @@ public class MainWindow : Window
             0,
             (int)Math.Floor(limitSeconds - _engine.UsedSecondsToday)
         );
+        // Cap at session remaining so the countdown never promises past a closing window.
+        remainingSeconds = Math.Min(remainingSeconds, Math.Max(0, eval.RemainingMinutes) * 60);
 
         if (_engine.IsLocked || _engine.IsAdminLocked)
             remainingSeconds = 0;

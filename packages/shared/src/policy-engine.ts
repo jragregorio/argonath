@@ -1,7 +1,9 @@
 import type {
   AllowedWindow,
   ExtensionOverrideInput,
+  LimitingFactor,
   PolicyEvaluation,
+  PolicyReach,
   PolicyStatus,
   ScreenTimePolicyInput,
 } from "./types";
@@ -12,11 +14,119 @@ function parseTime(time: string): number {
   return hours * 60 + minutes;
 }
 
-function isWithinWindow(
+function formatMinutes(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours.toString().padStart(2, "0")}:${minutes
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+const DAY_NAMES = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/**
+ * Per day, sort by start and merge overlapping and adjacent runs.
+ * Does not merge across different days.
+ */
+export function mergeWindows(windows: AllowedWindow[]): AllowedWindow[] {
+  const byDay = new Map<number, AllowedWindow[]>();
+  for (const window of windows) {
+    const list = byDay.get(window.day) ?? [];
+    list.push(window);
+    byDay.set(window.day, list);
+  }
+
+  const result: AllowedWindow[] = [];
+  for (const day of [...byDay.keys()].sort((a, b) => a - b)) {
+    const sorted = [...(byDay.get(day) ?? [])].sort(
+      (a, b) => parseTime(a.start) - parseTime(b.start)
+    );
+    const merged: AllowedWindow[] = [];
+    for (const window of sorted) {
+      const start = parseTime(window.start);
+      const end = parseTime(window.end);
+      if (merged.length === 0) {
+        merged.push({ day, start: window.start, end: window.end });
+        continue;
+      }
+      const last = merged[merged.length - 1];
+      const lastEnd = parseTime(last.end);
+      // Overlapping or adjacent (start === lastEnd) → one run
+      if (start <= lastEnd) {
+        if (end > lastEnd) {
+          last.end = formatMinutes(end);
+        }
+      } else {
+        merged.push({ day, start: window.start, end: window.end });
+      }
+    }
+    result.push(...merged);
+  }
+  return result;
+}
+
+/** Total merged window minutes for one weekday (0 if none). */
+export function getWindowCapacityMinutes(
+  windows: AllowedWindow[],
+  day: number
+): number {
+  return mergeWindows(windows)
+    .filter((w) => w.day === day)
+    .reduce((sum, w) => sum + (parseTime(w.end) - parseTime(w.start)), 0);
+}
+
+/**
+ * Per-weekday capacity vs daily limit for the parent advisory.
+ * Computes from policy fields only (no usage / now).
+ */
+export function getPolicyReach(
+  policy: Pick<ScreenTimePolicyInput, "dailyLimitMinutes" | "allowedWindows">
+): PolicyReach {
+  const { dailyLimitMinutes, allowedWindows } = policy;
+  const hasAnyWindows = allowedWindows.length > 0;
+  const byDay: PolicyReach["byDay"] = [];
+  const constrainedDays: number[] = [];
+  let minWindowedCapacityMinutes: number | null = null;
+
+  for (let day = 1; day <= 7; day++) {
+    const capacityMinutes = getWindowCapacityMinutes(allowedWindows, day);
+    const hasWindowsForDay = allowedWindows.some((w) => w.day === day);
+    const constrained =
+      hasWindowsForDay && capacityMinutes < dailyLimitMinutes;
+    byDay.push({ day, capacityMinutes, constrained });
+    if (constrained) constrainedDays.push(day);
+    if (hasWindowsForDay) {
+      minWindowedCapacityMinutes =
+        minWindowedCapacityMinutes === null
+          ? capacityMinutes
+          : Math.min(minWindowedCapacityMinutes, capacityMinutes);
+    }
+  }
+
+  if (!hasAnyWindows) {
+    minWindowedCapacityMinutes = null;
+  }
+
+  return {
+    dailyLimitMinutes,
+    byDay,
+    constrainedDays,
+    minWindowedCapacityMinutes,
+  };
+}
+
+type WindowState = {
+  inWindow: boolean;
+  nextStart?: string;
+  /** End minute of the current merged run (only when inWindow and windows non-empty). */
+  windowEndMinutes?: number;
+};
+
+function resolveWindowState(
   windows: AllowedWindow[],
   now: Date,
   timeZone: string
-): { inWindow: boolean; nextStart?: string } {
+): WindowState {
   if (windows.length === 0) {
     return { inWindow: true };
   }
@@ -24,40 +134,35 @@ function isWithinWindow(
   const { dayOfWeek: currentDay, minutesSinceMidnight: currentMinutes } =
     getZonedTimeParts(now, timeZone);
 
-  const todayWindows = windows.filter((w) => w.day === currentDay);
-  for (const window of todayWindows) {
+  const merged = mergeWindows(windows);
+  const todayMerged = merged.filter((w) => w.day === currentDay);
+
+  for (const window of todayMerged) {
     const start = parseTime(window.start);
     const end = parseTime(window.end);
     if (currentMinutes >= start && currentMinutes < end) {
-      return { inWindow: true };
+      return { inWindow: true, windowEndMinutes: end };
     }
   }
 
-  const sortedWindows = [...windows].sort((a, b) => {
-    if (a.day !== b.day) return a.day - b.day;
-    return parseTime(a.start) - parseTime(b.start);
-  });
-
-  for (const window of sortedWindows) {
+  for (const window of merged) {
     const start = parseTime(window.start);
     if (
       window.day > currentDay ||
       (window.day === currentDay && start > currentMinutes)
     ) {
-      const dayNames = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
       return {
         inWindow: false,
-        nextStart: `${dayNames[window.day]} ${window.start}`,
+        nextStart: `${DAY_NAMES[window.day]} ${window.start}`,
       };
     }
   }
 
-  if (sortedWindows.length > 0) {
-    const first = sortedWindows[0];
-    const dayNames = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  if (merged.length > 0) {
+    const first = merged[0];
     return {
       inWindow: false,
-      nextStart: `${dayNames[first.day]} ${first.start}`,
+      nextStart: `${DAY_NAMES[first.day]} ${first.start}`,
     };
   }
 
@@ -73,6 +178,21 @@ function getActiveBonusMinutes(
     .reduce((sum, o) => sum + o.extraMinutes, 0);
 }
 
+function pickLimitingFactor(
+  dailyRemaining: number,
+  windowRemaining: number | undefined,
+  hasWindows: boolean
+): LimitingFactor {
+  if (!hasWindows || windowRemaining === undefined) {
+    return "daily_limit";
+  }
+  // Exact tie → prefer daily_limit
+  if (dailyRemaining <= windowRemaining) {
+    return "daily_limit";
+  }
+  return "window";
+}
+
 export function evaluatePolicy(
   policy: ScreenTimePolicyInput,
   usedMinutesToday: number,
@@ -82,19 +202,29 @@ export function evaluatePolicy(
 ): PolicyEvaluation {
   const bonusMinutes = getActiveBonusMinutes(overrides, now);
   const effectiveLimit = policy.dailyLimitMinutes + bonusMinutes;
-  const remainingMinutes = Math.max(0, effectiveLimit - usedMinutesToday);
+  const dailyRemainingMinutes = Math.max(0, effectiveLimit - usedMinutesToday);
+  const hasWindows = policy.allowedWindows.length > 0;
+
+  const { dayOfWeek: today } = getZonedTimeParts(now, timeZone);
+  const windowCapacityToday = hasWindows
+    ? getWindowCapacityMinutes(policy.allowedWindows, today)
+    : effectiveLimit;
+  const reachableMinutesToday = Math.min(effectiveLimit, windowCapacityToday);
 
   if (!policy.isActive) {
     return {
       status: "allowed",
       remainingMinutes: 999,
+      dailyRemainingMinutes,
+      limitingFactor: "none",
+      reachableMinutesToday,
       usedMinutes: usedMinutesToday,
       dailyLimitMinutes: policy.dailyLimitMinutes,
       bonusMinutes,
     };
   }
 
-  const { inWindow, nextStart } = isWithinWindow(
+  const { inWindow, nextStart, windowEndMinutes } = resolveWindowState(
     policy.allowedWindows,
     now,
     timeZone
@@ -104,6 +234,9 @@ export function evaluatePolicy(
     return {
       status: "outside_window",
       remainingMinutes: 0,
+      dailyRemainingMinutes,
+      limitingFactor: "window",
+      reachableMinutesToday,
       usedMinutes: usedMinutesToday,
       dailyLimitMinutes: policy.dailyLimitMinutes,
       bonusMinutes,
@@ -114,10 +247,23 @@ export function evaluatePolicy(
     };
   }
 
+  const { minutesSinceMidnight: currentMinutes } = getZonedTimeParts(
+    now,
+    timeZone
+  );
+  const windowRemainingMinutes =
+    hasWindows && windowEndMinutes !== undefined
+      ? Math.max(0, windowEndMinutes - currentMinutes)
+      : undefined;
+
   if (usedMinutesToday >= effectiveLimit) {
     return {
       status: "blocked",
       remainingMinutes: 0,
+      dailyRemainingMinutes: 0,
+      windowRemainingMinutes,
+      limitingFactor: "daily_limit",
+      reachableMinutesToday,
       usedMinutes: usedMinutesToday,
       dailyLimitMinutes: policy.dailyLimitMinutes,
       bonusMinutes,
@@ -125,9 +271,23 @@ export function evaluatePolicy(
     };
   }
 
+  const limitingFactor = pickLimitingFactor(
+    dailyRemainingMinutes,
+    windowRemainingMinutes,
+    hasWindows
+  );
+  const remainingMinutes =
+    windowRemainingMinutes === undefined
+      ? dailyRemainingMinutes
+      : Math.min(dailyRemainingMinutes, windowRemainingMinutes);
+
   return {
     status: "allowed",
     remainingMinutes,
+    dailyRemainingMinutes,
+    windowRemainingMinutes,
+    limitingFactor,
+    reachableMinutesToday,
     usedMinutes: usedMinutesToday,
     dailyLimitMinutes: policy.dailyLimitMinutes,
     bonusMinutes,

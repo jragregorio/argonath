@@ -6,14 +6,53 @@ export type AllowedWindow = {
 
 export type PolicyStatus = "allowed" | "blocked" | "outside_window";
 
+/** Which constraint binds session remaining right now. On a tie, prefer daily_limit. */
+export type LimitingFactor = "daily_limit" | "window" | "none";
+
 export type PolicyEvaluation = {
   status: PolicyStatus;
+  /**
+   * Session remaining: min(dailyRemaining, windowRemaining) when allowed;
+   * 0 when blocked or outside_window; 999 when policy is inactive.
+   */
   remainingMinutes: number;
+  /** max(0, dailyLimit + bonus - used). Populated in every branch. */
+  dailyRemainingMinutes: number;
+  /** Minutes until the current merged window run closes. Undefined when no windows or outside. */
+  windowRemainingMinutes?: number;
+  /** Which constraint binds remainingMinutes right now. */
+  limitingFactor: LimitingFactor;
+  /**
+   * Whole-day capacity: min(dailyLimit + bonus, merged window capacity for today).
+   * Equals dailyLimit + bonus when allowedWindows is empty.
+   */
+  reachableMinutesToday: number;
   usedMinutes: number;
   dailyLimitMinutes: number;
   bonusMinutes: number;
   nextWindowStart?: string;
   message?: string;
+};
+
+/** Per-weekday capacity for parent advisory (draft-friendly, no usage needed). */
+export type PolicyReachDay = {
+  day: number;
+  /** Merged window minutes for this weekday (0 if no windows that day). */
+  capacityMinutes: number;
+  /** True when this day has ≥1 window and capacity is below dailyLimitMinutes. */
+  constrained: boolean;
+};
+
+export type PolicyReach = {
+  dailyLimitMinutes: number;
+  byDay: PolicyReachDay[];
+  /** Days with ≥1 window whose capacity is below the daily limit. */
+  constrainedDays: number[];
+  /**
+   * Smallest capacity among days that have ≥1 window.
+   * Null when allowedWindows is empty (any-time schedule).
+   */
+  minWindowedCapacityMinutes: number | null;
 };
 
 export type ScreenTimePolicyInput = {
@@ -98,7 +137,7 @@ export const DEVICE_ONLINE_THRESHOLD_SECONDS = HEARTBEAT_INTERVAL_SECONDS * 3;
 export const IDLE_THRESHOLD_SECONDS = 300;
 
 /** Product / dashboard version (keep in sync with Warden.Tray `<Version>`). */
-export const APP_VERSION = "0.5.12";
+export const APP_VERSION = "0.5.13";
 
 export function isDeviceRecentlySeen(
   lastSeenAt: Date | string | null | undefined,

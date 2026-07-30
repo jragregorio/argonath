@@ -471,10 +471,19 @@ public class LockWindow : Window
         {
             _statusText.Text =
                 evaluation.Message ?? "Ask a parent for more time, or come back tomorrow.";
-            _timeText.Text =
-                evaluation.Status == "outside_window" && evaluation.NextWindowStart != null
-                    ? $"Available again: {evaluation.NextWindowStart}"
-                    : $"Used {evaluation.UsedMinutes} of {evaluation.DailyLimitMinutes + evaluation.BonusMinutes} minutes today";
+            if (evaluation.Status == "outside_window" && evaluation.NextWindowStart != null)
+            {
+                var dailyLeft = evaluation.DailyRemainingMinutes;
+                _timeText.Text =
+                    dailyLeft > 0
+                        ? $"Available again: {evaluation.NextWindowStart} — {dailyLeft} min of today's time left"
+                        : $"Available again: {evaluation.NextWindowStart}";
+            }
+            else
+            {
+                _timeText.Text =
+                    $"Used {evaluation.UsedMinutes} of {evaluation.DailyLimitMinutes + evaluation.BonusMinutes} minutes today";
+            }
         });
     }
 
