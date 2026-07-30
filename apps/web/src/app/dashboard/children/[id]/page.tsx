@@ -83,11 +83,6 @@ function windowsEqual(a: AllowedWindow[], b: AllowedWindow[]) {
   );
 }
 
-function usagePercent(used: number, limit: number) {
-  if (limit <= 0) return used > 0 ? 100 : 0;
-  return Math.min(100, Math.round((used / limit) * 100));
-}
-
 function progressBarClass(status: PolicyStatus) {
   if (status === "blocked") return "bg-destructive";
   if (status === "outside_window") return "bg-yellow-500";
@@ -718,9 +713,6 @@ export default function ChildDetailPage() {
   const effectiveLimit = evaluation
     ? evaluation.dailyLimitMinutes + evaluation.bonusMinutes
     : 0;
-  const percent = evaluation
-    ? usagePercent(evaluation.usedMinutes, effectiveLimit)
-    : 0;
   const remainingFraction =
     !evaluation || effectiveLimit <= 0
       ? 0
@@ -967,7 +959,7 @@ export default function ChildDetailPage() {
                     className={`h-full rounded-full transition-[width] ${progressBarClass(
                       evaluation.status
                     )}`}
-                    style={{ width: `${percent}%` }}
+                    style={{ width: `${remainingFraction * 100}%` }}
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">

@@ -35,9 +35,9 @@ import {
 } from "@/lib/activity";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 
-function usagePercent(used: number, limit: number) {
-  if (limit <= 0) return used > 0 ? 100 : 0;
-  return Math.min(100, Math.round((used / limit) * 100));
+function remainingPercent(remaining: number, limit: number) {
+  if (limit <= 0) return 0;
+  return Math.min(100, Math.round((remaining / limit) * 100));
 }
 
 function progressBarClass(status: PolicyStatus) {
@@ -377,8 +377,8 @@ export default function DashboardOverviewPage() {
               const { evaluation } = child;
               const effectiveLimit =
                 evaluation.dailyLimitMinutes + evaluation.bonusMinutes;
-              const percent = usagePercent(
-                evaluation.usedMinutes,
+              const percent = remainingPercent(
+                evaluation.remainingMinutes,
                 effectiveLimit
               );
               const onlineDevices = child.devices.filter((d) => d.isOnline)
