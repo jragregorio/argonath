@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChildDetailSkeleton } from "@/components/dashboard-skeletons";
-import type { AllowedWindow } from "@warden/shared";
+import type { AllowedWindow, PolicyStatus } from "@warden/shared";
 import { getDeviceDisplayName, getPolicyStatusLabel } from "@warden/shared";
 import {
   ArrowLeft,
@@ -81,6 +81,17 @@ function windowsEqual(a: AllowedWindow[], b: AllowedWindow[]) {
       window.start === b[i].start &&
       window.end === b[i].end
   );
+}
+
+function usagePercent(used: number, limit: number) {
+  if (limit <= 0) return used > 0 ? 100 : 0;
+  return Math.min(100, Math.round((used / limit) * 100));
+}
+
+function progressBarClass(status: PolicyStatus) {
+  if (status === "blocked") return "bg-destructive";
+  if (status === "outside_window") return "bg-yellow-500";
+  return "bg-primary";
 }
 
 function formatWindowsSummary(windows: AllowedWindow[]) {
@@ -707,6 +718,9 @@ export default function ChildDetailPage() {
   const effectiveLimit = evaluation
     ? evaluation.dailyLimitMinutes + evaluation.bonusMinutes
     : 0;
+  const percent = evaluation
+    ? usagePercent(evaluation.usedMinutes, effectiveLimit)
+    : 0;
   const remainingFraction =
     !evaluation || effectiveLimit <= 0
       ? 0
@@ -947,16 +961,22 @@ export default function ChildDetailPage() {
                   Refreshes every 30s from agent heartbeats (realtime updates sooner)
                 </span>
               </div>
-              {evaluation.status === "allowed" ? (
-                <p className="text-sm text-muted-foreground mt-2 md:hidden">
-                  {evaluation.remainingMinutes} min remaining today
+              <div className="mt-3 max-w-md space-y-2">
+                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-[width] ${progressBarClass(
+                      evaluation.status
+                    )}`}
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {evaluation.status === "allowed"
+                    ? `${evaluation.remainingMinutes} min remaining`
+                    : evaluation.message ??
+                      getPolicyStatusLabel(evaluation.status)}
                 </p>
-              ) : (
-                <p className="text-sm text-muted-foreground mt-2 md:hidden">
-                  {evaluation.message ??
-                    getPolicyStatusLabel(evaluation.status)}
-                </p>
-              )}
+              </div>
             </div>
           </div>
         )}
