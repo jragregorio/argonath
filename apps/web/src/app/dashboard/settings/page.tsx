@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { PageHeader } from "@/components/page-header";
 
 function mutationErrorMessage(err: unknown, fallback: string) {
@@ -183,9 +184,8 @@ export default function SettingsPage() {
             </div>
             <div>
               <Label htmlFor="emailPassword">Current password</Label>
-              <Input
+              <PasswordInput
                 id="emailPassword"
-                type="password"
                 value={emailPassword}
                 onChange={(e) => setEmailPassword(e.target.value)}
                 className="mt-1"
@@ -240,9 +240,8 @@ export default function SettingsPage() {
           >
             <div>
               <Label htmlFor="currentPassword">Current password</Label>
-              <Input
+              <PasswordInput
                 id="currentPassword"
-                type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 className="mt-1"
@@ -252,9 +251,8 @@ export default function SettingsPage() {
             </div>
             <div>
               <Label htmlFor="newPassword">New password</Label>
-              <Input
+              <PasswordInput
                 id="newPassword"
-                type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="mt-1"
@@ -265,9 +263,8 @@ export default function SettingsPage() {
             </div>
             <div>
               <Label htmlFor="confirmPassword">Confirm new password</Label>
-              <Input
+              <PasswordInput
                 id="confirmPassword"
-                type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="mt-1"
@@ -461,9 +458,8 @@ export default function SettingsPage() {
           >
             <div>
               <Label htmlFor="pin">PIN (4–8 characters)</Label>
-              <Input
+              <PasswordInput
                 id="pin"
-                type="password"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 placeholder={
