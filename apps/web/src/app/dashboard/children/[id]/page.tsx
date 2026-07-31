@@ -865,30 +865,64 @@ export default function ChildDetailPage() {
     return `${evaluation.remainingMinutes} min left now`;
   })();
 
-  const renderPolicyEditor = (idPrefix: string, mode: "card" | "sheet") => (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <input
-          type="checkbox"
-          id={`${idPrefix}-active`}
-          checked={currentActive}
-          onChange={(e) => setIsActive(e.target.checked)}
-          className="rounded"
-        />
-        <Label htmlFor={`${idPrefix}-active`}>Policy active</Label>
-      </div>
+  const renderPolicyEditor = (
+    idPrefix: string,
+    mode: "card" | "sheet",
+    options?: { showActiveToggle?: boolean }
+  ) => {
+    const showActiveToggle = options?.showActiveToggle ?? true;
 
-      <div>
-        <Label htmlFor={`${idPrefix}-limit`}>Daily limit (minutes)</Label>
-        <Input
-          id={`${idPrefix}-limit`}
-          type="number"
-          min={0}
-          max={1440}
-          value={currentLimit}
-          onChange={(e) => setDailyLimit(parseInt(e.target.value) || 0)}
-          className="mt-1"
-        />
+    return (
+    <div className="space-y-4">
+      {showActiveToggle && (
+        <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            id={`${idPrefix}-active`}
+            checked={currentActive}
+            onChange={(e) => setIsActive(e.target.checked)}
+            className="rounded"
+          />
+          <Label htmlFor={`${idPrefix}-active`}>Policy active</Label>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Label htmlFor={`${idPrefix}-limit`}>Daily limit</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            id={`${idPrefix}-limit`}
+            type="number"
+            min={0}
+            max={1440}
+            step={1}
+            value={currentLimit}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === "") {
+                setDailyLimit(0);
+                return;
+              }
+              if (!/^\d+$/.test(raw)) return;
+              setDailyLimit(Math.min(1440, parseInt(raw, 10)));
+            }}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-", ".", ","].includes(e.key)) {
+                e.preventDefault();
+              }
+            }}
+            className="w-28 text-center tabular-nums"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            aria-describedby={`${idPrefix}-limit-unit`}
+          />
+          <span
+            id={`${idPrefix}-limit-unit`}
+            className="text-sm text-muted-foreground"
+          >
+            minutes
+          </span>
+        </div>
       </div>
 
       {mode === "card" ? (
@@ -976,7 +1010,8 @@ export default function ChildDetailPage() {
         </p>
       )}
     </div>
-  );
+    );
+  };
 
   const renderPairingContent = () =>
     pairingCode ? (
@@ -1028,11 +1063,11 @@ export default function ChildDetailPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <Link
           href="/dashboard/children"
-          className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 mb-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+          className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 mb-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to children
@@ -1104,7 +1139,7 @@ export default function ChildDetailPage() {
         )}
 
         {evaluation && (
-          <div className="relative mt-4 overflow-hidden rounded-xl border border-border bg-card md:mt-2 md:border-0 md:bg-transparent">
+          <div className="relative mt-3 overflow-hidden rounded-xl border border-border bg-card md:mt-2 md:border-0 md:bg-transparent">
             {/* Remaining-time fill behind content (same idea as the tray usage card) */}
             <div
               className={`pointer-events-none absolute inset-y-0 left-0 transition-[width] duration-500 ease-out md:hidden ${usageFillClass}`}
@@ -1120,7 +1155,10 @@ export default function ChildDetailPage() {
                 >
                   {getPolicyStatusLabel(evaluation.status)}
                 </Badge>
-                <span className="text-sm text-foreground/90 md:text-muted-foreground">
+                <span
+                  className="text-sm text-foreground/90 md:text-muted-foreground"
+                  title="Refreshes every 30s from agent heartbeats (realtime updates sooner)"
+                >
                   {evaluation.usedMinutes} / {effectiveLimit} min used today
                   {evaluation.bonusMinutes > 0 &&
                     ` (+${evaluation.bonusMinutes} bonus)`}
@@ -1137,9 +1175,6 @@ export default function ChildDetailPage() {
                     {clearBonus.isPending ? "Clearing…" : "Clear bonus"}
                   </Button>
                 )}
-                <span className="hidden md:inline text-xs text-muted-foreground">
-                  Refreshes every 30s from agent heartbeats (realtime updates sooner)
-                </span>
               </div>
               <div className="mt-3 max-w-md space-y-2">
                 <div className="hidden h-2 w-full overflow-hidden rounded-full bg-muted md:block">
@@ -1159,61 +1194,16 @@ export default function ChildDetailPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <Card className="order-2 self-start w-full">
-          <CardHeader>
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <CardTitle>Screen time policy</CardTitle>
-                <CardDescription>
-                  Set daily limits and allowed time windows
-                </CardDescription>
-              </div>
-              {policyDirty ? (
-                <Badge variant="warning">Unsaved changes</Badge>
-              ) : showPolicySaved ? (
-                <Badge variant="success">
-                  <Check className="w-3 h-3 mr-1" />
-                  Saved
-                </Badge>
-              ) : null}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
-              <p>
-                <span className="text-foreground font-medium">
-                  {currentLimit} min/day
-                </span>
-                {currentActive ? "" : " · policy off"}
-              </p>
-              <p className="mt-0.5">{formatWindowsSummary(currentWindows)}</p>
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full md:hidden"
-              onClick={() => setPolicyEditorOpen(true)}
-            >
-              <ChevronDown className="w-4 h-4 mr-2" />
-              Edit limits
-            </Button>
-
-            <div className="hidden md:block space-y-4">
-              {renderPolicyEditor("desktop", "card")}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="order-1 self-start w-full">
+      <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-2">
+        <Card className="order-1 flex h-full w-full flex-col">
           <CardHeader>
             <CardTitle>Devices</CardTitle>
             <CardDescription>
               Pair the Windows agent using a one-time code
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-1 flex-col gap-4">
+            <div className="flex flex-1 flex-col gap-4">
             {child.devices.map((device) => {
               const pendingLock = pendingLocks[device.id];
               const effectiveAdminLock =
@@ -1224,7 +1214,7 @@ export default function ChildDetailPage() {
               return (
                 <div
                   key={device.id}
-                  className="flex flex-col gap-3 p-3 rounded-lg border border-border"
+                  className="flex min-h-[12rem] flex-1 flex-col justify-between gap-4 rounded-lg border border-border p-4 sm:p-5"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
@@ -1265,7 +1255,7 @@ export default function ChildDetailPage() {
                           </form>
                         ) : (
                           <div className="flex items-center gap-1.5">
-                            <p className="font-medium truncate">
+                            <p className="truncate text-lg font-semibold tracking-tight">
                               {getDeviceDisplayName(device)}
                             </p>
                             <Button
@@ -1467,6 +1457,7 @@ export default function ChildDetailPage() {
                 </div>
               );
             })}
+            </div>
 
             {pairingCode ? (
               <div className="hidden md:block p-4 rounded-lg bg-primary/10 border border-primary/30">
@@ -1555,12 +1546,70 @@ export default function ChildDetailPage() {
             )}
           </CardContent>
         </Card>
+
+        <Card className="order-2 flex h-full w-full flex-col">
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <CardTitle>Screen time policy</CardTitle>
+                <CardDescription>
+                  Set daily limits and allowed time windows
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
+                <div className="hidden items-center gap-2 md:flex">
+                  <input
+                    type="checkbox"
+                    id="desktop-header-active"
+                    checked={currentActive}
+                    onChange={(e) => setIsActive(e.target.checked)}
+                    className="rounded"
+                  />
+                  <Label htmlFor="desktop-header-active">Policy active</Label>
+                </div>
+                {policyDirty ? (
+                  <Badge variant="warning">Unsaved changes</Badge>
+                ) : showPolicySaved ? (
+                  <Badge variant="success">
+                    <Check className="w-3 h-3 mr-1" />
+                    Saved
+                  </Badge>
+                ) : null}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground md:hidden">
+              <p>
+                <span className="text-foreground font-medium">
+                  {currentLimit} min/day
+                </span>
+                {currentActive ? "" : " · policy off"}
+              </p>
+              <p className="mt-0.5">{formatWindowsSummary(currentWindows)}</p>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full md:hidden"
+              onClick={() => setPolicyEditorOpen(true)}
+            >
+              <ChevronDown className="w-4 h-4 mr-2" />
+              Edit limits
+            </Button>
+
+            <div className="hidden md:block space-y-4">
+              {renderPolicyEditor("desktop", "card", {
+                showActiveToggle: false,
+              })}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div>
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold">Recent activity</h2>
-        </div>
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold">Recent activity</h2>
         <RecentActivityCard
           items={activity}
           hideChildName

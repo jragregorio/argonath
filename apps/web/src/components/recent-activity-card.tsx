@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Activity } from "lucide-react";
+import { cn } from "@warden/ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -27,6 +28,8 @@ type RecentActivityCardProps = {
   items: RecentActivityItem[] | undefined;
   /** Hide child name in the detail line (useful on the child detail page). */
   hideChildName?: boolean;
+  /** Denser rows for narrow columns (timestamp under detail). */
+  compact?: boolean;
   initialVisible?: number;
   emptyDescription?: string;
 };
@@ -34,6 +37,7 @@ type RecentActivityCardProps = {
 export function RecentActivityCard({
   items,
   hideChildName = false,
+  compact = false,
   initialVisible = 5,
   emptyDescription = "Lockdowns, captures, nudges, and policy changes will show here",
 }: RecentActivityCardProps) {
@@ -46,8 +50,18 @@ export function RecentActivityCard({
   if (!items || items.length === 0) {
     return (
       <Card>
-        <CardContent className="py-10 text-center text-muted-foreground">
-          <Activity className="mx-auto mb-3 h-10 w-10 opacity-50" />
+        <CardContent
+          className={cn(
+            "text-center text-muted-foreground",
+            compact ? "px-4 py-8" : "py-10"
+          )}
+        >
+          <Activity
+            className={cn(
+              "mx-auto mb-3 opacity-50",
+              compact ? "h-8 w-8" : "h-10 w-10"
+            )}
+          />
           <p>No activity yet</p>
           <p className="mt-1 text-sm">{emptyDescription}</p>
         </CardContent>
@@ -68,11 +82,17 @@ export function RecentActivityCard({
             item.actor?.name?.trim() ||
             item.actor?.email ||
             (item.actor ? null : "Agent");
+          const when = new Date(item.createdAt).toLocaleString();
 
           return (
             <li
               key={item.id}
-              className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 sm:px-5 sm:py-3.5"
+              className={cn(
+                "px-4 py-3",
+                compact
+                  ? "space-y-1"
+                  : "flex flex-wrap items-start justify-between gap-3 sm:px-5 sm:py-3.5"
+              )}
             >
               <div className="min-w-0 space-y-0.5">
                 <p className="text-sm font-medium">
@@ -88,10 +108,17 @@ export function RecentActivityCard({
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
+                {compact && (
+                  <p className="text-xs tabular-nums text-muted-foreground">
+                    {when}
+                  </p>
+                )}
               </div>
-              <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                {new Date(item.createdAt).toLocaleString()}
-              </p>
+              {!compact && (
+                <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                  {when}
+                </p>
+              )}
             </li>
           );
         })}
