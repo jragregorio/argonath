@@ -8,8 +8,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     <FamilyRealtimeProvider>
       <div className="flex min-h-dvh flex-col overflow-x-hidden md:h-dvh md:min-h-0 md:flex-row md:overflow-hidden">
         <DashboardNav />
-        <main className="flex-1 min-w-0 min-h-0 p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] md:overflow-y-auto md:p-8 md:pb-8">
-          <div className="max-w-6xl mx-auto w-full">{children}</div>
+        <main className="relative flex-1 min-h-0 min-w-0 p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] md:overflow-y-auto md:p-8 md:pb-8">
+          <div
+            className="pointer-events-none absolute -right-24 top-0 h-72 w-72 rounded-full bg-attention/8 blur-[100px]"
+            aria-hidden="true"
+          />
+          <div
+            className="pointer-events-none absolute -left-20 bottom-20 h-64 w-64 rounded-full bg-primary/10 blur-[90px]"
+            aria-hidden="true"
+          />
+          <div className="relative mx-auto w-full max-w-6xl">{children}</div>
         </main>
       </div>
     </FamilyRealtimeProvider>

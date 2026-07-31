@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChildDetailSkeleton } from "@/components/dashboard-skeletons";
+import { SwipeToLock } from "@/components/swipe-to-lock";
 import type { AllowedWindow, PolicyStatus } from "@warden/shared";
 import {
   getDeviceDisplayName,
@@ -25,7 +26,6 @@ import {
   Camera,
   Check,
   Copy,
-  Lock,
   Monitor,
   MoreHorizontal,
   Pencil,
@@ -1301,149 +1301,157 @@ export default function ChildDetailPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                  <div className="flex flex-col gap-2">
                     {nudgeByDevice[device.id]?.label && (
-                      <span className="text-xs text-muted-foreground sm:order-first sm:mr-1">
+                      <span className="text-xs text-muted-foreground">
                         {nudgeByDevice[device.id].label}
                       </span>
                     )}
-                    <NudgeControls
-                      disabled={
-                        !device.isPaired ||
-                        !device.isOnline ||
-                        Boolean(nudgeByDevice[device.id]?.nudgeId)
-                      }
-                      isSending={
-                        sendNudge.isPending &&
-                        sendNudge.variables?.deviceId === device.id
-                      }
-                      title={
-                        !device.isPaired
-                          ? "Device must be paired first"
-                          : !device.isOnline
-                            ? "Device is offline"
-                            : "Send a gentle attention nudge"
-                      }
-                      onSend={(message) =>
-                        sendNudge.mutate({
-                          deviceId: device.id,
-                          message,
-                        })
-                      }
-                    />
-                    {effectiveAdminLock ? (
-                      <Button
-                        variant="outline"
-                        className="w-full sm:w-auto"
-                        onClick={() =>
-                          setAdminLock.mutate({
-                            deviceId: device.id,
-                            locked: false,
-                          })
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                      <NudgeControls
+                        className="w-full sm:w-52 sm:shrink-0"
+                        disabled={
+                          !device.isPaired ||
+                          !device.isOnline ||
+                          Boolean(nudgeByDevice[device.id]?.nudgeId)
                         }
-                      >
-                        <Unlock className="w-4 h-4 mr-2" />
-                        Release
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="destructive"
-                        className="w-full sm:w-auto"
-                        onClick={() =>
-                          setAdminLock.mutate({
-                            deviceId: device.id,
-                            locked: true,
-                          })
+                        isSending={
+                          sendNudge.isPending &&
+                          sendNudge.variables?.deviceId === device.id
                         }
-                        disabled={!device.isPaired}
                         title={
                           !device.isPaired
                             ? "Device must be paired first"
-                            : "Immediately lock this device"
+                            : !device.isOnline
+                              ? "Device is offline"
+                              : "Send a gentle attention nudge"
                         }
-                      >
-                        <Lock className="w-4 h-4 mr-2" />
-                        Lock down
-                      </Button>
-                    )}
-
-                    <div
-                      className="relative w-full sm:w-auto"
-                      ref={
-                        deviceMoreOpenId === device.id ? deviceMoreRef : undefined
-                      }
-                    >
-                      <Button
-                        variant="outline"
-                        className="w-full sm:w-auto"
-                        onClick={() =>
-                          setDeviceMoreOpenId((prev) =>
-                            prev === device.id ? null : device.id
-                          )
+                        onSend={(message) =>
+                          sendNudge.mutate({
+                            deviceId: device.id,
+                            message,
+                          })
                         }
-                        aria-expanded={deviceMoreOpenId === device.id}
-                        aria-haspopup="menu"
-                      >
-                        <MoreHorizontal className="w-4 h-4 mr-2" />
-                        More
-                      </Button>
-                      {deviceMoreOpenId === device.id && (
-                        <div
-                          role="menu"
-                          className="absolute left-0 right-0 sm:left-auto sm:right-0 z-20 mt-1.5 min-w-[12rem] overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg"
-                        >
-                          {device.isOnline && isSupabaseConfigured() && (
-                            <>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-secondary disabled:opacity-50"
-                                disabled={captureBusy}
-                                onClick={() => {
-                                  setDeviceMoreOpenId(null);
-                                  requestCapture.mutate({
-                                    deviceId: device.id,
-                                    type: "screen",
-                                  });
-                                }}
-                              >
-                                <Camera className="w-4 h-4 text-muted-foreground" />
-                                Screenshot
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-secondary disabled:opacity-50"
-                                disabled={captureBusy}
-                                onClick={() => {
-                                  setDeviceMoreOpenId(null);
-                                  requestCapture.mutate({
-                                    deviceId: device.id,
-                                    type: "webcam",
-                                  });
-                                }}
-                              >
-                                <Video className="w-4 h-4 text-muted-foreground" />
-                                Webcam
-                              </button>
-                              <div className="my-1 border-t border-border" />
-                            </>
-                          )}
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-destructive hover:bg-secondary disabled:opacity-50"
-                            disabled={deleteDevice.isPending}
-                            onClick={() => {
-                              setDeviceMoreOpenId(null);
-                              confirmDeleteDevice(device);
-                            }}
+                      />
+                      <div className="flex w-full min-w-0 items-stretch gap-2 sm:flex-1">
+                        {effectiveAdminLock ? (
+                          <Button
+                            variant="outline"
+                            className="min-w-0 flex-1"
+                            onClick={() =>
+                              setAdminLock.mutate({
+                                deviceId: device.id,
+                                locked: false,
+                              })
+                            }
                           >
-                            <Trash2 className="w-4 h-4" />
-                            Remove device
-                          </button>
+                            <Unlock className="mr-2 h-4 w-4" />
+                            Release
+                          </Button>
+                        ) : (
+                          <SwipeToLock
+                            className="min-w-0 flex-1"
+                            onConfirm={() =>
+                              setAdminLock.mutate({
+                                deviceId: device.id,
+                                locked: true,
+                              })
+                            }
+                            disabled={!device.isPaired}
+                            pending={
+                              setAdminLock.isPending &&
+                              setAdminLock.variables?.deviceId === device.id &&
+                              setAdminLock.variables?.locked === true
+                            }
+                            title={
+                              !device.isPaired
+                                ? "Device must be paired first"
+                                : "Swipe to immediately lock this device"
+                            }
+                          />
+                        )}
+
+                        <div
+                          className="relative shrink-0"
+                          ref={
+                            deviceMoreOpenId === device.id
+                              ? deviceMoreRef
+                              : undefined
+                          }
+                        >
+                          <Button
+                            variant="outline"
+                            className="px-3"
+                            onClick={() =>
+                              setDeviceMoreOpenId((prev) =>
+                                prev === device.id ? null : device.id
+                              )
+                            }
+                            aria-expanded={deviceMoreOpenId === device.id}
+                            aria-haspopup="menu"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">More</span>
+                          </Button>
+                          {deviceMoreOpenId === device.id && (
+                            <div
+                              role="menu"
+                              className="absolute right-0 z-20 mt-1.5 min-w-[12rem] overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg"
+                            >
+                              {device.isOnline && isSupabaseConfigured() && (
+                                <>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-secondary disabled:opacity-50"
+                                    disabled={captureBusy}
+                                    onClick={() => {
+                                      setDeviceMoreOpenId(null);
+                                      requestCapture.mutate({
+                                        deviceId: device.id,
+                                        type: "screen",
+                                      });
+                                    }}
+                                  >
+                                    <Camera className="w-4 h-4 text-muted-foreground" />
+                                    Screenshot
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-secondary disabled:opacity-50"
+                                    disabled={captureBusy}
+                                    onClick={() => {
+                                      setDeviceMoreOpenId(null);
+                                      requestCapture.mutate({
+                                        deviceId: device.id,
+                                        type: "webcam",
+                                      });
+                                    }}
+                                  >
+                                    <Video className="w-4 h-4 text-muted-foreground" />
+                                    Webcam
+                                  </button>
+                                  <div className="my-1 border-t border-border" />
+                                </>
+                              )}
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-destructive hover:bg-secondary disabled:opacity-50"
+                                disabled={deleteDevice.isPending}
+                                onClick={() => {
+                                  setDeviceMoreOpenId(null);
+                                  confirmDeleteDevice(device);
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Remove device
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
                   </div>
                   {feedback && (

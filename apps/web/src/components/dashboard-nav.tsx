@@ -73,12 +73,18 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             key={href}
             href={href}
             onClick={onNavigate}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors min-h-11 ${focusRing} ${
+            className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors min-h-11 ${focusRing} ${
               active
-                ? "bg-primary/20 text-primary"
+                ? "bg-primary/15 text-primary"
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary"
             }`}
           >
+            {active && (
+              <span
+                className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-attention"
+                aria-hidden="true"
+              />
+            )}
             <Icon className="w-5 h-5 shrink-0" />
             <span className="flex-1 truncate">{label}</span>
             {count > 0 && (
@@ -222,11 +228,23 @@ function NavFooter({ onNavigate }: { onNavigate?: () => void }) {
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={`flex items-center gap-2 ${compact ? "" : "px-2"}`}>
-      <Shield className={`${compact ? "w-6 h-6" : "w-7 h-7"} text-attention`} />
-      <span className={`${compact ? "text-base" : "text-lg"} font-bold`}>
-        Warden
-      </span>
+    <div className={`flex items-center gap-2.5 ${compact ? "" : "px-2"}`}>
+      <Shield
+        className={`${compact ? "h-6 w-6" : "h-7 w-7"} text-attention`}
+        aria-hidden="true"
+      />
+      <div>
+        <span
+          className={`font-display font-semibold tracking-tight ${
+            compact ? "text-base" : "text-lg"
+          }`}
+        >
+          Warden
+        </span>
+        {!compact && (
+          <div className="mt-2 h-px w-10 bg-attention/50" aria-hidden="true" />
+        )}
+      </div>
     </div>
   );
 }
@@ -402,8 +420,12 @@ export function DashboardNav() {
       <MobileMoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
 
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-64 shrink-0 border-r border-border h-dvh sticky top-0 p-4 flex-col overflow-y-auto">
-        <div className="mb-8">
+      <aside className="relative hidden h-dvh w-64 shrink-0 sticky top-0 flex-col overflow-y-auto border-r border-border bg-[#1a2420]/40 p-4 md:flex">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-primary/5 blur-2xl"
+          aria-hidden="true"
+        />
+        <div className="relative mb-8">
           <Brand />
         </div>
         <NavLinks />

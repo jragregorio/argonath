@@ -166,11 +166,11 @@ export function NudgeControls({
 
   return (
     <>
-      <div className={cn("inline-flex w-full sm:w-auto", className)}>
+      <div className={cn("inline-flex w-full min-w-0", className)}>
         <Button
           type="button"
           variant="attention"
-          className="w-full rounded-r-none sm:w-auto"
+          className="min-w-0 flex-1 rounded-r-none"
           onClick={sendDefault}
           disabled={disabled || isSending}
           title={title}
