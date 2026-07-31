@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useCallback,
   useEffect,
   useId,
   useRef,
@@ -40,10 +39,8 @@ export function Modal({
   const descriptionId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
-
-  const handleClose = useCallback(() => {
-    onClose();
-  }, [onClose]);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -58,7 +55,7 @@ export function Modal({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        handleClose();
+        onCloseRef.current();
         return;
       }
 
@@ -82,10 +79,13 @@ export function Modal({
 
     window.addEventListener("keydown", onKeyDown);
     requestAnimationFrame(() => {
+      const preferred = panelRef.current?.querySelector<HTMLElement>(
+        "[data-modal-initial-focus='true'], input:not([disabled]), textarea:not([disabled])"
+      );
       const closeBtn = panelRef.current?.querySelector<HTMLElement>(
         '[data-modal-close="true"]'
       );
-      closeBtn?.focus();
+      (preferred ?? closeBtn)?.focus();
     });
 
     return () => {
@@ -93,7 +93,7 @@ export function Modal({
       window.removeEventListener("keydown", onKeyDown);
       previouslyFocused.current?.focus?.();
     };
-  }, [open, handleClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -103,7 +103,7 @@ export function Modal({
         type="button"
         className="fixed inset-0 z-[60] bg-black/60"
         aria-label="Close"
-        onClick={handleClose}
+        onClick={() => onCloseRef.current()}
       />
       <div
         ref={panelRef}
@@ -135,7 +135,7 @@ export function Modal({
             variant="ghost"
             size="sm"
             data-modal-close="true"
-            onClick={handleClose}
+            onClick={() => onCloseRef.current()}
             className={`min-h-11 min-w-11 shrink-0 p-2 ${focusRing}`}
             aria-label="Close"
           >

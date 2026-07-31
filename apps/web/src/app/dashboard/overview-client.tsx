@@ -16,10 +16,10 @@ import {
   Clock,
   ArrowRight,
   Activity,
-  Bell,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { NudgeControls } from "@/components/nudge-controls";
 import {
   getDeviceDisplayName,
   getPolicyStatusLabel,
@@ -507,19 +507,15 @@ export default function DashboardOverviewPage() {
                                   {nudgeByDevice[device.id].label}
                                 </span>
                               )}
-                              <Button
-                                variant="attention"
-                                className="w-full sm:w-auto"
-                                onClick={() =>
-                                  sendNudge.mutate({ deviceId: device.id })
-                                }
+                              <NudgeControls
                                 disabled={
                                   !device.isPaired ||
                                   !device.isOnline ||
-                                  Boolean(nudgeByDevice[device.id]?.nudgeId) ||
-                                  (sendNudge.isPending &&
-                                    sendNudge.variables?.deviceId ===
-                                      device.id)
+                                  Boolean(nudgeByDevice[device.id]?.nudgeId)
+                                }
+                                isSending={
+                                  sendNudge.isPending &&
+                                  sendNudge.variables?.deviceId === device.id
                                 }
                                 title={
                                   !device.isPaired
@@ -528,10 +524,13 @@ export default function DashboardOverviewPage() {
                                       ? "Device is offline"
                                       : "Send a gentle attention nudge"
                                 }
-                              >
-                                <Bell className="w-4 h-4 mr-1.5" />
-                                Nudge
-                              </Button>
+                                onSend={(message) =>
+                                  sendNudge.mutate({
+                                    deviceId: device.id,
+                                    message,
+                                  })
+                                }
+                              />
                               {effectiveAdminLock ? (
                                 <Button
                                   variant="outline"

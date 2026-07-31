@@ -34,7 +34,6 @@ import {
   Unlock,
   Video,
   ChevronDown,
-  Bell,
   Download,
 } from "lucide-react";
 import Link from "next/link";
@@ -44,6 +43,7 @@ import {
   rollbackAdminLock,
 } from "@/lib/device-cache";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { NudgeControls } from "@/components/nudge-controls";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 import {
   formatClockInText,
@@ -1312,16 +1312,15 @@ export default function ChildDetailPage() {
                         {nudgeByDevice[device.id].label}
                       </span>
                     )}
-                    <Button
-                      variant="attention"
-                      className="w-full sm:w-auto"
-                      onClick={() => sendNudge.mutate({ deviceId: device.id })}
+                    <NudgeControls
                       disabled={
                         !device.isPaired ||
                         !device.isOnline ||
-                        Boolean(nudgeByDevice[device.id]?.nudgeId) ||
-                        (sendNudge.isPending &&
-                          sendNudge.variables?.deviceId === device.id)
+                        Boolean(nudgeByDevice[device.id]?.nudgeId)
+                      }
+                      isSending={
+                        sendNudge.isPending &&
+                        sendNudge.variables?.deviceId === device.id
                       }
                       title={
                         !device.isPaired
@@ -1330,10 +1329,13 @@ export default function ChildDetailPage() {
                             ? "Device is offline"
                             : "Send a gentle attention nudge"
                       }
-                    >
-                      <Bell className="w-4 h-4 mr-2" />
-                      Nudge
-                    </Button>
+                      onSend={(message) =>
+                        sendNudge.mutate({
+                          deviceId: device.id,
+                          message,
+                        })
+                      }
+                    />
                     {effectiveAdminLock ? (
                       <Button
                         variant="outline"
