@@ -137,7 +137,10 @@ export const DEVICE_ONLINE_THRESHOLD_SECONDS = HEARTBEAT_INTERVAL_SECONDS * 3;
 export const IDLE_THRESHOLD_SECONDS = 300;
 
 /** Product / dashboard version (keep in sync with Warden.Tray `<Version>`). */
-export const APP_VERSION = "0.5.18";
+export const APP_VERSION = "0.5.19";
+
+/** Default text shown on the child PC when a parent sends a nudge without a custom message. */
+export const DEFAULT_NUDGE_MESSAGE = "Your parent wants your attention";
 
 export function isDeviceRecentlySeen(
   lastSeenAt: Date | string | null | undefined,

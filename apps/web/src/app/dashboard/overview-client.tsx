@@ -15,11 +15,11 @@ import {
   Users,
   Clock,
   ArrowRight,
-  Activity,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { NudgeControls } from "@/components/nudge-controls";
+import { RecentActivityCard } from "@/components/recent-activity-card";
 import {
   getDeviceDisplayName,
   getPolicyStatusLabel,
@@ -30,10 +30,6 @@ import {
   optimisticAdminLock,
   rollbackAdminLock,
 } from "@/lib/device-cache";
-import {
-  formatActivityDetail,
-  getActivityLabel,
-} from "@/lib/activity";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 
 function remainingPercent(remaining: number, limit: number) {
@@ -69,7 +65,6 @@ export default function DashboardOverviewPage() {
   const [pendingLocks, setPendingLocks] = useState<
     Record<string, boolean | undefined>
   >({});
-  const [showAllActivity, setShowAllActivity] = useState(false);
   const [nudgeByDevice, setNudgeByDevice] = useState<
     Record<string, { nudgeId: string; label: string }>
   >({});
@@ -239,10 +234,6 @@ export default function DashboardOverviewPage() {
   const children = overview?.children ?? [];
   const pendingRequests = overview?.pendingRequests ?? 0;
   const onlineCount = devices.filter((d) => d.isOnline).length;
-  const activityItems = activity ?? [];
-  const visibleActivity = showAllActivity
-    ? activityItems
-    : activityItems.slice(0, 5);
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -588,68 +579,10 @@ export default function DashboardOverviewPage() {
       </div>
 
       <div>
-        <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-xl font-semibold">Recent activity</h2>
         </div>
-
-        {!activity || activity.length === 0 ? (
-          <Card>
-            <CardContent className="py-10 text-center text-muted-foreground">
-              <Activity className="w-10 h-10 mx-auto mb-3 opacity-50" />
-              <p>No activity yet</p>
-              <p className="text-sm mt-1">
-                Lockdowns, captures, approvals, and policy changes will show
-                here
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="p-0 overflow-hidden">
-            <ul className="divide-y divide-border">
-              {visibleActivity.map((item) => {
-                const detail = formatActivityDetail(item);
-                const actorName =
-                  item.actor?.name?.trim() ||
-                  item.actor?.email ||
-                  (item.actor ? null : "Agent");
-
-                return (
-                  <li
-                    key={item.id}
-                    className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 sm:px-5 sm:py-3.5"
-                  >
-                    <div className="min-w-0 space-y-0.5">
-                      <p className="font-medium text-sm">
-                        {getActivityLabel(item.action)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {[detail, actorName ? `by ${actorName}` : null]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                    </div>
-                    <p className="text-xs text-muted-foreground tabular-nums shrink-0">
-                      {new Date(item.createdAt).toLocaleString()}
-                    </p>
-                  </li>
-                );
-              })}
-            </ul>
-            {activityItems.length > 5 && (
-              <div className="border-t border-border p-3">
-                <Button
-                  variant="ghost"
-                  className="w-full"
-                  onClick={() => setShowAllActivity((prev) => !prev)}
-                >
-                  {showAllActivity
-                    ? "Show less"
-                    : `Show ${activityItems.length - 5} more`}
-                </Button>
-              </div>
-            )}
-          </Card>
-        )}
+        <RecentActivityCard items={activity} />
       </div>
     </div>
   );

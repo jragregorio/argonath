@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { Bell, ChevronDown } from "lucide-react";
+import { DEFAULT_NUDGE_MESSAGE } from "@warden/shared";
 import { cn } from "@warden/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 
-const DEFAULT_NUDGE_MESSAGE = "Your parent wants your attention";
 const MAX_MESSAGE_LENGTH = 200;
 
 const NUDGE_PRESETS = [

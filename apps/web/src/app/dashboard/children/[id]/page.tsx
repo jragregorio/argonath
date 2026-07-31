@@ -44,6 +44,7 @@ import {
 } from "@/lib/device-cache";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { NudgeControls } from "@/components/nudge-controls";
+import { RecentActivityCard } from "@/components/recent-activity-card";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 import {
   formatClockInText,
@@ -204,6 +205,10 @@ export default function ChildDetailPage() {
       // Usage ticks via heartbeats; policy/extension Realtime covers other changes
       refetchInterval: POLL_HEARTBEAT_MS,
     }
+  );
+  const { data: activity } = trpc.dashboard.activity.useQuery(
+    { limit: 30, childId },
+    { refetchInterval: POLL_HEARTBEAT_MS }
   );
   // Re-enable after Supabase plan upgrade (Free plan caps Storage objects at 50MB;
   // the MSI is ~84MB). Publish with: npm run publish:agent -- --msi …
@@ -1550,6 +1555,17 @@ export default function ChildDetailPage() {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      <div>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-xl font-semibold">Recent activity</h2>
+        </div>
+        <RecentActivityCard
+          items={activity}
+          hideChildName
+          emptyDescription="Nudges, lockdowns, captures, and policy changes for this child will show here"
+        />
       </div>
 
       <BottomSheet

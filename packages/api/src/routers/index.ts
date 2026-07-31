@@ -3,6 +3,7 @@ import type { Prisma } from "@warden/db";
 import {
   CAPTURE_RATE_LIMIT_PER_HOUR,
   DEFAULT_TIME_ZONE,
+  DEFAULT_NUDGE_MESSAGE,
   compareAgentVersions,
   evaluatePolicy,
   generateDeviceToken,
@@ -852,7 +853,8 @@ export const deviceRouter = router({
       const autoDismissSeconds = 45;
       const expiresAt = new Date(now.getTime() + 3 * 60 * 1000);
       const message =
-        input.message?.trim() || "Your parent wants your attention";
+        input.message?.trim() || DEFAULT_NUDGE_MESSAGE;
+      const custom = message !== DEFAULT_NUDGE_MESSAGE;
 
       const nudge = await prisma.nudge.create({
         data: {
@@ -870,6 +872,8 @@ export const deviceRouter = router({
         deviceId: device.id,
         childId: device.childId,
         nudgeId: nudge.id,
+        message,
+        custom,
       });
 
       void broadcastToDevice(device.id, {
@@ -1278,21 +1282,53 @@ export const dashboardRouter = router({
     };
   }),
 
-  /** Recent family audit events for the Overview activity feed. */
+  /** Recent family audit events for Overview / child activity feeds. */
   activity: protectedProcedure
     .input(
       z
         .object({
           limit: z.number().int().min(1).max(100).default(30),
+          childId: z.string().optional(),
         })
         .optional()
     )
     .query(async ({ ctx, input }) => {
       const family = await getFamilyForUser(ctx);
       const limit = input?.limit ?? 30;
+      const filterChildId = input?.childId;
+
+      let where: Prisma.AuditLogWhereInput = { familyId: family.id };
+
+      if (filterChildId) {
+        const child = await prisma.child.findFirst({
+          where: { id: filterChildId, familyId: family.id },
+          select: { id: true, devices: { select: { id: true } } },
+        });
+        if (!child) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        const deviceIds = child.devices.map((device) => device.id);
+        where = {
+          familyId: family.id,
+          OR: [
+            {
+              metadata: {
+                path: ["childId"],
+                equals: filterChildId,
+              },
+            },
+            ...deviceIds.map((deviceId) => ({
+              metadata: {
+                path: ["deviceId"],
+                equals: deviceId,
+              },
+            })),
+          ],
+        };
+      }
 
       const logs = await prisma.auditLog.findMany({
-        where: { familyId: family.id },
+        where,
         orderBy: { createdAt: "desc" },
         take: limit,
       });
@@ -1316,13 +1352,21 @@ export const dashboardRouter = router({
 
       const childIds = new Set<string>();
       const deviceIds = new Set<string>();
+      const nudgeIds = new Set<string>();
       for (const log of logs) {
         const meta = asAuditMetadata(log.metadata);
         if (typeof meta.childId === "string") childIds.add(meta.childId);
         if (typeof meta.deviceId === "string") deviceIds.add(meta.deviceId);
+        if (
+          log.action === "nudge_sent" &&
+          typeof meta.nudgeId === "string" &&
+          typeof meta.message !== "string"
+        ) {
+          nudgeIds.add(meta.nudgeId);
+        }
       }
 
-      const [children, devices] = await Promise.all([
+      const [children, devices, nudges] = await Promise.all([
         childIds.size > 0
           ? prisma.child.findMany({
               where: { familyId: family.id, id: { in: [...childIds] } },
@@ -1343,6 +1387,12 @@ export const dashboardRouter = router({
               },
             })
           : Promise.resolve([]),
+        nudgeIds.size > 0
+          ? prisma.nudge.findMany({
+              where: { familyId: family.id, id: { in: [...nudgeIds] } },
+              select: { id: true, message: true },
+            })
+          : Promise.resolve([]),
       ]);
 
       const childById = new Map(
@@ -1351,9 +1401,27 @@ export const dashboardRouter = router({
       const deviceById = new Map(
         devices.map((device) => [device.id, device] as const)
       );
+      const nudgeById = new Map(
+        nudges.map((nudge) => [nudge.id, nudge] as const)
+      );
 
       return logs.map((log) => {
-        const meta = asAuditMetadata(log.metadata);
+        let meta = asAuditMetadata(log.metadata);
+        if (
+          log.action === "nudge_sent" &&
+          typeof meta.message !== "string" &&
+          typeof meta.nudgeId === "string"
+        ) {
+          const nudge = nudgeById.get(meta.nudgeId);
+          if (nudge) {
+            meta = {
+              ...meta,
+              message: nudge.message,
+              custom: nudge.message !== DEFAULT_NUDGE_MESSAGE,
+            };
+          }
+        }
+
         const device =
           typeof meta.deviceId === "string"
             ? deviceById.get(meta.deviceId)
