@@ -28,11 +28,15 @@ Optional future signing: `-p:SignMsi=true -p:CertificateThumbprint=...` (hook is
 
 ### Install on a child PC (elevated)
 
+**Interactive install (double-click the MSI):** the wizard asks which Windows account the child uses. Pick the child's standard (non-admin) account — not the parent admin that clicked through UAC. That choice is persisted to `HKLM\SOFTWARE\Warden\ChildUser` and reused on silent upgrades.
+
+**Silent / scripted install** still accepts an explicit account (required for unattended upgrades):
+
 ```powershell
-msiexec /i Warden-0.5.11-x64.msi CHILDUSER="CHILDPC\ChildAccount"
+msiexec /i Warden-0.5.15-x64.msi CHILDUSER="CHILDPC\ChildAccount" /qn
 ```
 
-`CHILDUSER` is the Windows account that should get the logon scheduled task. Under UAC, the default `LogonUser` is often the **elevating admin**, not the child — always pass `CHILDUSER` explicitly on family PCs.
+`CHILDUSER` is `COMPUTER\ChildAccount` (or `DOMAIN\ChildAccount`) — the Windows account that should get the logon scheduled task.
 
 The installer:
 
@@ -42,7 +46,23 @@ The installer:
 - Best-effort removes a legacy HKCU `Run\Warden` value if reachable
 - Does **not** touch `%LOCALAPPDATA%\Warden\config.json` (pairing survives upgrade and uninstall)
 
-When the installer-managed task exists, the tray **Start with Windows** item is checked and disabled.
+When the installer task is correctly bound to the current user, the tray **Start with Windows** item is checked and disabled. If the task is missing, disabled, or bound to a different account, the tray installs a per-user HKCU Run fallback and keeps the menu item editable.
+
+### Troubleshooting: app does not start at boot
+
+1. On the child PC (elevated PowerShell), run the read-only diagnostic:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\path\to\Guardian\scripts\diagnose-warden-startup.ps1 -OutFile "$env:USERPROFILE\Desktop\warden-startup-diag.txt"
+```
+
+2. Check the **VERDICT** line and **LIKELY CAUSE** block. If the task is bound to the parent/admin account, repair (elevated) after installing v0.5.14+:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Program Files\Warden\Repair-WardenStartup.ps1" -UserId "CHILDPC\ChildAccount"
+```
+
+3. App logs (v0.5.14+): `%LOCALAPPDATA%\Warden\logs\`. Installer/SYSTEM logs: `C:\ProgramData\Warden\logs\`.
 
 ## Projects
 

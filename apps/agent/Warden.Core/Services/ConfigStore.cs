@@ -9,7 +9,23 @@ public class ConfigStore
     private bool _recoveredFromCorruptConfig;
 
     public ConfigStore()
+        : this(null)
     {
+    }
+
+    /// <param name="configDirectory">
+    /// Optional override for the config folder (tests/harnesses). Null uses
+    /// %LOCALAPPDATA%\Warden and migrates legacy brand folders.
+    /// </param>
+    public ConfigStore(string? configDirectory)
+    {
+        if (!string.IsNullOrWhiteSpace(configDirectory))
+        {
+            Directory.CreateDirectory(configDirectory);
+            _configPath = Path.Combine(configDirectory, "config.json");
+            return;
+        }
+
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var dir = Path.Combine(appData, "Warden");
         Directory.CreateDirectory(dir);

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Timers;
+using Warden.Core.Diagnostics;
 using Warden.Core.Models;
 using Websocket.Client;
 using Timer = System.Timers.Timer;
@@ -51,9 +52,10 @@ public class RealtimeService : IDisposable
             {
                 JoinDeviceChannel();
             }
-            catch
+            catch (Exception ex)
             {
                 // Next reconnect attempt will retry.
+                WardenLog.Debug("Realtime", "JoinDeviceChannel after reconnect failed", ex);
             }
         });
 
@@ -81,9 +83,10 @@ public class RealtimeService : IDisposable
                         _onEvent(realtimeEvent);
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 // Ignore malformed messages
+                WardenLog.Debug("Realtime", "Malformed realtime message", ex);
             }
         });
 
@@ -97,9 +100,10 @@ public class RealtimeService : IDisposable
             {
                 SendPhoenixHeartbeat();
             }
-            catch
+            catch (Exception ex)
             {
                 // Socket may be reconnecting.
+                WardenLog.Debug("Realtime", "Phoenix heartbeat failed", ex);
             }
         };
         _heartbeatTimer.Start();

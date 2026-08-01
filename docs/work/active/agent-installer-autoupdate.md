@@ -122,3 +122,8 @@ node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.5.11-
 1. Upgrade Supabase (or host MSI elsewhere); set `INSTALLER_DOWNLOAD_ENABLED = true`; publish MSI.
 2. Redeploy if needed.
 3. Phase 3: SYSTEM updater service.
+
+## Related work
+
+Autostart diagnosis, agent file logging, HKCU self-heal, and installer startup-script hardening
+are tracked in [agent-startup-diagnostics.md](./agent-startup-diagnostics.md) (targets v0.5.14).

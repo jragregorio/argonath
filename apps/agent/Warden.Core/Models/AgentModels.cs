@@ -15,7 +15,8 @@ public class PairingRequest
 {
     public string Code { get; set; } = "";
     public string MachineName { get; set; } = "";
-    public string AgentVersion { get; set; } = "0.5.13";
+    /// <summary>Set by the API client from assembly version (AgentVersionInfo.Current).</summary>
+    public string AgentVersion { get; set; } = "";
 }
 
 public class PairingResponse
@@ -34,8 +35,14 @@ public class HeartbeatRequest
     public int ActiveMinutesToday { get; set; }
     public int IdleMinutesToday { get; set; }
     public bool IsLocked { get; set; }
-    public string AgentVersion { get; set; } = "0.5.13";
+    /// <summary>Set by the API client from assembly version (AgentVersionInfo.Current).</summary>
+    public string AgentVersion { get; set; } = "";
     public string MachineName { get; set; } = "";
+    /// <summary>
+    /// True once per boot when the previous process left the session marker
+    /// (End Task, crash, power loss). Cleared client-side after a successful send.
+    /// </summary>
+    public bool PreviousSessionUnclean { get; set; }
 }
 
 public class AllowedWindow

@@ -21,6 +21,15 @@ Parental screen-time control: a parent web dashboard and a Windows enforcement a
 
 `apps/agent` has no `package.json` and is invisible to npm workspaces / Turborepo.
 
+## Versioning (two independent lines)
+
+| Product line | Owned by | Notes |
+|--------------|----------|--------|
+| Web / `@warden/*` npm | `apps/web/package.json`, `packages/*/package.json` | Dashboard releases |
+| Windows agent / MSI | `apps/agent/Directory.Build.props` (`$(Version)`) | Child-PC agent only |
+
+Do **not** bump one when releasing the other. Agent versions must increase monotonically forever (ADR-0004). Runtime agent version comes from the assembly via `AgentVersionInfo.Current` — no hardcoded agent version literals.
+
 ## Dependency rules (enforced)
 
 - Apps may depend on packages. Packages must not import apps.

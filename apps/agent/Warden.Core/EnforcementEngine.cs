@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Warden.Core.Diagnostics;
 using Warden.Core.Models;
 using Warden.Core.Services;
 
@@ -234,13 +235,25 @@ public class EnforcementEngine
         {
             _isLocked = true;
             LockRequired?.Invoke();
-            _ = _api.SetLockedAsync(true);
+            _ = NotifyLockedAsync(true);
         }
         else if (!shouldLock && _isLocked)
         {
             _isLocked = false;
             UnlockRequired?.Invoke();
-            _ = _api.SetLockedAsync(false);
+            _ = NotifyLockedAsync(false);
+        }
+    }
+
+    private async Task NotifyLockedAsync(bool isLocked)
+    {
+        try
+        {
+            await _api.SetLockedAsync(isLocked).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not DeviceUnpairedException)
+        {
+            WardenLog.Warn("Engine", $"SetLockedAsync({isLocked}) failed (non-fatal)", ex);
         }
     }
 
@@ -316,9 +329,14 @@ public class EnforcementEngine
         };
     }
 
-    public async Task SendHeartbeatAsync()
+    public async Task SendHeartbeatAsync(bool previousSessionUnclean = false)
     {
-        await _api.SendHeartbeatAsync(ActiveMinutesToday, IdleMinutesToday, _isLocked);
+        await _api.SendHeartbeatAsync(
+            ActiveMinutesToday,
+            IdleMinutesToday,
+            _isLocked,
+            previousSessionUnclean
+        );
         // Refresh policy/bonus only — do not clobber local accumulation from a stale server value.
         await RefreshPolicyAsync(syncUsageFromServer: false);
     }
@@ -359,9 +377,10 @@ public class EnforcementEngine
         {
             await _api.ClearAdminLockAsync().ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex)
         {
             // Best-effort; local flag still cleared below.
+            WardenLog.Warn("Engine", "ClearAdminLockAsync failed", ex);
         }
 
         if (_currentPolicy != null)

@@ -2,10 +2,13 @@ using System.Reflection;
 
 namespace Warden.Core;
 
+/// <summary>
+/// Agent version is owned solely by <c>apps/agent/Directory.Build.props</c>
+/// (<c>$(Version)</c> → assembly version). See ADR-0004. Never hardcode a product
+/// version string here — web/package bumps must not touch the agent line.
+/// </summary>
 public static class AgentVersionInfo
 {
-    public const string Fallback = "0.5.13";
-
     public static string Current
     {
         get
@@ -13,8 +16,9 @@ public static class AgentVersionInfo
             var version =
                 Assembly.GetEntryAssembly()?.GetName().Version
                 ?? Assembly.GetExecutingAssembly().GetName().Version;
+            // AssemblyVersion is Major.Minor.Build.Revision from Directory.Build.props.
             return version == null
-                ? Fallback
+                ? "0.0.0"
                 : $"{version.Major}.{version.Minor}.{version.Build}";
         }
     }

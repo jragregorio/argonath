@@ -1,6 +1,12 @@
+using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
+using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Windows;
+using System.Windows.Threading;
 using Warden.Core;
+using Warden.Core.Diagnostics;
 using Warden.Core.Services;
 using Warden.LockUI;
 using Application = System.Windows.Application;
@@ -10,6 +16,26 @@ namespace Warden.Tray;
 
 static class Program
 {
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ProcessBasicInformation
+    {
+        public IntPtr Reserved1;
+        public IntPtr PebBaseAddress;
+        public IntPtr Reserved2_0;
+        public IntPtr Reserved2_1;
+        public IntPtr UniqueProcessId;
+        public IntPtr InheritedFromUniqueProcessId;
+    }
+
+    [DllImport("ntdll.dll")]
+    private static extern int NtQueryInformationProcess(
+        IntPtr processHandle,
+        int processInformationClass,
+        ref ProcessBasicInformation processInformation,
+        int processInformationLength,
+        out int returnLength
+    );
+
     private static EnforcementEngine? _engine;
     private static RealtimeService? _realtime;
     private static System.Windows.Forms.Timer? _tickTimer;
@@ -25,229 +51,573 @@ static class Program
     private static bool _attentionBusy;
     private static readonly Queue<Action> _attentionQueue = new();
     private static readonly object _attentionLock = new();
+    private static StartupDiagnosis? _startupDiagnosis;
+    private static string? _lastErrorSummary;
+    private static readonly HeartbeatHealthTracker _heartbeatHealth = new();
+    private static Mutex? _singleInstanceMutex;
+    private static bool _previousSessionUnclean;
+    private static bool _uncleanExitReported;
 
     private static DateTime _lastNudgePollAt = DateTime.MinValue;
 
     [STAThread]
     static void Main()
     {
-        System.Windows.Forms.Application.EnableVisualStyles();
-        System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
+        InstallGlobalExceptionHandlers();
 
-        var app = new Application
+        try
         {
-            ShutdownMode = ShutdownMode.OnExplicitShutdown
-        };
+            WardenLog.Init("Startup");
 
-        _configStore = new ConfigStore();
-        var http = new HttpClient();
-        var api = new WardenApiClient(http, _configStore);
-
-        // Touch config early so corrupt/empty files are discarded before pairing checks.
-        _ = _configStore.Load();
-        if (_configStore.ConsumeCorruptConfigRecovery())
-        {
-            MessageBox.Show(
-                "The local Warden configuration was missing or damaged, so this device needs to be paired again.\n\n"
-                    + "Open the parent dashboard, generate a pairing code, and enter it on the next screen.",
-                "Warden",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning
-            );
-        }
-
-        if (!_configStore.IsPaired())
-        {
-            var pairing = new PairingWindow(api, _configStore);
-            if (pairing.ShowDialog() != true || !_configStore.IsPaired())
+            // Session-scoped single-instance (Local\, not Global\): each Windows user
+            // may run their own tray. Duplicate logon launches exit silently (code 0).
+            if (!SingleInstanceGuard.TryAcquire(out _singleInstanceMutex, out var mutexMsg))
             {
+                WardenLog.Warn("Startup", mutexMsg);
                 return;
             }
-        }
 
-        _engine = new EnforcementEngine(api, _configStore);
+            WardenLog.Info("Startup", mutexMsg);
+            LogBootContext();
 
-        _engine.LockRequired += () =>
-        {
-            var monitors = System.Windows.Forms.Screen.AllScreens
-                .Select(s => new MonitorBounds(
-                    s.Bounds.Left,
-                    s.Bounds.Top,
-                    s.Bounds.Width,
-                    s.Bounds.Height,
-                    s.Primary
-                ))
-                .ToList();
+            _previousSessionUnclean = SessionMarker.HadUncleanPreviousSession();
+            if (_previousSessionUnclean)
+            {
+                WardenLog.Warn(
+                    "Session",
+                    "Previous session ended uncleanly (marker still present — force-kill, crash, or abrupt power/logoff)."
+                );
+            }
 
-            LockWindowManager.Show(
-                minutes => _engine!.RequestExtensionAsync(minutes),
-                async pin =>
+            WardenLog.Info("Startup", "WinForms init");
+            System.Windows.Forms.Application.EnableVisualStyles();
+            System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
+
+            WardenLog.Info("Startup", "Creating WPF Application");
+            var app = new Application
+            {
+                ShutdownMode = ShutdownMode.OnExplicitShutdown
+            };
+            app.DispatcherUnhandledException += OnDispatcherUnhandledException;
+
+            WardenLog.Info("Startup", "Constructing services");
+            _configStore = new ConfigStore();
+            var http = NetworkResilience.CreateAgentHttpClient();
+            var api = new WardenApiClient(http, _configStore);
+
+            WardenLog.Info("Startup", "Loading config");
+            _ = _configStore.Load();
+            if (_configStore.ConsumeCorruptConfigRecovery())
+            {
+                WardenLog.Warn("Startup", "Corrupt/missing config recovered; re-pairing required");
+                MessageBox.Show(
+                    "The local Warden configuration was missing or damaged, so this device needs to be paired again.\n\n"
+                        + "Open the parent dashboard, generate a pairing code, and enter it on the next screen.",
+                    "Warden",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+            }
+
+            if (!_configStore.IsPaired())
+            {
+                WardenLog.Info("Startup", "Pairing gate entered");
+                var pairing = new PairingWindow(api, _configStore);
+                if (pairing.ShowDialog() != true || !_configStore.IsPaired())
                 {
-                    var result = _engine!.ValidateParentPin(pin);
-                    if (!result.ok)
+                    WardenLog.Info("Startup", "Exiting: pairing cancelled or incomplete");
+                    return;
+                }
+
+                WardenLog.Info("Startup", "Pairing gate completed");
+            }
+            else
+            {
+                WardenLog.Info("Startup", "Already paired");
+            }
+
+            WardenLog.Info("Startup", "Creating EnforcementEngine");
+            _engine = new EnforcementEngine(api, _configStore);
+
+            WardenLog.Info("Startup", "Wiring engine event handlers");
+            _engine.LockRequired += () =>
+            {
+                var monitors = System.Windows.Forms.Screen.AllScreens
+                    .Select(s => new MonitorBounds(
+                        s.Bounds.Left,
+                        s.Bounds.Top,
+                        s.Bounds.Width,
+                        s.Bounds.Height,
+                        s.Primary
+                    ))
+                    .ToList();
+
+                LockWindowManager.Show(
+                    minutes => _engine!.RequestExtensionAsync(minutes),
+                    async pin =>
                     {
-                        return result;
+                        try
+                        {
+                            var result = _engine!.ValidateParentPin(pin);
+                            if (!result.ok)
+                            {
+                                return result;
+                            }
+
+                            try
+                            {
+                                await _engine.ClearAdminLockAsync();
+                            }
+                            catch (Exception ex)
+                            {
+                                WardenLog.Warn("Shutdown", "ClearAdminLockAsync failed during PIN unlock", ex);
+                            }
+
+                            ShutdownWarden("parent-pin-unlock");
+                            return result;
+                        }
+                        catch (Exception ex)
+                        {
+                            WardenLog.Error("LockUI", "PIN unlock handler failed", ex);
+                            return (false, "Unexpected error. Try again.");
+                        }
+                    },
+                    _engine.CurrentEvaluation,
+                    monitors
+                );
+            };
+
+            _engine.UnlockRequired += () => LockWindowManager.Hide();
+            _engine.PolicyChanged += eval =>
+            {
+                LockWindowManager.Update(eval);
+                UpdateTrayStatusText();
+            };
+
+            _engine.CaptureRequested += (payload, type) =>
+            {
+                _ = app.Dispatcher.InvokeAsync(async () =>
+                {
+                    try
+                    {
+                        if (_engine == null)
+                        {
+                            return;
+                        }
+
+                        await _engine.HandleCaptureAsync(payload, type);
+                    }
+                    catch (Exception ex)
+                    {
+                        WardenLog.Warn("Capture", "HandleCaptureAsync failed", ex);
+                    }
+                });
+            };
+
+            _engine.NudgeRequested += payload =>
+            {
+                _ = app.Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        EnqueueAttention(() => ShowNudge(payload));
+                    }
+                    catch (Exception ex)
+                    {
+                        WardenLog.Warn("Nudge", "NudgeRequested UI enqueue failed", ex);
+                    }
+                });
+            };
+
+            _engine.TimeWarningRequested += payload =>
+            {
+                _ = app.Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        EnqueueAttention(() => ShowTimeWarning(payload));
+                    }
+                    catch (Exception ex)
+                    {
+                        WardenLog.Warn("TimeWarning", "TimeWarningRequested UI enqueue failed", ex);
+                    }
+                });
+            };
+
+            WardenLog.Info("Startup", "Creating RealtimeService");
+            _realtime = new RealtimeService(_configStore, evt => _engine!.HandleRealtimeEvent(evt));
+
+            WardenLog.Info("Startup", "Starting background init task");
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _engine.InitializeAsync();
+                    await _realtime.ConnectAsync();
+                    await app.Dispatcher.InvokeAsync(async () =>
+                    {
+                        try
+                        {
+                            await PollPendingCapturesAsync();
+                            await PollPendingNudgesAsync();
+                        }
+                        catch (Exception ex) when (ex is not DeviceUnpairedException)
+                        {
+                            WardenLog.Warn("Startup", "Post-init poll failed (non-fatal)", ex);
+                        }
+                    });
+                    WardenLog.Info("Startup", "Background init completed");
+                }
+                catch (DeviceUnpairedException ex)
+                {
+                    WardenLog.Warn("Startup", "Device unpaired during background init", ex);
+                    _ = app.Dispatcher.BeginInvoke(() =>
+                    {
+                        MessageBox.Show(
+                            ex.Message,
+                            "Warden",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information
+                        );
+                        ShutdownWarden("device-unpaired-init");
+                    });
+                }
+                catch (Exception ex)
+                {
+                    // Offline / transient failure at boot must not kill the agent.
+                    // Tick() keeps enforcing the last known local policy until heartbeat recovers.
+                    WardenLog.Error("Startup", "Background init failed (agent continues offline)", ex);
+                    _lastErrorSummary = ex.Message;
+                }
+            });
+
+            WardenLog.Info("Startup", "Starting timers");
+            _tickTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+            _tickTimer.Tick += async (_, _) =>
+            {
+                try
+                {
+                    if (_engine == null)
+                    {
+                        return;
+                    }
+
+                    _engine.Tick();
+                    UpdateTrayStatusText();
+
+                    var shouldPollServer =
+                        (DateTime.UtcNow - _lastHeartbeatAt).TotalSeconds >= 5;
+
+                    if (!shouldPollServer)
+                    {
+                        return;
                     }
 
                     try
                     {
-                        await _engine.ClearAdminLockAsync();
+                        var reportUnclean =
+                            _previousSessionUnclean && !_uncleanExitReported;
+                        await _engine.SendHeartbeatAsync(reportUnclean);
+                        _lastHeartbeatAt = DateTime.UtcNow;
+                        if (reportUnclean)
+                        {
+                            _uncleanExitReported = true;
+                            WardenLog.Info("Session", "Reported previousSessionUnclean to server");
+                        }
+                        _heartbeatHealth.RecordSuccess();
+                        UpdateTrayStatusText();
                     }
-                    catch
+                    catch (DeviceUnpairedException ex)
                     {
-                        // Still shut down even if the dashboard clear fails.
+                        WardenLog.Warn("Heartbeat", "Device unpaired", ex);
+                        MessageBox.Show(
+                            ex.Message,
+                            "Warden",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information
+                        );
+                        ShutdownWarden("device-unpaired-heartbeat");
+                    }
+                    catch (Exception ex)
+                    {
+                        // Transient network errors must never tear down the agent.
+                        _heartbeatHealth.RecordFailure(ex);
+                        _lastErrorSummary = ex.Message;
                     }
 
-                    ShutdownWarden();
-                    return result;
-                },
-                _engine.CurrentEvaluation,
-                monitors
-            );
-        };
+                    if ((DateTime.UtcNow - _lastNudgePollAt).TotalSeconds >= 5)
+                    {
+                        _lastNudgePollAt = DateTime.UtcNow;
+                        try
+                        {
+                            await PollPendingNudgesAsync();
+                        }
+                        catch (DeviceUnpairedException ex)
+                        {
+                            WardenLog.Warn("Poll", "Device unpaired during nudge poll", ex);
+                            MessageBox.Show(
+                                ex.Message,
+                                "Warden",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Information
+                            );
+                            ShutdownWarden("device-unpaired-poll");
+                        }
+                        catch (Exception ex)
+                        {
+                            WardenLog.Warn("Poll", "Nudge poll failed (non-fatal)", ex);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    WardenLog.Warn("Heartbeat", "Tick handler failed (non-fatal)", ex);
+                }
+            };
+            _tickTimer.Start();
 
-        _engine.UnlockRequired += () => LockWindowManager.Hide();
-        _engine.PolicyChanged += eval =>
-        {
-            LockWindowManager.Update(eval);
-            UpdateTrayStatusText();
-        };
-
-        // Screen capture must run on the WPF UI (STA) thread. Realtime arrives off-thread.
-        _engine.CaptureRequested += (payload, type) =>
-        {
-            _ = app.Dispatcher.InvokeAsync(async () =>
+            _captureTimer = new System.Windows.Forms.Timer { Interval = 15_000 };
+            _captureTimer.Tick += async (_, _) =>
             {
                 try
-                {
-                    await _engine.HandleCaptureAsync(payload, type);
-                }
-                catch
-                {
-                    // Best-effort; failures are reported via confirmSnapshot.
-                }
-            });
-        };
-
-        _engine.NudgeRequested += payload =>
-        {
-            _ = app.Dispatcher.InvokeAsync(() => EnqueueAttention(() => ShowNudge(payload)));
-        };
-
-        _engine.TimeWarningRequested += payload =>
-        {
-            _ = app.Dispatcher.InvokeAsync(() =>
-                EnqueueAttention(() => ShowTimeWarning(payload))
-            );
-        };
-
-        _realtime = new RealtimeService(_configStore, evt => _engine!.HandleRealtimeEvent(evt));
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await _engine.InitializeAsync();
-                await _realtime.ConnectAsync();
-                await app.Dispatcher.InvokeAsync(async () =>
                 {
                     await PollPendingCapturesAsync();
-                    await PollPendingNudgesAsync();
-                });
-            }
-            catch (DeviceUnpairedException ex)
-            {
-                _ = app.Dispatcher.BeginInvoke(() =>
-                {
-                    MessageBox.Show(
-                        ex.Message,
-                        "Warden",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information
-                    );
-                    ShutdownWarden();
-                });
-            }
-        });
-
-        _tickTimer = new System.Windows.Forms.Timer { Interval = 1000 };
-        _tickTimer.Tick += async (_, _) =>
-        {
-            _engine.Tick();
-            UpdateTrayStatusText();
-
-            var shouldPollServer =
-                _engine.IsLocked || (DateTime.UtcNow - _lastHeartbeatAt).TotalSeconds >= 5;
-
-            if (shouldPollServer)
-            {
-                try
-                {
-                    await _engine.SendHeartbeatAsync();
-                    _lastHeartbeatAt = DateTime.UtcNow;
-                    UpdateTrayStatusText();
                 }
                 catch (DeviceUnpairedException ex)
                 {
+                    WardenLog.Warn("Poll", "Device unpaired during capture poll", ex);
                     MessageBox.Show(
                         ex.Message,
                         "Warden",
                         MessageBoxButton.OK,
                         MessageBoxImage.Information
                     );
-                    ShutdownWarden();
+                    ShutdownWarden("device-unpaired-poll");
                 }
-            }
-        };
-        _tickTimer.Start();
+                catch (Exception ex)
+                {
+                    WardenLog.Warn("Poll", "Capture poll failed (non-fatal)", ex);
+                }
+            };
+            _captureTimer.Start();
 
-        // Independent of heartbeat so missed realtime events are picked up within ~1s.
-        // Nudges poll every 5s to avoid saturating the API/DB connection pool.
-        _captureTimer = new System.Windows.Forms.Timer { Interval = 1000 };
-        _captureTimer.Tick += async (_, _) =>
+            WardenLog.Info("Startup", "Creating main window");
+            _mainWindow = new MainWindow(
+                _engine,
+                _configStore,
+                pin =>
+                {
+                    var result = _engine!.ValidateParentPin(pin);
+                    if (result.ok)
+                    {
+                        ShutdownWarden("main-window-pin-exit");
+                        return (true, null);
+                    }
+
+                    return result;
+                }
+            );
+
+            WardenLog.Info("Startup", "Creating tray");
+            SetupTray();
+            WardenLog.Info("Startup", "Showing main window");
+            _mainWindow.Show();
+
+            WardenLog.Info("Startup", "Entering message loop");
+            SessionMarker.MarkRunning();
+            try
+            {
+                Microsoft.Win32.SystemEvents.SessionEnding += OnSessionEnding;
+            }
+            catch (Exception ex)
+            {
+                WardenLog.Debug("Session", "SystemEvents.SessionEnding subscribe failed", ex);
+            }
+
+            app.Run();
+            WardenLog.Info("Startup", "Message loop exited");
+            SessionMarker.ClearClean();
+        }
+        catch (Exception ex)
+        {
+            _lastErrorSummary = ex.Message;
+            WardenLog.Error("Startup", "Fatal error in Main", ex);
+            throw;
+        }
+        finally
         {
             try
             {
-                await PollPendingCapturesAsync();
-                if ((DateTime.UtcNow - _lastNudgePollAt).TotalSeconds >= 5)
-                {
-                    _lastNudgePollAt = DateTime.UtcNow;
-                    await PollPendingNudgesAsync();
-                }
+                Microsoft.Win32.SystemEvents.SessionEnding -= OnSessionEnding;
             }
-            catch (DeviceUnpairedException ex)
+            catch
             {
-                MessageBox.Show(
-                    ex.Message,
-                    "Warden",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information
+                // ignore
+            }
+
+            SingleInstanceGuard.Release(ref _singleInstanceMutex);
+        }
+    }
+
+    private static void OnSessionEnding(object sender, Microsoft.Win32.SessionEndingEventArgs e)
+    {
+        // Logoff / shutdown is a clean OS exit — do not treat as End Task.
+        SessionMarker.ClearClean();
+        WardenLog.Info("Session", $"SessionEnding reason={e.Reason}; cleared session marker");
+    }
+
+    /// <summary>
+    /// Policy: parental-control agents must survive transient network failures. Mark
+    /// HttpRequestException / IO / socket / timeout / websocket (and inners) as Handled
+    /// so a wifi blip cannot uninstall enforcement. Genuine logic bugs (NRE, invalid UI
+    /// state, OOM) still terminate so we do not run corrupt.
+    /// </summary>
+    private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        _lastErrorSummary = e.Exception.Message;
+        if (NetworkResilience.IsRecoverable(e.Exception))
+        {
+            WardenLog.Error(
+                "Unhandled",
+                "DispatcherUnhandledException recovered (network/transient) — agent continues",
+                e.Exception
+            );
+            e.Handled = true;
+            return;
+        }
+
+        WardenLog.Error("Unhandled", "DispatcherUnhandledException (not recovered)", e.Exception);
+    }
+
+    private static void InstallGlobalExceptionHandlers()
+    {
+        try
+        {
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            {
+                var ex = e.ExceptionObject as Exception;
+                _lastErrorSummary = ex?.Message ?? e.ExceptionObject?.ToString();
+                WardenLog.Error(
+                    "Unhandled",
+                    $"AppDomain.UnhandledException (IsTerminating={e.IsTerminating})",
+                    ex
                 );
-                ShutdownWarden();
-            }
-        };
-        _captureTimer.Start();
+            };
+        }
+        catch
+        {
+            // ignore
+        }
 
-        _mainWindow = new MainWindow(
-            _engine,
-            _configStore,
-            pin =>
+        try
+        {
+            System.Windows.Forms.Application.ThreadException += (_, e) =>
             {
-                var result = _engine!.ValidateParentPin(pin);
-                if (result.ok)
+                _lastErrorSummary = e.Exception.Message;
+                if (NetworkResilience.IsRecoverable(e.Exception))
                 {
-                    ShutdownWarden();
-                    return (true, null);
+                    WardenLog.Error(
+                        "Unhandled",
+                        "WinForms ThreadException recovered (network/transient) — agent continues",
+                        e.Exception
+                    );
+                    return;
                 }
 
-                return result;
+                WardenLog.Error("Unhandled", "WinForms Application.ThreadException", e.Exception);
+            };
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            TaskScheduler.UnobservedTaskException += (_, e) =>
+            {
+                _lastErrorSummary = e.Exception.Message;
+                if (NetworkResilience.IsRecoverable(e.Exception))
+                {
+                    WardenLog.Error(
+                        "Unhandled",
+                        "UnobservedTaskException recovered (network/transient)",
+                        e.Exception
+                    );
+                    e.SetObserved();
+                    return;
+                }
+
+                WardenLog.Error("Unhandled", "TaskScheduler.UnobservedTaskException", e.Exception);
+            };
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private static void LogBootContext()
+    {
+        try
+        {
+            var sid = WindowsIdentity.GetCurrent().User?.Value ?? "(unknown)";
+            var args = string.Join(" ", Environment.GetCommandLineArgs().Skip(1));
+            var parent = TryGetParentProcessDescription();
+            WardenLog.Info(
+                "Boot",
+                $"version={AgentVersionInfo.Current}; path={Environment.ProcessPath}; pid={Environment.ProcessId}; "
+                    + $"args=[{args}]; user={Environment.UserDomainName}\\{Environment.UserName}; sid={sid}; "
+                    + $"session={Process.GetCurrentProcess().SessionId}; os={Environment.OSVersion}; "
+                    + $"machine={Environment.MachineName}; cwd={Environment.CurrentDirectory}; parent={parent}"
+            );
+
+            _startupDiagnosis = StartupHelper.Diagnose(selfHeal: true);
+            WardenLog.Info("Boot", $"autostart: {_startupDiagnosis.Summary}");
+        }
+        catch (Exception ex)
+        {
+            WardenLog.Warn("Boot", "Failed to log boot context", ex);
+        }
+    }
+
+    private static string TryGetParentProcessDescription()
+    {
+        try
+        {
+            using var self = Process.GetCurrentProcess();
+            var pbi = new ProcessBasicInformation();
+            var status = NtQueryInformationProcess(
+                self.Handle,
+                0,
+                ref pbi,
+                Marshal.SizeOf<ProcessBasicInformation>(),
+                out _
+            );
+            if (status != 0)
+            {
+                return "(unknown)";
             }
-        );
 
-        SetupTray();
-        _mainWindow.Show();
+            var ppid = pbi.InheritedFromUniqueProcessId.ToInt32();
+            var parentName = "?";
+            try
+            {
+                using var parent = Process.GetProcessById(ppid);
+                parentName = parent.ProcessName;
+            }
+            catch
+            {
+                // Parent may have exited (common for Task Scheduler).
+            }
 
-        app.Run();
+            return $"{parentName} (pid {ppid})";
+        }
+        catch (Exception ex)
+        {
+            WardenLog.Debug("Boot", "Parent process lookup failed", ex);
+            return "(unknown)";
+        }
     }
 
     private static Icon? TryLoadEmbeddedTrayIcon()
@@ -261,12 +631,12 @@ static class Program
                 return null;
             }
 
-            // Clone so the icon outlives the stream; request 16px for the tray.
             using var loaded = new Icon(stream, 16, 16);
             return (Icon)loaded.Clone();
         }
-        catch
+        catch (Exception ex)
         {
+            WardenLog.Debug("Tray", "Failed to load embedded tray icon", ex);
             return null;
         }
     }
@@ -289,27 +659,45 @@ static class Program
             null,
             (_, _) => _mainWindow?.Dispatcher.Invoke(() => _mainWindow.ShowFromTray())
         );
-        var installerManagedStartup = StartupHelper.IsInstallerManaged();
+
+        var diagnosis = _startupDiagnosis ?? StartupHelper.Diagnose(selfHeal: false);
+        _startupDiagnosis = diagnosis;
+        var taskOk = diagnosis.TaskState == InstallerTaskState.Ok;
+        var taskBroken = diagnosis.TaskState is InstallerTaskState.WrongUser
+            or InstallerTaskState.Disabled
+            or InstallerTaskState.Missing;
+
         var startupItem = new ToolStripMenuItem("Start with Windows")
         {
-            Checked = installerManagedStartup || StartupHelper.IsEnabled(),
-            CheckOnClick = !installerManagedStartup,
-            Enabled = !installerManagedStartup,
+            Checked = diagnosis.IsEffectivelyEnabled,
+            CheckOnClick = !taskOk,
+            Enabled = !taskOk,
         };
-        if (installerManagedStartup)
+        if (taskOk)
         {
             startupItem.ToolTipText = "Startup is managed by the Warden installer.";
         }
-        else
+        else if (taskBroken)
+        {
+            startupItem.ToolTipText =
+                diagnosis.TaskState == InstallerTaskState.WrongUser
+                    ? "The installer's startup task is registered for a different Windows account; Warden installed a per-user fallback."
+                    : $"Installer startup task state: {diagnosis.TaskState}. A per-user fallback may be used.";
+        }
+
+        if (!taskOk)
         {
             startupItem.Click += (_, _) =>
             {
                 try
                 {
                     StartupHelper.SetEnabled(startupItem.Checked);
+                    StartupHelper.InvalidateCache();
+                    _startupDiagnosis = StartupHelper.Diagnose(selfHeal: false);
                 }
                 catch (Exception ex)
                 {
+                    WardenLog.Warn("Tray", "Toggle Start with Windows failed", ex);
                     startupItem.Checked = StartupHelper.IsEnabled();
                     MessageBox.Show(
                         ex.Message,
@@ -326,8 +714,100 @@ static class Program
             null,
             async (_, _) =>
             {
-                await _engine!.SendHeartbeatAsync();
-                _mainWindow?.Dispatcher.Invoke(() => _mainWindow.ShowFromTray());
+                try
+                {
+                    if (_engine == null)
+                    {
+                        WardenLog.Warn("Tray", "Refresh policy clicked before engine ready");
+                        return;
+                    }
+
+                    await _engine.SendHeartbeatAsync();
+                    _heartbeatHealth.RecordSuccess();
+                    _mainWindow?.Dispatcher.Invoke(() => _mainWindow.ShowFromTray());
+                }
+                catch (DeviceUnpairedException ex)
+                {
+                    WardenLog.Warn("Tray", "Device unpaired during refresh", ex);
+                    MessageBox.Show(
+                        ex.Message,
+                        "Warden",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information
+                    );
+                    ShutdownWarden("device-unpaired-refresh");
+                }
+                catch (Exception ex)
+                {
+                    _heartbeatHealth.RecordFailure(ex);
+                    MessageBox.Show(
+                        "Could not refresh policy right now (network error). Warden keeps enforcing the last known rules.",
+                        "Warden",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning
+                    );
+                }
+            }
+        );
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(
+            "Open logs folder",
+            null,
+            (_, _) =>
+            {
+                try
+                {
+                    var dir = WardenLog.GetLogDirectory();
+                    Directory.CreateDirectory(dir);
+                    Process.Start(
+                        new ProcessStartInfo
+                        {
+                            FileName = "explorer.exe",
+                            Arguments = $"\"{dir}\"",
+                            UseShellExecute = true,
+                        }
+                    );
+                }
+                catch (Exception ex)
+                {
+                    WardenLog.Warn("Tray", "Open logs folder failed", ex);
+                    MessageBox.Show(
+                        ex.Message,
+                        "Warden",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning
+                    );
+                }
+            }
+        );
+        menu.Items.Add(
+            "Copy diagnostics",
+            null,
+            (_, _) =>
+            {
+                try
+                {
+                    var text = StartupHelper.BuildDiagnosticsClipboardText(
+                        _startupDiagnosis ?? StartupHelper.Diagnose(selfHeal: false)
+                    );
+                    if (!string.IsNullOrEmpty(_lastErrorSummary))
+                    {
+                        text += Environment.NewLine + $"Last error: {_lastErrorSummary}";
+                    }
+
+                    System.Windows.Forms.Clipboard.SetText(text);
+                    WardenLog.Info("Tray", "Diagnostics copied to clipboard");
+                }
+                catch (Exception ex)
+                {
+                    WardenLog.Warn("Tray", "Copy diagnostics failed", ex);
+                    MessageBox.Show(
+                        ex.Message,
+                        "Warden",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning
+                    );
+                }
             }
         );
         menu.Items.Add(new ToolStripSeparator());
@@ -345,7 +825,7 @@ static class Program
                     var result = _engine!.ValidateParentPin(pinWindow.Pin);
                     if (result.ok)
                     {
-                        ShutdownWarden();
+                        ShutdownWarden("tray-pin-exit");
                     }
                     else
                     {
@@ -385,7 +865,6 @@ static class Program
         _capturePollInFlight = true;
         try
         {
-            // BitBlt must run on this STA/UI thread; upload continues off-thread inside the engine.
             await _engine.ProcessPendingCapturesAsync();
         }
         finally
@@ -469,9 +948,9 @@ static class Program
             {
                 await _engine.AckNudgeAsync(payload.NudgeId, "delivered");
             }
-            catch
+            catch (Exception ex)
             {
-                // Delivery ack is best-effort; poll/realtime still show the UI.
+                WardenLog.Debug("Nudge", "Ack delivered failed", ex);
             }
         });
 
@@ -482,16 +961,15 @@ static class Program
                 _activeNudgeWindows.Remove(payload.NudgeId);
             }
 
-            // Keep engine _nudgeShown so poll does not re-open this nudge before ack lands.
             _ = Task.Run(async () =>
             {
                 try
                 {
                     await _engine.AckNudgeAsync(payload.NudgeId, "seen", "ok");
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Best-effort.
+                    WardenLog.Debug("Nudge", "Ack seen failed", ex);
                 }
             });
 
@@ -528,9 +1006,10 @@ static class Program
         _trayIcon.Text = TrayStatusText.Format(_engine);
     }
 
-    private static void ShutdownWarden()
+    private static void ShutdownWarden(string reason = "unspecified")
     {
-        // Never block the UI thread on network (GetResult deadlocks the WPF sync context).
+        WardenLog.Info("Shutdown", $"ShutdownWarden requested; reason={reason}");
+
         var engine = _engine;
         _ = Task.Run(async () =>
         {
@@ -539,21 +1018,23 @@ static class Program
             {
                 await engine.ClearAdminLockAsync().ConfigureAwait(false);
             }
-            catch
+            catch (Exception ex)
             {
-                // Best-effort dashboard unlock.
+                WardenLog.Warn("Shutdown", "ClearAdminLockAsync failed", ex);
             }
         });
 
         void Exit()
         {
+            WardenLog.Info("Shutdown", "Tearing down UI and exiting process");
+            SessionMarker.ClearClean();
             try
             {
                 LockWindowManager.Hide();
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore if lock UI already torn down.
+                WardenLog.Debug("Shutdown", "LockWindowManager.Hide failed", ex);
             }
 
             try
@@ -562,9 +1043,9 @@ static class Program
                 _captureTimer?.Dispose();
                 _captureTimer = null;
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore.
+                WardenLog.Debug("Shutdown", "captureTimer dispose failed", ex);
             }
 
             try
@@ -573,9 +1054,9 @@ static class Program
                 _tickTimer?.Dispose();
                 _tickTimer = null;
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore.
+                WardenLog.Debug("Shutdown", "tickTimer dispose failed", ex);
             }
 
             try
@@ -583,9 +1064,9 @@ static class Program
                 _realtime?.Dispose();
                 _realtime = null;
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore.
+                WardenLog.Debug("Shutdown", "realtime dispose failed", ex);
             }
 
             if (_trayIcon != null)
@@ -605,25 +1086,25 @@ static class Program
             {
                 _mainWindow?.AllowCloseAndShutdown();
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore.
+                WardenLog.Debug("Shutdown", "AllowCloseAndShutdown failed", ex);
             }
 
             try
             {
                 Application.Current?.Shutdown();
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore.
+                WardenLog.Debug("Shutdown", "Application.Shutdown failed", ex);
             }
 
-            // LockUI runs a background STA dispatcher that can keep the process alive.
+            SingleInstanceGuard.Release(ref _singleInstanceMutex);
+            WardenLog.Info("Shutdown", "Environment.Exit(0)");
             Environment.Exit(0);
         }
 
-        // Always defer so we unwind modal PIN / click handlers before tearing down.
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null)
         {

@@ -3,6 +3,7 @@ using System.Drawing.Imaging;
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
 using OpenCvSharp;
+using Warden.Core.Diagnostics;
 
 namespace Warden.Core.Services;
 
@@ -11,10 +12,17 @@ public class CaptureService
     private const int SRCCOPY = 0x00CC0020;
     private const int CAPTUREBLT = 0x40000000;
 
-    private static readonly HttpClient UploadClient = new()
+    private static readonly HttpClient UploadClient = CreateUploadClient();
+
+    private static HttpClient CreateUploadClient()
     {
-        Timeout = TimeSpan.FromSeconds(15)
-    };
+        var handler = new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            ConnectTimeout = TimeSpan.FromSeconds(10),
+        };
+        return new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
+    }
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetDC(IntPtr hWnd);
@@ -79,8 +87,9 @@ public class CaptureService
 
             return EncodeJpeg(bitmap);
         }
-        catch
+        catch (Exception ex)
         {
+            WardenLog.Warn("Capture", "CaptureScreen failed", ex);
             return null;
         }
     }
@@ -124,8 +133,9 @@ public class CaptureService
             Cv2.ImEncode(".jpg", frame, out var bytes, new ImageEncodingParam(ImwriteFlags.JpegQuality, 85));
             return bytes is { Length: > 1024 } ? bytes : null;
         }
-        catch
+        catch (Exception ex)
         {
+            WardenLog.Warn("Capture", "CaptureWebcam failed", ex);
             return null;
         }
     }

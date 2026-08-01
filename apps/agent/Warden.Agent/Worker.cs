@@ -75,7 +75,14 @@ public class Worker : BackgroundService
         _engine.PolicyChanged += eval => LockWindowManager.Update(eval);
         _engine.CaptureRequested += async (payload, type) =>
         {
-            await _engine.HandleCaptureAsync(payload, type);
+            try
+            {
+                await _engine.HandleCaptureAsync(payload, type);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "HandleCaptureAsync failed (non-fatal)");
+            }
         };
 
         _realtime = new RealtimeService(_configStore, evt => _engine.HandleRealtimeEvent(evt));
@@ -89,6 +96,10 @@ public class Worker : BackgroundService
         {
             _logger.LogWarning(ex, "Device is no longer paired. Run Warden.Tray to pair again.");
             return;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Background init failed; service continues offline with last policy");
         }
 
         _logger.LogInformation("Warden Agent service started");
@@ -113,6 +124,10 @@ public class Worker : BackgroundService
                 {
                     _logger.LogWarning(ex, "Device is no longer paired. Stopping service loop.");
                     return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Heartbeat failed (non-fatal)");
                 }
             }
 

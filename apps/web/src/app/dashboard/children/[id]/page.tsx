@@ -277,6 +277,12 @@ export default function ChildDetailPage() {
       utils.dashboard.overview.invalidate();
     },
   });
+  const dismissUncleanExit = trpc.device.dismissUncleanExit.useMutation({
+    onSuccess: () => {
+      void utils.children.get.invalidate({ childId });
+      void utils.device.list.invalidate();
+    },
+  });
   const setAdminLock = trpc.device.setAdminLock.useMutation({
     onMutate: async ({ deviceId, locked }) => {
       setPendingLocks((prev) => ({ ...prev, [deviceId]: locked }));
@@ -1288,6 +1294,9 @@ export default function ChildDetailPage() {
                       >
                         {device.isOnline ? "Online" : "Offline"}
                       </Badge>
+                      {device.lastUncleanExitAt && (
+                        <Badge variant="destructive">Unclean exit</Badge>
+                      )}
                       {effectiveAdminLock && (
                         <Badge variant="destructive">Locked down</Badge>
                       )}
@@ -1300,6 +1309,32 @@ export default function ChildDetailPage() {
                       )}
                     </div>
                   </div>
+
+                  {device.lastUncleanExitAt && (
+                    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
+                      <p>
+                        Warden on this device did not shut down cleanly
+                        {device.lastUncleanExitAt
+                          ? ` (detected ${new Date(device.lastUncleanExitAt).toLocaleString()})`
+                          : ""}
+                        . That usually means Task Manager End Task, a crash, or
+                        a hard power cut — not a normal Exit. It should
+                        auto-relaunch within about a minute.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 h-7"
+                        disabled={dismissUncleanExit.isPending}
+                        onClick={() =>
+                          dismissUncleanExit.mutate({ deviceId: device.id })
+                        }
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-2">
                     {nudgeByDevice[device.id]?.label && (

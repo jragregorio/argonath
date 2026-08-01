@@ -35,9 +35,9 @@ From `apps/agent`:
 After building the MSI, upload to Supabase Storage and upsert the `AgentRelease` row:
 
 ```bash
-npm run publish:agent -- --msi apps/agent/artifacts/Warden-0.5.11-x64.msi --channel stable
+npm run publish:agent -- --msi apps/agent/artifacts/Warden-0.5.15-x64.msi --channel stable
 # equivalent:
-node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.5.11-x64.msi --channel stable
+node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.5.15-x64.msi --channel stable
 ```
 
 Requires `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL` (or `SUPABASE_URL`), and `DATABASE_URL` (loaded from `apps/web/.env.local` / `packages/db/.env` when unset). Storage key: `releases/<channel>/Warden-<version>-x64.msi`. Optional flags: `--channel test`, `--mandatory`, `--version X.Y.Z`.
@@ -46,13 +46,34 @@ Parents download via the child detail **Devices** card (**Download for Windows**
 
 ### Install on child PC (elevated)
 
+**Interactive install:** the MSI wizard shows a **child Windows account** picker (non-admin local accounts, editable for domain accounts). Do not choose the parent admin that elevates the installer.
+
+**Silent install / Phase 3 upgrades:** pass `CHILDUSER` explicitly (or rely on the persisted HKLM value):
+
 ```powershell
-msiexec /i Warden-0.5.11-x64.msi CHILDUSER="CHILDPC\ChildAccount"
+msiexec /i Warden-0.5.15-x64.msi CHILDUSER="CHILDPC\ChildAccount" /qn
 ```
 
-Pass `CHILDUSER` explicitly on **first install**. It is persisted under `HKLM\SOFTWARE\Warden\ChildUser` so Phase 3 SYSTEM-driven silent upgrades re-register the logon task for the same child account (without relying on `LogonUser`, which would be `SYSTEM`). Under UAC elevation, the default logon user is often the admin who elevated, not the child.
+`CHILDUSER` is persisted under `HKLM\SOFTWARE\Warden\ChildUser` so SYSTEM-driven silent upgrades re-register the logon task for the same child account. Quiet installs (`UILevel <= 3`) may still fall back to `[LogonUser]` if neither cmdline nor HKLM is set; full UI never uses that fallback.
 
 Pairing state in `%LOCALAPPDATA%\Warden\config.json` is preserved across MSI upgrade and uninstall.
+
+### Troubleshooting: agent does not start at boot / logon
+
+1. Run the read-only diagnostic on the child PC (elevated):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\diagnose-warden-startup.ps1 -OutFile "$env:USERPROFILE\Desktop\warden-startup-diag.txt"
+```
+
+2. Read the **VERDICT** line (task UserId vs current user) and **LIKELY CAUSE**.
+3. Repair the logon task (v0.5.14+, elevated):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Program Files\Warden\Repair-WardenStartup.ps1" -UserId "CHILDPC\ChildAccount"
+```
+
+4. Logs: `%LOCALAPPDATA%\Warden\logs\` (app) and `C:\ProgramData\Warden\logs\` (installer/SYSTEM).
 
 ### Zip / publish fallback
 

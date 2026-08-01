@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using Warden.Core.Diagnostics;
 using Warden.Core.Models;
 using Warden.Core.Services;
 
@@ -77,9 +78,10 @@ public class LockWindow : Window
                 Topmost = true;
                 Activate();
             }
-            catch
+            catch (Exception ex)
             {
                 // Ignore if the window is tearing down.
+                WardenLog.Debug("LockUI", "Re-activate after Deactivated failed", ex);
             }
         };
 
@@ -344,10 +346,20 @@ public class LockWindow : Window
             btn.IsEnabled = false;
             var previous = btn.Content;
             btn.Content = "Requesting...";
-            var success = await onExtensionRequest(minutes);
-            btn.Content = success ? "Request sent!" : "Failed - try again";
-            if (!success)
+            try
             {
+                var success = await onExtensionRequest(minutes);
+                btn.Content = success ? "Request sent!" : "Failed - try again";
+                if (!success)
+                {
+                    await Task.Delay(2000);
+                    btn.Content = previous;
+                    btn.IsEnabled = true;
+                }
+            }
+            catch (Exception)
+            {
+                btn.Content = "Failed - try again";
                 await Task.Delay(2000);
                 btn.Content = previous;
                 btn.IsEnabled = true;
@@ -371,24 +383,38 @@ public class LockWindow : Window
             }
 
             btn.IsEnabled = false;
-            var (ok, error) = await onParentShutdown(pinBox.Password);
-            if (ok)
+            try
             {
-                if (_pinStatusText != null)
+                var (ok, error) = await onParentShutdown(pinBox.Password);
+                if (ok)
                 {
-                    _pinStatusText.Foreground = SuccessBrush;
-                    _pinStatusText.Text = "Shutting down...";
+                    if (_pinStatusText != null)
+                    {
+                        _pinStatusText.Foreground = SuccessBrush;
+                        _pinStatusText.Text = "Shutting down...";
+                    }
+                }
+                else
+                {
+                    if (_pinStatusText != null)
+                    {
+                        _pinStatusText.Foreground = DangerBrush;
+                        _pinStatusText.Text = error ?? "Shutdown failed.";
+                    }
+
+                    btn.IsEnabled = true;
                 }
             }
-            else
+            catch (Exception ex)
             {
                 if (_pinStatusText != null)
                 {
                     _pinStatusText.Foreground = DangerBrush;
-                    _pinStatusText.Text = error ?? "Shutdown failed.";
+                    _pinStatusText.Text = "Unexpected error. Try again.";
                 }
 
                 btn.IsEnabled = true;
+                System.Diagnostics.Debug.WriteLine(ex);
             }
         };
         return btn;
@@ -545,9 +571,10 @@ public static class LockWindowManager
                 {
                     KeyboardLock.Enable();
                 }
-                catch
+                catch (Exception ex)
                 {
                     // Lock UI still works without the hook; shortcuts may bypass.
+                    WardenLog.Warn("LockUI", "KeyboardLock.Enable failed", ex);
                 }
 
                 _dispatcher = Dispatcher.CurrentDispatcher;

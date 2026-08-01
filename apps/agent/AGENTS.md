@@ -32,8 +32,19 @@ Publish output: `Warden.Tray/bin/Release/net8.0-windows/win-x64/publish/`. Prefe
 - After pairing: `%LOCALAPPDATA%\Warden\config.json`
 - MSI install: pass `CHILDUSER="COMPUTER\ChildAccount"` so the logon task targets the child (not the elevating admin)
 
+## Versioning
+
+**Agent version is independent of web/packages** (ADR-0004). Sole owner:
+
+| Line | File | Who bumps it |
+|------|------|----------------|
+| Agent / MSI | `apps/agent/Directory.Build.props` → `$(Version)` | Agent releases only |
+| Web / npm | `apps/web/package.json`, `packages/*/package.json` | Web releases only — never here |
+
+Runtime reads `AgentVersionInfo.Current` from the assembly. Do not hardcode agent version strings. Agent versions must **only increase** (field agents + MSI downgrade protection).
+
 ## Boundaries
 
-Keep `Warden.Core` / `Warden.LockUI` inside this folder (ADR-0002). ProjectReferences must stay sibling-relative under `apps/agent`. No npm package for these libraries. Installer decisions: ADR-0003.
+Keep `Warden.Core` / `Warden.LockUI` inside this folder (ADR-0002). ProjectReferences must stay sibling-relative under `apps/agent`. No npm package for these libraries. Installer decisions: ADR-0003. Version ownership: ADR-0004.
 
 Details: `apps/agent/README.md`.

@@ -116,6 +116,9 @@ model Device {
   isOnline     Boolean   @default(false)
   isLocked     Boolean   @default(false)
   adminLock    Boolean   @default(false)
+  /// Set when the agent reports the previous process exited uncleanly (End Task / crash).
+  /// Cleared when a parent dismisses the dashboard banner.
+  lastUncleanExitAt DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Warden.Core.Diagnostics;
 using Warden.Core.Models;
 
 namespace Warden.Core.Services;
@@ -21,6 +22,8 @@ public class WardenApiClient
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true
     };
+
+    private const int MaxTransientAttempts = 3;
 
     public WardenApiClient(HttpClient http, ConfigStore configStore)
     {
@@ -58,6 +61,36 @@ public class WardenApiClient
         }
     }
 
+    private async Task<HttpResponseMessage> SendWithTransientRetryAsync(
+        Func<CancellationToken, Task<HttpResponseMessage>> send,
+        string operation,
+        CancellationToken cancellationToken = default
+    )
+    {
+        Exception? last = null;
+        for (var attempt = 1; attempt <= MaxTransientAttempts; attempt++)
+        {
+            try
+            {
+                return await send(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (NetworkResilience.IsRecoverable(ex) && attempt < MaxTransientAttempts)
+            {
+                last = ex;
+                // Jittered exponential backoff: ~200ms, ~800ms (+0-100ms).
+                var delayMs = (200 * attempt * attempt) + Random.Shared.Next(0, 100);
+                WardenLog.Warn(
+                    "Api",
+                    $"{operation} attempt {attempt}/{MaxTransientAttempts} failed; retry in {delayMs}ms",
+                    ex
+                );
+                await Task.Delay(delayMs, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        throw last ?? new HttpRequestException($"{operation} failed after retries");
+    }
+
     public async Task<PairingResponse?> PairAsync(string code)
     {
         var config = _configStore.Load();
@@ -89,7 +122,12 @@ public class WardenApiClient
         return result;
     }
 
-    public async Task<bool> SendHeartbeatAsync(int activeMinutes, int idleMinutes, bool isLocked)
+    public async Task<bool> SendHeartbeatAsync(
+        int activeMinutes,
+        int idleMinutes,
+        bool isLocked,
+        bool previousSessionUnclean = false
+    )
     {
         SetDeviceTokenHeader();
         var config = _configStore.Load();
@@ -100,12 +138,13 @@ public class WardenApiClient
             IdleMinutesToday = idleMinutes,
             IsLocked = isLocked,
             MachineName = Environment.MachineName,
-            AgentVersion = AgentVersionInfo.Current
+            AgentVersion = AgentVersionInfo.Current,
+            PreviousSessionUnclean = previousSessionUnclean
         };
 
-        var response = await _http.PostAsJsonAsync(
-            $"{config.ApiBaseUrl}/api/agent",
-            request
+        var response = await SendWithTransientRetryAsync(
+            ct => _http.PostAsJsonAsync($"{config.ApiBaseUrl}/api/agent", request, ct),
+            "heartbeat"
         );
 
         HandleUnpairedResponse(response);
@@ -117,8 +156,9 @@ public class WardenApiClient
         SetDeviceTokenHeader();
         var config = _configStore.Load();
 
-        var response = await _http.GetAsync(
-            $"{config.ApiBaseUrl}/api/agent?action=policy"
+        var response = await SendWithTransientRetryAsync(
+            ct => _http.GetAsync($"{config.ApiBaseUrl}/api/agent?action=policy", ct),
+            "getPolicy"
         );
 
         HandleUnpairedResponse(response);
@@ -211,8 +251,9 @@ public class WardenApiClient
         SetDeviceTokenHeader();
         var config = _configStore.Load();
 
-        var response = await _http.GetAsync(
-            $"{config.ApiBaseUrl}/api/agent?action=pendingCaptures"
+        var response = await SendWithTransientRetryAsync(
+            ct => _http.GetAsync($"{config.ApiBaseUrl}/api/agent?action=pendingCaptures", ct),
+            "pendingCaptures"
         );
 
         HandleUnpairedResponse(response);
@@ -230,8 +271,9 @@ public class WardenApiClient
         SetDeviceTokenHeader();
         var config = _configStore.Load();
 
-        var response = await _http.GetAsync(
-            $"{config.ApiBaseUrl}/api/agent?action=pendingNudges"
+        var response = await SendWithTransientRetryAsync(
+            ct => _http.GetAsync($"{config.ApiBaseUrl}/api/agent?action=pendingNudges", ct),
+            "pendingNudges"
         );
 
         HandleUnpairedResponse(response);

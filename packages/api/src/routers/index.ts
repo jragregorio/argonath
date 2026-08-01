@@ -61,6 +61,7 @@ const deviceClientSelect = {
   isOnline: true,
   isLocked: true,
   adminLock: true,
+  lastUncleanExitAt: true,
   pairingCode: true,
   pairingExpiresAt: true,
   createdAt: true,
@@ -80,6 +81,7 @@ type DeviceClientSource = {
   isOnline: boolean;
   isLocked: boolean;
   adminLock: boolean;
+  lastUncleanExitAt: Date | null;
   pairingCode: string | null;
   pairingExpiresAt: Date | null;
   createdAt: Date;
@@ -748,6 +750,28 @@ export const deviceRouter = router({
       });
 
       return prisma.device.delete({ where: { id: device.id } });
+    }),
+
+  dismissUncleanExit: parentProcedure
+    .input(z.object({ deviceId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const device = await prisma.device.findFirst({
+        where: {
+          id: input.deviceId,
+          child: { familyId: family.id },
+        },
+      });
+
+      if (!device) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      return prisma.device.update({
+        where: { id: device.id },
+        data: { lastUncleanExitAt: null },
+        select: { id: true, lastUncleanExitAt: true },
+      });
     }),
 
   setAdminLock: parentProcedure
@@ -1844,6 +1868,7 @@ export const agentRouter = router({
         isLocked: z.boolean(),
         agentVersion: z.string(),
         machineName: z.string(),
+        previousSessionUnclean: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1885,6 +1910,9 @@ export const agentRouter = router({
           lastSeenAt: new Date(),
           agentVersion: input.agentVersion,
           machineName: input.machineName,
+          ...(input.previousSessionUnclean
+            ? { lastUncleanExitAt: new Date() }
+            : {}),
         },
       });
 

@@ -8,7 +8,8 @@
   the old install.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 
   <Package
     Name="Warden"
@@ -53,10 +54,12 @@
     <Property Id="ARPPRODUCTICON" Value="Warden.exe" />
 
     <!--
-      CHILDUSER resolution (Phase 3 upgrade-safe):
-        1) explicit msiexec command line
-        2) persisted HKLM\SOFTWARE\Warden\ChildUser (via CHILDUSER_REG AppSearch)
-        3) [LogonUser] fallback
+      CHILDUSER resolution:
+        1) explicit msiexec command line (tracked as CHILDUSER_SET_FROM_CMDLINE; skips UI dialog)
+        2) persisted HKLM\SOFTWARE\Warden\ChildUser (via CHILDUSER_REG AppSearch) — pre-fills
+           the interactive dialog so a wrong upgrade value can be corrected
+        3) [LogonUser] fallback ONLY for quiet/basic UI (UILevel <= 3) so Phase 3 unattended
+           upgrades still work; interactive double-click installs must pick the child in the UI
       RegistrySearch must NOT write CHILDUSER directly or it would overwrite cmdline.
     -->
     <Property Id="CHILDUSER" Secure="yes" />
@@ -69,6 +72,12 @@
         Type="raw"
         Bitness="always64" />
     </Property>
+    <Property Id="CHILDUSER_VALID" Secure="yes" />
+    <Property Id="CHILDUSER_IS_ADMIN" Secure="yes" />
+    <Property Id="CHILDUSER_ADMIN_OK" Secure="yes" />
+    <Property Id="CHILDUSER_VALID_MSG" Secure="yes" />
+    <Property Id="CHILDUSER_SET_FROM_CMDLINE" Secure="yes" />
+
     <SetProperty
       Id="CHILDUSER"
       Action="SetChildUserFromReg"
@@ -82,7 +91,14 @@
       Value="[LogonUser]"
       After="SetChildUserFromReg"
       Sequence="first"
-      Condition="NOT CHILDUSER" />
+      Condition="NOT CHILDUSER AND UILevel &lt;= 3" />
+
+    <UIRef Id="WixUI_Warden" />
+
+    <!-- Pull in the deferred task-registration Fragment (smart-link otherwise drops it). -->
+    <CustomActionRef Id="CreateWardenTask" />
+    <CustomActionRef Id="DeleteWardenTask" />
+    <CustomActionRef Id="RollbackWardenTask" />
 
     <Feature Id="Main" Title="Warden" Level="1">
       <ComponentGroupRef Id="HarvestedPublishFiles" />
@@ -130,6 +146,10 @@
         <File Source="assets\Unregister-WardenStartup.ps1" KeyPath="yes" />
       </Component>
 
+      <Component Id="RepairStartupScript" Guid="B7C4E91F-2A5D-4F8E-9C1B-6D3E8A0F4B72">
+        <File Source="assets\Repair-WardenStartup.ps1" KeyPath="yes" />
+      </Component>
+
       <!-- Persist resolved CHILDUSER for unattended/SYSTEM upgrades (Phase 3). -->
       <Component Id="PersistedChildUser" Guid="C4E8F1A2-6B3D-4E9F-A0C1-2D3E4F5A6B7C">
         <RegistryValue
@@ -165,55 +185,61 @@
   </Fragment>
 
   <Fragment>
-    <!-- Deferred SYSTEM actions: register / remove logon task for CHILDUSER. -->
+    <!--
+      Deferred SYSTEM actions: register / remove logon task for CHILDUSER.
+      Uses managed DTF CA (LogonTaskActions) instead of PowerShell + WixQuietExec.
+      Empty CustomActionData or schtasks failure fails the install (Return=check).
+      After successful create, the CA best-effort schtasks /Run (never fails install).
+      RollbackWardenTask has Execute=rollback so it only runs if the transaction rolls back.
+    -->
     <SetProperty
       Id="CreateWardenTask"
-      Value="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]Register-WardenStartup.ps1&quot; -ExePath &quot;[INSTALLFOLDER]Warden.Tray.exe&quot; -UserId &quot;[CHILDUSER]&quot; -TaskName &quot;Warden\WardenTray&quot;"
+      Value="ExePath=[INSTALLFOLDER]Warden.Tray.exe;UserId=[CHILDUSER];TaskName=Warden\WardenTray"
       Before="CreateWardenTask"
       Sequence="execute"
       Condition="NOT REMOVE" />
 
     <CustomAction
       Id="CreateWardenTask"
-      BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
-      DllEntry="WixQuietExec"
+      BinaryRef="WardenInstallerCA"
+      DllEntry="CreateWardenLogonTask"
       Execute="deferred"
       Impersonate="no"
       Return="check" />
 
     <SetProperty
       Id="DeleteWardenTask"
-      Value="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]Unregister-WardenStartup.ps1&quot; -TaskName &quot;Warden\WardenTray&quot;"
+      Value="TaskName=Warden\WardenTray"
       Before="DeleteWardenTask"
       Sequence="execute" />
 
     <CustomAction
       Id="DeleteWardenTask"
-      BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
-      DllEntry="WixQuietExec"
+      BinaryRef="WardenInstallerCA"
+      DllEntry="DeleteWardenLogonTask"
       Execute="deferred"
       Impersonate="no"
       Return="ignore" />
 
     <SetProperty
       Id="RollbackWardenTask"
-      Value="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]Unregister-WardenStartup.ps1&quot; -TaskName &quot;Warden\WardenTray&quot;"
+      Value="TaskName=Warden\WardenTray"
       Before="RollbackWardenTask"
       Sequence="execute"
       Condition="NOT REMOVE" />
 
     <CustomAction
       Id="RollbackWardenTask"
-      BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
-      DllEntry="WixQuietExec"
+      BinaryRef="WardenInstallerCA"
+      DllEntry="RollbackWardenLogonTask"
       Execute="rollback"
       Impersonate="no"
       Return="ignore" />
 
     <InstallExecuteSequence>
       <Custom Action="CreateWardenTask" After="InstallFiles" Condition="NOT REMOVE" />
+      <!-- Rollback scheduling only; Execute=rollback means it does not run on success. -->
       <Custom Action="RollbackWardenTask" Before="CreateWardenTask" Condition="NOT REMOVE" />
-      <!-- On full uninstall, delete task while files (script) still present. -->
       <Custom Action="DeleteWardenTask" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot;" />
     </InstallExecuteSequence>
   </Fragment>

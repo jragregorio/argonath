@@ -1,6 +1,8 @@
 <Project>
   <PropertyGroup>
-    <Version>0.5.13</Version>
+    <!-- Agent MSI / assembly version ONLY. Independent of apps/web and packages/* (ADR-0004).
+         Must increase monotonically forever — never reset or jump. -->
+    <Version>0.5.18</Version>
     <AssemblyVersion>$(Version).0</AssemblyVersion>
     <FileVersion>$(Version).0</FileVersion>
     <Company>Warden</Company>
