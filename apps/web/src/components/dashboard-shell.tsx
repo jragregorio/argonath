@@ -6,9 +6,9 @@ import { FamilyRealtimeProvider } from "@/lib/family-realtime";
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <FamilyRealtimeProvider>
-      <div className="flex min-h-dvh flex-col overflow-x-hidden md:h-dvh md:min-h-0 md:flex-row md:overflow-hidden">
+      <div className="flex w-full min-h-dvh flex-col overflow-x-hidden md:h-dvh md:min-h-0 md:flex-row md:overflow-hidden">
         <DashboardNav />
-        <main className="relative flex-1 min-h-0 min-w-0 p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] md:overflow-y-auto md:p-8 md:pb-8">
+        <main className="relative flex-1 min-h-0 min-w-0 overflow-x-hidden p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] md:overflow-y-auto md:p-8 md:pb-8">
           <div
             className="pointer-events-none absolute -right-24 top-0 h-72 w-72 rounded-full bg-attention/8 blur-[100px]"
             aria-hidden="true"

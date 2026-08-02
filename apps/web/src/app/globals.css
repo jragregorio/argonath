@@ -40,12 +40,18 @@
   border-color: var(--color-border);
 }
 
+html {
+  /* Decorative blurs / full-bleed chrome must not create a page-level x-scrollbar */
+  overflow-x: hidden;
+}
+
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
   /* Avoid rubber-band revealing wrong edges behind fixed chrome */
   min-height: 100dvh;
+  overflow-x: hidden;
 }
 
 @keyframes home-rise {
