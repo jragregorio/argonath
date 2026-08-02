@@ -11,3 +11,4 @@ alwaysApply: false
 - Do not move Core/LockUI to `packages/` (ADR-0002).
 - Bootstrap via `warden.json` or `WARDEN_API_BASE_URL`.
 - Validate with `dotnet build apps/agent/Warden.sln`. No .NET test projects yet.
+- Version: bump only `Directory.Build.props` on agent releases (ADR-0004). Base-10 carry — after `X.Y.9` next is `X.(Y+1).0`, never `X.Y.10`.

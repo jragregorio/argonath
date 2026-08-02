@@ -9,10 +9,10 @@
 
 | Line | Owner file | Notes |
 |------|------------|--------|
-| Agent / MSI | `apps/agent/Directory.Build.props` → `$(Version)` | Independent; monotonic forever |
-| Web / npm | `apps/web/package.json`, `packages/*` | Web can change for dashboard banner; agent version stays in Directory.Build.props only |
+| Agent / MSI | `apps/agent/Directory.Build.props` → `$(Version)` | Independent; monotonic forever; base-10 carry |
+| Web / npm | `apps/web/package.json`, `packages/shared` + `APP_VERSION` | Independent; same base-10 carry |
 
-Runtime: `AgentVersionInfo.Current` from assembly. No hardcoded agent version literals in models.
+Runtime: `AgentVersionInfo.Current` from assembly. No hardcoded agent version literals in models. After `X.Y.9` → `X.(Y+1).0` (never `*.*.10+`).
 
 ## Product ceiling
 

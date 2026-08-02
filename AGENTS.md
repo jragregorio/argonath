@@ -25,10 +25,20 @@ Parental screen-time control: a parent web dashboard and a Windows enforcement a
 
 | Product line | Owned by | Notes |
 |--------------|----------|--------|
-| Web / `@warden/*` npm | `apps/web/package.json`, `packages/*/package.json` | Dashboard releases |
+| Web / `@warden/*` npm | `apps/web/package.json`, `packages/shared` (`package.json` + `APP_VERSION`) | Dashboard releases |
 | Windows agent / MSI | `apps/agent/Directory.Build.props` (`$(Version)`) | Child-PC agent only |
 
 Do **not** bump one when releasing the other. Agent versions must increase monotonically forever (ADR-0004). Runtime agent version comes from the assembly via `AgentVersionInfo.Current` — no hardcoded agent version literals.
+
+### Base-10 carry (strict)
+
+Each `MAJOR.MINOR.PATCH` component uses digits **0–9 only**. On every bump of a line:
+
+1. Increment `PATCH` by 1.
+2. If `PATCH` would become `10`, set `PATCH` to `0` and increment `MINOR` by 1.
+3. If `MINOR` would become `10`, set `MINOR` to `0` and increment `MAJOR` by 1.
+
+Examples: `0.5.9` → `0.6.0`; `0.9.9` → `1.0.0`. Never publish `*.*.10` or higher. Applies independently to web and agent.
 
 ## Dependency rules (enforced)
 
