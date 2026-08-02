@@ -272,6 +272,74 @@ does not exist in a production build.
 4. Agent polls `pendingCaptures` at 1 Hz; each poll now costs ~780 ms locally.
    Consider backing off when idle.
 
+## Phase 4 — live LCP diagnosis (2026-08-02)
+
+**Symptom:** Chrome local metrics on live show LCP **10.48 s** (poor), CLS 0.01 /
+INP 16 ms (good). Local `npm run dev` feels fast.
+
+**Orchestrator:** Opus 5 (`59eaa848-f822-4e1c-bc60-097fb9de3044`).
+**Executor:** Grok 4.5 — measurement only; no code changes.
+
+### Live host / region evidence (measured)
+
+| Probe | Result |
+|-------|--------|
+| Host | `https://warden-alpha.vercel.app` |
+| Homepage | prerendered, `X-Vercel-Cache: HIT`, warm TTFB ~150–170 ms |
+| Edge (`X-Vercel-Id` first segment) | `sin1` (Singapore) |
+| Node `/api/agent` (401, no DB) | `sin1::iad1::…` — **function region = `iad1` (US East)** |
+| `/api/agent` TTFB ×5 | 0.42–0.45 s steady (edge→iad1 hop even without Prisma) |
+| DB (from earlier Phase notes) | Supabase pooler `aws-0-ap-southeast-1` |
+| `vercel.json` | no `regions` key → Node defaults to `iad1` |
+
+Static marketing pages are not the 10 s problem. Authenticated `/dashboard` is.
+
+### Cause chain (ranked)
+
+1. **Region mismatch (primary multiplier).** Vercel Node runs in `iad1`; Postgres
+   is in `ap-southeast-1`. Every Prisma round trip pays trans-Pacific RTT. Local
+   dev talks to the same DB at ~35–41 ms RTT; live functions pay ~5–6× that per
+   statement, on top of `pgbouncer=true` multi-statement wraps.
+2. **LCP gated on client tRPC.** `dashboard/page.tsx` re-exports
+   `overview-client.tsx`, which returns text-free `OverviewSkeleton` until
+   `dashboard.overview` resolves. Prefetch only covers `navBadges` +
+   `device.list` — not overview/activity/`auth.me`.
+3. **Blocking layout SSR.** `dashboard/layout.tsx` `await`s
+   `prefetchDashboardShell()` with no Suspense above it, so document HTML waits
+   on two cold Prisma procedures before any shell streams.
+4. **Auth refresh detour (cold visits every 15 min).** Middleware redirects page
+   navigations to `/api/auth/refresh` (Node + sequential Prisma in
+   `refreshSession`) then back — extra document RTT(s) before (2)/(3).
+
+Rough cold-visit budget that reaches ~10 s: refresh chain (2–4 s from iad1) +
+blocking SSR prefetch (1–3 s) + hydrate (0.5–1.5 s) + client overview batch
+(1.5–3 s). Warm-token visits still look multi-second because of (1)+(2)+(3).
+
+### Why local feels fine
+
+- Next runs on the laptop (no `iad1` function hop).
+- DB RTT ~35 ms vs function→DB ~200 ms+.
+- Dev often uses `NEXT_PUBLIC_DEV_AUTH_BYPASS=true` (skips middleware refresh);
+  even with bypass off, local never pays US-East→Singapore per query.
+
+### Not yet proven (need signed-in DevTools)
+
+Acceptance items still open without cookies: LCP element identity, TTFB vs LCP
+split on `/dashboard`, cold vs warm redirect list, `/api/trpc` batch timing with
+auth cookies. Code + region probes are sufficient to explain the live/dev gap.
+
+### Region pin applied (2026-08-02)
+
+`"regions": ["sin1"]` added to `apps/web/vercel.json` so Node co-locates with
+Supabase `ap-southeast-1`. Needs a Vercel redeploy. After deploy, `/api/agent`
+`X-Vercel-Id` should show `sin1::sin1::…` (not `sin1::iad1::…`).
+
+### Do not change yet
+
+Fonts, marketing animations, TTL lengthening, edge runtime for Prisma, or
+bundle-only tweaks. Remaining LCP candidates after region deploy: SSR/prefetch
+`dashboard.overview`, stream layout past non-LCP shell prefetch.
+
 ## Sources
 
 - API audit: agent `35670c2e-7747-4b2c-a4e1-50cdea6adb9f`
