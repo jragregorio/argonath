@@ -1,7 +1,7 @@
 # Version credit popover (web footer)
 
 **Started:** 2026-08-04
-**Status:** Done — shipped in web v0.6.1
+**Status:** Done — web v0.6.2 / agent v0.6.1
 
 ## Goal
 
@@ -12,7 +12,7 @@ desktop agent versions.
 
 - Shared `VersionCredit` (desktop sidebar + mobile More sheet).
 - Click/tap disclosure; labels regular, versions `font-semibold`.
-- Desktop version hardcoded (`0.6.0` = agent line) via
+- Desktop version hardcoded (`0.6.1` = agent line) via
   `HARDCODED_DESKTOP_APP_VERSION`; flip `USE_AGENT_RELEASE_FOR_DESKTOP_VERSION`
   when AgentRelease should drive it again.
 - API: `agentRelease.latestMeta` kept for that switch.

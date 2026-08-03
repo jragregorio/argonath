@@ -2,7 +2,7 @@
   <PropertyGroup>
     <!-- Agent MSI / assembly version ONLY. Independent of apps/web and packages/* (ADR-0004).
          Must increase monotonically forever. Patch is 0–9 only; next after X.Y.9 is X.(Y+1).0. -->
-    <Version>0.6.0</Version>
+    <Version>0.6.1</Version>
     <AssemblyVersion>$(Version).0</AssemblyVersion>
     <FileVersion>$(Version).0</FileVersion>
     <Company>Warden</Company>
