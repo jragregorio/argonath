@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   Shield,
   LayoutDashboard,
@@ -249,6 +249,98 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
+/**
+ * Temporary desktop version until AgentRelease rows are published regularly.
+ * Flip USE_AGENT_RELEASE_FOR_DESKTOP_VERSION when ready to read from DB again.
+ * Keep HARDCODED_DESKTOP_APP_VERSION in sync with apps/agent/Directory.Build.props.
+ */
+const USE_AGENT_RELEASE_FOR_DESKTOP_VERSION = false;
+const HARDCODED_DESKTOP_APP_VERSION = "0.6.0";
+
+function VersionCredit({ className = "" }: { className?: string }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const panelId = useId();
+
+  const metaQuery = trpc.agentRelease.latestMeta.useQuery(undefined, {
+    enabled: open && USE_AGENT_RELEASE_FOR_DESKTOP_VERSION,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onPointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (target && rootRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  let desktopVersion: string | null = HARDCODED_DESKTOP_APP_VERSION;
+  let desktopStatus: string | null = null;
+  if (USE_AGENT_RELEASE_FOR_DESKTOP_VERSION) {
+    desktopVersion = metaQuery.data?.version ?? null;
+    if (metaQuery.isFetching && !metaQuery.data) {
+      desktopStatus = "Loading desktop version…";
+    } else if (metaQuery.isError) {
+      desktopStatus = "Couldn’t load desktop version.";
+    } else if (!desktopVersion) {
+      desktopStatus = "No desktop release published.";
+    }
+  }
+
+  return (
+    <div ref={rootRef} className={`relative ${className}`}>
+      {open && (
+        <div
+          id={panelId}
+          className="absolute bottom-full left-1/2 z-[70] mb-2 w-max max-w-[14rem] -translate-x-1/2 rounded-lg border border-border bg-secondary px-3 py-2 text-left text-[11px] leading-snug shadow-lg"
+        >
+          <p className="text-muted-foreground">
+            Web ·{" "}
+            <span className="font-semibold text-foreground">v{APP_VERSION}</span>
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            {desktopVersion ? (
+              <>
+                Desktop app ·{" "}
+                <span className="font-semibold text-foreground">
+                  v{desktopVersion}
+                </span>
+              </>
+            ) : (
+              desktopStatus
+            )}
+          </p>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={`mx-auto block w-full rounded-md px-2 py-1.5 text-center text-[11px] text-muted-foreground/70 underline-offset-2 transition-colors hover:text-muted-foreground hover:underline ${focusRing}`}
+        aria-expanded={open}
+        aria-controls={panelId}
+      >
+        Made by JRAG · v{APP_VERSION}
+      </button>
+    </div>
+  );
+}
+
 function MobileBottomTabs({
   moreOpen,
   onMoreToggle,
@@ -373,9 +465,7 @@ function MobileMoreSheet({
 
         <NavFooter onNavigate={onClose} />
 
-        <p className="pt-4 text-center text-[11px] text-muted-foreground/70">
-          Made by JRAG · v{APP_VERSION}
-        </p>
+        <VersionCredit className="pt-4" />
       </div>
     </>
   );
@@ -430,9 +520,7 @@ export function DashboardNav() {
         </div>
         <NavLinks />
         <NavFooter />
-        <p className="mt-auto pt-4 text-center text-[11px] text-muted-foreground/70">
-          Made by JRAG · v{APP_VERSION}
-        </p>
+        <VersionCredit className="mt-auto pt-4" />
       </aside>
     </>
   );

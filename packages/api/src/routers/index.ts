@@ -2304,6 +2304,35 @@ export const agentRouter = router({
 });
 
 export const agentReleaseRouter = router({
+  /** Version metadata only — no Storage signed URL (works without Supabase). */
+  latestMeta: parentProcedure
+    .input(
+      z
+        .object({
+          channel: agentReleaseChannelSchema.default("stable"),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const channel = input?.channel ?? "stable";
+
+      try {
+        const latest = await findLatestAgentRelease(channel);
+        if (!latest) {
+          return null;
+        }
+
+        return {
+          version: latest.version,
+          mandatory: latest.mandatory,
+          publishedAt: latest.publishedAt,
+        };
+      } catch (error) {
+        console.error("[agentRelease] latestMeta lookup failed", error);
+        return null;
+      }
+    }),
+
   latest: parentProcedure
     .input(
       z
