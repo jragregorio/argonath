@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Shield,
   LayoutDashboard,
@@ -19,6 +19,7 @@ import { isSupabaseConfigured } from "@/lib/dev-config";
 import { trpc } from "@/lib/trpc";
 import { useNavBadges } from "@/lib/family-realtime";
 import { APP_VERSION } from "@warden/shared";
+import { InteractiveMenu, type InteractiveMenuItem } from "@/components/ui/modern-mobile-menu";
 
 const devAuthBypassEnabled =
   process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
@@ -349,55 +350,55 @@ function MobileBottomTabs({
   onMoreToggle: () => void;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { badgeFor } = useNavBadges();
   const settingsActive = isNavActive(pathname, "/dashboard/settings");
 
+  const menuItems = useMemo((): InteractiveMenuItem[] => {
+    const tabs: InteractiveMenuItem[] = primaryTabs.map(({ href, label, icon }) => ({
+      label,
+      icon,
+      href,
+      badge: badgeFor(href),
+    }));
+    tabs.push({ label: "More", icon: MoreHorizontal, onClick: onMoreToggle });
+    return tabs;
+  }, [badgeFor, onMoreToggle]);
+
+  const moreIndex = menuItems.length - 1;
+
+  const activeIndex = useMemo(() => {
+    if (moreOpen || settingsActive) return moreIndex;
+    const routeIndex = primaryTabs.findIndex(({ href }) =>
+      isNavActive(pathname, href)
+    );
+    return routeIndex >= 0 ? routeIndex : 0;
+  }, [moreOpen, settingsActive, pathname, moreIndex]);
+
+  function handleItemSelect(index: number) {
+    const item = menuItems[index];
+    if (!item) return;
+    if ("href" in item && item.href) {
+      router.push(item.href);
+      return;
+    }
+    item.onClick?.();
+  }
+
   return (
-    <nav
-      className="md:hidden fixed bottom-0 inset-x-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90"
+    <div
+      className="md:hidden fixed bottom-0 inset-x-0 z-50 pointer-events-none"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-      aria-label="Primary"
     >
-      <div className="flex items-stretch justify-around px-1 pt-1.5 pb-1.5">
-        {primaryTabs.map(({ href, label, icon: Icon }) => {
-          const active = !moreOpen && isNavActive(pathname, href);
-          const count = badgeFor(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`relative flex flex-1 flex-col items-center justify-center gap-1 min-h-16 px-1 py-2 text-xs font-medium transition-colors ${focusRing} ${
-                active ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <span className="relative">
-                <Icon className="w-6 h-6" />
-                {count > 0 && (
-                  <span className="absolute -top-1.5 -right-2.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">
-                    {count > 9 ? "9+" : count}
-                  </span>
-                )}
-              </span>
-              <span className="truncate max-w-full">{label}</span>
-            </Link>
-          );
-        })}
-        <button
-          type="button"
-          onClick={onMoreToggle}
-          className={`relative flex flex-1 flex-col items-center justify-center gap-1 min-h-16 px-1 py-2 text-xs font-medium transition-colors ${focusRing} ${
-            moreOpen || settingsActive
-              ? "text-primary"
-              : "text-muted-foreground"
-          }`}
-          aria-label="More"
-          aria-expanded={moreOpen}
-        >
-          <MoreHorizontal className="w-6 h-6" />
-          <span>More</span>
-        </button>
+      <div className="pointer-events-auto px-3 pb-2 pt-1">
+        <InteractiveMenu
+          items={menuItems}
+          activeIndex={activeIndex}
+          onItemSelect={handleItemSelect}
+          aria-label="Primary"
+        />
       </div>
-    </nav>
+    </div>
   );
 }
 
