@@ -40,3 +40,13 @@ Never commit the service account file or put it in git.
 4. Parent phone should show: **More time requested**
 
 Without the service account env, extension requests still work in the dashboard (Realtime) but no system notification is sent.
+
+## Device offline notifications
+
+Offline push is **not** sent from the agent. A Vercel cron hits `/api/cron/device-offline` every minute (`CRON_SECRET` auth, same as cleanup). The server finds paired devices whose `lastSeenAt` is older than **120 seconds** (`DEVICE_OFFLINE_PUSH_THRESHOLD_SECONDS` in `@warden/shared`) and notifies parents once per offline episode (`Device.offlineNotifiedAt` dedup; cleared on agent heartbeat).
+
+Manual test after deploy:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://<your-host>/api/cron/device-offline
+```

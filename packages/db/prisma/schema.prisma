@@ -115,6 +115,8 @@ model Device {
   displayName  String?
   agentVersion String?
   lastSeenAt   DateTime?
+  /// Set when parents are notified this device went offline; cleared on heartbeat.
+  offlineNotifiedAt DateTime?
   isOnline     Boolean   @default(false)
   isLocked     Boolean   @default(false)
   adminLock    Boolean   @default(false)

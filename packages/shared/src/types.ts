@@ -134,10 +134,12 @@ export const SNAPSHOT_RETENTION_DAYS = 7;
 export const HEARTBEAT_INTERVAL_SECONDS = 5;
 /** Online if a heartbeat arrived within this many missed intervals. */
 export const DEVICE_ONLINE_THRESHOLD_SECONDS = HEARTBEAT_INTERVAL_SECONDS * 3;
+/** Push notification when lastSeenAt is older than this (avoids brief blips). */
+export const DEVICE_OFFLINE_PUSH_THRESHOLD_SECONDS = 120;
 export const IDLE_THRESHOLD_SECONDS = 300;
 
 /** Product / dashboard version (keep in sync with Warden.Tray `<Version>`). */
-export const APP_VERSION = "0.6.8";
+export const APP_VERSION = "0.6.9";
 
 /** Default text shown on the child PC when a parent sends a nudge without a custom message. */
 export const DEFAULT_NUDGE_MESSAGE = "Your parent wants your attention";
@@ -150,6 +152,16 @@ export function isDeviceRecentlySeen(
   const seenAt = typeof lastSeenAt === "string" ? new Date(lastSeenAt) : lastSeenAt;
   if (Number.isNaN(seenAt.getTime())) return false;
   return now.getTime() - seenAt.getTime() <= DEVICE_ONLINE_THRESHOLD_SECONDS * 1000;
+}
+
+export function isDeviceOfflineForPush(
+  lastSeenAt: Date | string | null | undefined,
+  now: Date = new Date()
+): boolean {
+  if (!lastSeenAt) return false;
+  const seenAt = typeof lastSeenAt === "string" ? new Date(lastSeenAt) : lastSeenAt;
+  if (Number.isNaN(seenAt.getTime())) return false;
+  return now.getTime() - seenAt.getTime() > DEVICE_OFFLINE_PUSH_THRESHOLD_SECONDS * 1000;
 }
 
 export const EXTENSION_PRESETS = [15, 30, 60] as const;

@@ -8,6 +8,10 @@ export {
   cleanupExpiredSnapshots,
 } from "./lib/supabase";
 export {
+  notifyStaleDeviceOffline,
+  type DeviceOfflineNotifyResult,
+} from "./lib/device-offline-notify";
+export {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
   ACCESS_TOKEN_TTL_SECONDS,

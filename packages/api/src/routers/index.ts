@@ -1914,6 +1914,7 @@ export const agentRouter = router({
           isOnline: true,
           isLocked: input.isLocked,
           lastSeenAt: new Date(),
+          offlineNotifiedAt: null,
           agentVersion: input.agentVersion,
           machineName: input.machineName,
           ...(input.previousSessionUnclean
