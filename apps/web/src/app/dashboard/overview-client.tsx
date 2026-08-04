@@ -16,6 +16,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { NudgeControls } from "@/components/nudge-controls";
 import { SwipeToLock } from "@/components/swipe-to-lock";
@@ -50,6 +51,7 @@ function statusBadgeVariant(status: PolicyStatus) {
 }
 
 export default function DashboardOverviewPage() {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const { data: overview, isLoading } = trpc.dashboard.overview.useQuery(
     undefined,
@@ -397,9 +399,31 @@ export default function DashboardOverviewPage() {
                         ? `${evaluation.remainingMinutes} min left now (allowed hours ending) · ${evaluation.dailyRemainingMinutes} min of daily budget left`
                         : `${evaluation.remainingMinutes} min left now`;
 
+              const manageHref = `/dashboard/children/${child.id}`;
+
+              const navigateToManage = () => {
+                router.push(manageHref);
+              };
+
+              const handleHeaderKeyDown = (e: React.KeyboardEvent) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  navigateToManage();
+                }
+              };
+
               return (
-                <Card key={child.id}>
-                  <CardHeader>
+                <Card
+                  key={child.id}
+                  className="transition-colors hover:border-primary/40"
+                >
+                  <CardHeader
+                    role="link"
+                    tabIndex={0}
+                    onClick={navigateToManage}
+                    onKeyDown={handleHeaderKeyDown}
+                    className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-t-lg"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <CardTitle className="truncate">
@@ -447,7 +471,10 @@ export default function DashboardOverviewPage() {
                     </div>
                   </CardHeader>
 
-                  <CardContent className="space-y-3 max-md:space-y-4">
+                  <CardContent
+                    className="space-y-3 max-md:space-y-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {child.devices.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         Pair a device from this child&apos;s page to monitor
@@ -465,6 +492,8 @@ export default function DashboardOverviewPage() {
                           <div
                             key={device.id}
                             className="space-y-2.5 max-md:space-y-3 rounded-lg border border-border/60 px-3 py-2.5 max-md:px-4 max-md:py-3"
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
                           >
                             <div className="flex min-w-0 items-center gap-2">
                               <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -574,8 +603,9 @@ export default function DashboardOverviewPage() {
                     )}
 
                     <Link
-                      href={`/dashboard/children/${child.id}`}
+                      href={manageHref}
                       className="inline-flex items-center text-sm text-primary hover:underline"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       Manage {child.displayName}
                       <ArrowRight className="w-3.5 h-3.5 ml-1" />

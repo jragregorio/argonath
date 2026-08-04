@@ -22,7 +22,6 @@ import {
   getPolicyStatusLabel,
 } from "@warden/shared";
 import {
-  ArrowLeft,
   Camera,
   Check,
   Copy,
@@ -36,7 +35,7 @@ import {
   ChevronDown,
   Download,
 } from "lucide-react";
-import Link from "next/link";
+import { InlineBackLink } from "@/components/sticky-back-chip";
 import { isSupabaseConfigured } from "@/lib/dev-config";
 import {
   optimisticAdminLock,
@@ -691,13 +690,7 @@ export default function ChildDetailPage() {
   if (!child) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/dashboard/children"
-          className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to children
-        </Link>
+        <InlineBackLink />
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <p>Child not found</p>
@@ -1071,13 +1064,7 @@ export default function ChildDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          href="/dashboard/children"
-          className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 mb-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to children
-        </Link>
+        <InlineBackLink className="mb-3" />
 
         {editingChildName ? (
           <div className="flex flex-wrap items-start justify-between gap-4">

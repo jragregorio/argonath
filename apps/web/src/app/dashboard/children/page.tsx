@@ -12,9 +12,12 @@ import { ChildrenListSkeleton } from "@/components/dashboard-skeletons";
 import { getDeviceDisplayName } from "@warden/shared";
 import { Pencil, Plus, Trash2, User } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { cn } from "@warden/ui";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 
 export default function ChildrenPage() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -98,12 +101,40 @@ export default function ChildrenPage() {
         <ChildrenListSkeleton />
       ) : children && children.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {children.map((child) => (
-            <Card key={child.id}>
+          {children.map((child) => {
+            const isEditing = editingId === child.id;
+            const manageHref = `/dashboard/children/${child.id}`;
+
+            const navigateToManage = () => {
+              if (!isEditing) router.push(manageHref);
+            };
+
+            const handleCardKeyDown = (e: React.KeyboardEvent) => {
+              if (isEditing) return;
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                navigateToManage();
+              }
+            };
+
+            return (
+            <Card
+              key={child.id}
+              role={isEditing ? undefined : "link"}
+              tabIndex={isEditing ? undefined : 0}
+              onClick={navigateToManage}
+              onKeyDown={handleCardKeyDown}
+              className={cn(
+                !isEditing &&
+                  "cursor-pointer transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              )}
+            >
               <CardHeader>
-                {editingId === child.id ? (
+                {isEditing ? (
                   <form
                     className="flex flex-wrap items-center gap-2"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
                     onSubmit={(e) => {
                       e.preventDefault();
                       const next = editName.trim();
@@ -144,7 +175,9 @@ export default function ChildrenPage() {
                       variant="ghost"
                       size="sm"
                       className="h-7 w-7 p-0 ml-auto"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
                         setEditingId(child.id);
                         setEditName(child.displayName);
                       }}
@@ -180,8 +213,9 @@ export default function ChildrenPage() {
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Link
-                    href={`/dashboard/children/${child.id}`}
+                    href={manageHref}
                     className="text-primary hover:underline text-sm"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     Manage profile →
                   </Link>
@@ -190,7 +224,9 @@ export default function ChildrenPage() {
                     size="sm"
                     className="text-destructive hover:text-destructive"
                     disabled={deleteChild.isPending}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
                       const ok = window.confirm(
                         `Delete ${child.displayName} and ${child.devices.length} connected device${child.devices.length === 1 ? "" : "s"}? This cannot be undone.`
                       );
@@ -203,7 +239,8 @@ export default function ChildrenPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <Card>
