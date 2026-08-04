@@ -12,7 +12,7 @@ import {
   AlertCircle,
   Unlock,
   Users,
-  Clock,
+  History,
   ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
@@ -262,7 +262,7 @@ export default function DashboardOverviewPage() {
                 </p>
               </div>
             </div>
-            <Link href="/dashboard/extensions" className="w-full sm:w-auto">
+            <Link href="/dashboard/activity" className="w-full sm:w-auto">
               <Button className="w-full sm:w-auto" variant="outline">
                 Review requests
                 <ArrowRight className="w-4 h-4 ml-2" />
@@ -291,9 +291,9 @@ export default function DashboardOverviewPage() {
             </span>
           </p>
         </Card>
-        <Link href="/dashboard/extensions" className="block">
+        <Link href="/dashboard/activity" className="block">
           <Card className="h-full p-3.5">
-            <p className="text-xs text-muted-foreground truncate">Requests</p>
+            <p className="text-xs text-muted-foreground truncate">Activity</p>
             <p className="text-xl font-semibold tabular-nums mt-0.5">
               {pendingRequests}
             </p>
@@ -328,11 +328,11 @@ export default function DashboardOverviewPage() {
             </CardTitle>
           </CardHeader>
         </Card>
-        <Link href="/dashboard/extensions" className="block group">
+        <Link href="/dashboard/activity" className="block group">
           <Card className="h-full transition-colors group-hover:border-primary/40">
             <CardHeader className="relative mb-0">
               <div className="absolute top-0 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <Clock className="w-5 h-5 text-primary" />
+                <History className="w-5 h-5 text-primary" />
               </div>
               <CardDescription>Pending requests</CardDescription>
               <CardTitle className="text-3xl">{pendingRequests}</CardTitle>
@@ -621,6 +621,12 @@ export default function DashboardOverviewPage() {
       <div>
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-xl font-semibold">Recent activity</h2>
+          <Link
+            href="/dashboard/activity"
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            View all →
+          </Link>
         </div>
         <RecentActivityCard items={activity} />
       </div>

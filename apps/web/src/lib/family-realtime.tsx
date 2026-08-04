@@ -172,7 +172,7 @@ export function FamilyRealtimeProvider({ children }: { children: ReactNode }) {
 
   const badgeFor = useCallback(
     (href: string): number => {
-      if (href === "/dashboard/extensions") return badges?.pendingRequests ?? 0;
+      if (href === "/dashboard/activity") return badges?.pendingRequests ?? 0;
       if (href === "/dashboard/snapshots") return badges?.unviewedSnapshots ?? 0;
       return 0;
     },

@@ -2055,7 +2055,7 @@ export const agentRouter = router({
             type: "extension:requested",
             requestId: request.id,
             childId: ctx.device.childId,
-            path: "/dashboard/extensions",
+            path: "/dashboard/activity",
           },
         }).catch((error) => {
           console.error("[fcm] extension notify failed", error);

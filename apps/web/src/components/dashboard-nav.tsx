@@ -6,7 +6,7 @@ import {
   LayoutDashboard,
   Users,
   Camera,
-  Clock,
+  History,
   Settings,
   LogOut,
   ChevronDown,
@@ -28,7 +28,7 @@ const devAuthBypassEnabled =
 const allNavItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/children", label: "Children", icon: Users },
-  { href: "/dashboard/extensions", label: "Requests", icon: Clock },
+  { href: "/dashboard/activity", label: "Activity", icon: History },
   { href: "/dashboard/snapshots", label: "Snapshots", icon: Camera, requiresSupabase: true },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
