@@ -9,6 +9,7 @@ import {
   generateDeviceToken,
   generatePairingCode,
   getCalendarDateInTimeZone,
+  getDeviceDisplayName,
   isDeviceRecentlySeen,
   isValidTimeZone,
   PAIRING_CODE_EXPIRY_MINUTES,
@@ -1877,7 +1878,11 @@ export const agentRouter = router({
 
       const child = await prisma.child.findUnique({
         where: { id: device.childId },
-        select: { family: { select: { timezone: true } } },
+        select: {
+          displayName: true,
+          familyId: true,
+          family: { select: { timezone: true } },
+        },
       });
       const timeZone = child?.family.timezone || DEFAULT_TIME_ZONE;
       const today = getCalendarDateInTimeZone(new Date(), timeZone);
@@ -1924,6 +1929,32 @@ export const agentRouter = router({
           deviceId: device.id,
           timestamp: new Date().toISOString(),
         }).catch(() => {});
+
+        if (child) {
+          const now = new Date();
+          const timeLabel = new Intl.DateTimeFormat("en-US", {
+            timeZone: timeZone,
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          }).format(now);
+          const deviceLabel = getDeviceDisplayName({
+            displayName: device.displayName,
+            machineName: input.machineName,
+          });
+          void notifyFamilyParents(child.familyId, {
+            title: "Device online",
+            body: `${child.displayName}'s ${deviceLabel} came online at ${timeLabel}`,
+            data: {
+              type: "device:online",
+              deviceId: device.id,
+              childId: device.childId,
+              path: `/dashboard/children/${device.childId}`,
+            },
+          }).catch((error) => {
+            console.error("[fcm] device online notify failed", error);
+          });
+        }
       }
 
       const update = await getHeartbeatUpdateHint(input.agentVersion);
