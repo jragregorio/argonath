@@ -271,17 +271,17 @@ export default function DashboardOverviewPage() {
       )}
 
       {/* Mobile compact stats strip */}
-      <div className="md:hidden grid grid-cols-3 gap-2">
+      <div className="md:hidden grid grid-cols-3 gap-2.5">
         <Link href="/dashboard/children" className="block">
-          <Card className="h-full p-3">
-            <p className="text-[11px] text-muted-foreground truncate">Children</p>
+          <Card className="h-full p-3.5">
+            <p className="text-xs text-muted-foreground truncate">Children</p>
             <p className="text-xl font-semibold tabular-nums mt-0.5">
               {children.length}
             </p>
           </Card>
         </Link>
-        <Card className="h-full p-3">
-          <p className="text-[11px] text-muted-foreground truncate">Online</p>
+        <Card className="h-full p-3.5">
+          <p className="text-xs text-muted-foreground truncate">Online</p>
           <p className="text-xl font-semibold tabular-nums mt-0.5">
             {onlineCount}
             <span className="text-sm text-muted-foreground font-normal">
@@ -290,8 +290,8 @@ export default function DashboardOverviewPage() {
           </p>
         </Card>
         <Link href="/dashboard/extensions" className="block">
-          <Card className="h-full p-3">
-            <p className="text-[11px] text-muted-foreground truncate">Requests</p>
+          <Card className="h-full p-3.5">
+            <p className="text-xs text-muted-foreground truncate">Requests</p>
             <p className="text-xl font-semibold tabular-nums mt-0.5">
               {pendingRequests}
             </p>
@@ -364,7 +364,7 @@ export default function DashboardOverviewPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-md:gap-5">
             {children.map((child) => {
               const { evaluation } = child;
               const effectiveLimit =
@@ -433,7 +433,7 @@ export default function DashboardOverviewPage() {
                           )}
                         </span>
                       </div>
-                      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                      <div className="h-2.5 md:h-2 w-full rounded-full bg-muted overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-[width] ${progressBarClass(
                             evaluation.status
@@ -441,13 +441,13 @@ export default function DashboardOverviewPage() {
                           style={{ width: `${percent}%` }}
                         />
                       </div>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm md:text-xs text-muted-foreground">
                         {statusText}
                       </p>
                     </div>
                   </CardHeader>
 
-                  <CardContent className="space-y-3">
+                  <CardContent className="space-y-3 max-md:space-y-4">
                     {child.devices.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         Pair a device from this child&apos;s page to monitor
@@ -464,7 +464,7 @@ export default function DashboardOverviewPage() {
                         return (
                           <div
                             key={device.id}
-                            className="space-y-2.5 rounded-lg border border-border/60 px-3 py-2.5"
+                            className="space-y-2.5 max-md:space-y-3 rounded-lg border border-border/60 px-3 py-2.5 max-md:px-4 max-md:py-3"
                           >
                             <div className="flex min-w-0 items-center gap-2">
                               <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -497,13 +497,13 @@ export default function DashboardOverviewPage() {
                               </div>
                             </div>
 
-                            <div className="flex flex-col gap-2">
+                            <div className="flex flex-col gap-2 max-md:gap-3">
                               {nudgeByDevice[device.id]?.label && (
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-sm md:text-xs text-muted-foreground">
                                   {nudgeByDevice[device.id].label}
                                 </span>
                               )}
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                              <div className="flex flex-col gap-2 max-md:gap-3 sm:flex-row sm:items-stretch">
                                 <NudgeControls
                                   className="w-full sm:w-52 sm:shrink-0"
                                   disabled={

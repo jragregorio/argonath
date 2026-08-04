@@ -1125,6 +1125,7 @@ export default function ChildDetailPage() {
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="max-md:min-h-11 max-md:min-w-11"
                   onClick={startRenameChild}
                   title="Rename child"
                 >
@@ -1191,7 +1192,7 @@ export default function ChildDetailPage() {
                     style={{ width: `${remainingFraction * 100}%` }}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm md:text-xs text-muted-foreground">
                   {evaluationStatusText}
                 </p>
               </div>
@@ -1220,7 +1221,7 @@ export default function ChildDetailPage() {
               return (
                 <div
                   key={device.id}
-                  className="flex min-h-[12rem] flex-1 flex-col justify-between gap-4 rounded-lg border border-border p-4 sm:p-5"
+                  className="flex min-h-[12rem] flex-1 flex-col justify-between gap-4 rounded-lg border border-border p-4 max-md:p-5 sm:p-5"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
@@ -1267,7 +1268,7 @@ export default function ChildDetailPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 w-7 p-0"
+                              className="h-7 w-7 p-0 max-md:min-h-11 max-md:min-w-11 max-md:h-11"
                               onClick={() => startRenameDevice(device)}
                               title="Rename device"
                             >
@@ -1275,7 +1276,7 @@ export default function ChildDetailPage() {
                             </Button>
                           </div>
                         )}
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-sm md:text-xs text-muted-foreground">
                           {device.machineName &&
                           device.displayName &&
                           device.machineName !== device.displayName
@@ -1336,13 +1337,13 @@ export default function ChildDetailPage() {
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-2 max-md:gap-3">
                     {nudgeByDevice[device.id]?.label && (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-sm md:text-xs text-muted-foreground">
                         {nudgeByDevice[device.id].label}
                       </span>
                     )}
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                    <div className="flex flex-col gap-2 max-md:gap-3 sm:flex-row sm:items-stretch">
                       <NudgeControls
                         className="w-full sm:w-52 sm:shrink-0"
                         disabled={
@@ -1368,7 +1369,7 @@ export default function ChildDetailPage() {
                           })
                         }
                       />
-                      <div className="flex w-full min-w-0 items-stretch gap-2 sm:flex-1">
+                      <div className="flex w-full min-w-0 items-stretch gap-2 max-md:gap-3 sm:flex-1">
                         {effectiveAdminLock ? (
                           <Button
                             variant="outline"
@@ -1416,7 +1417,7 @@ export default function ChildDetailPage() {
                         >
                           <Button
                             variant="outline"
-                            className="px-3"
+                            className="px-3 max-md:min-w-11"
                             onClick={() =>
                               setDeviceMoreOpenId((prev) =>
                                 prev === device.id ? null : device.id
@@ -1509,7 +1510,7 @@ export default function ChildDetailPage() {
             ) : (
               <Button
                 variant="outline"
-                className="w-full sm:w-auto"
+                className="w-full max-md:mt-1 sm:w-auto"
                 onClick={() => void startPairing()}
                 disabled={generateCode.isPending}
               >

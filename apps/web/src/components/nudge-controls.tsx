@@ -181,7 +181,7 @@ export function NudgeControls({
         <Button
           type="button"
           variant="attention"
-          className="shrink-0 rounded-l-none border-l border-attention-foreground/20 px-2.5"
+          className="shrink-0 rounded-l-none border-l border-attention-foreground/20 px-2.5 max-md:min-w-11 max-md:px-3"
           onClick={openCompose}
           disabled={disabled || isSending}
           title="Send nudge with a custom message"

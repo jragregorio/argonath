@@ -21,10 +21,9 @@ type SwipeToLockProps = {
   label?: string;
 };
 
-/** Matches thumb `h-9 w-9` (2.25rem). */
-const THUMB = 36;
 const END_PAD = 4;
 const COMPLETE_RATIO = 0.88;
+const DEFAULT_THUMB = 36;
 
 export function SwipeToLock({
   onConfirm,
@@ -35,6 +34,7 @@ export function SwipeToLock({
   label = "Swipe to lock down",
 }: SwipeToLockProps) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLButtonElement>(null);
   const draggingRef = useRef(false);
   const startXRef = useRef(0);
   const startOffsetRef = useRef(0);
@@ -42,22 +42,29 @@ export function SwipeToLock({
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [maxTravel, setMaxTravel] = useState(0);
+  const [thumbSize, setThumbSize] = useState(DEFAULT_THUMB);
   const labelId = useId();
 
   const inactive = disabled || pending;
 
   const measure = useCallback(() => {
     const el = trackRef.current;
+    const thumb = thumbRef.current;
     if (!el) return;
-    setMaxTravel(Math.max(0, el.clientWidth - THUMB - END_PAD * 2));
+    const thumbW = thumb?.offsetWidth ?? DEFAULT_THUMB;
+    setThumbSize(thumbW);
+    setMaxTravel(Math.max(0, el.clientWidth - thumbW - END_PAD * 2));
   }, []);
 
   useEffect(() => {
     measure();
     const el = trackRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
+    const thumb = thumbRef.current;
+    if (typeof ResizeObserver === "undefined") return;
+
     const ro = new ResizeObserver(measure);
-    ro.observe(el);
+    if (el) ro.observe(el);
+    if (thumb) ro.observe(thumb);
     return () => ro.disconnect();
   }, [measure]);
 
@@ -140,13 +147,13 @@ export function SwipeToLock({
   const fillWidth =
     progress >= 0.999
       ? "100%"
-      : `${END_PAD + offset + THUMB}px`;
+      : `${END_PAD + offset + thumbSize}px`;
 
   return (
     <div
       ref={trackRef}
       className={cn(
-        "relative h-11 w-full min-w-0 shrink-0 select-none overflow-hidden rounded-lg border border-destructive/40 bg-destructive/15",
+        "relative h-14 md:h-11 w-full min-w-0 shrink-0 select-none overflow-hidden rounded-lg border border-destructive/40 bg-destructive/15",
         inactive && "opacity-50",
         className,
       )}
@@ -160,7 +167,7 @@ export function SwipeToLock({
 
       <div
         id={labelId}
-        className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 px-11 text-xs font-medium whitespace-nowrap text-foreground/80 sm:text-sm"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 px-14 text-xs font-medium whitespace-nowrap text-foreground/80 md:px-11 md:text-sm"
         style={{ opacity: Math.max(0, 1 - progress * 1.35) }}
         aria-hidden="true"
       >
@@ -178,6 +185,7 @@ export function SwipeToLock({
       </div>
 
       <button
+        ref={thumbRef}
         type="button"
         disabled={inactive}
         aria-labelledby={labelId}
@@ -186,7 +194,7 @@ export function SwipeToLock({
         aria-valuenow={Math.round(progress * 100)}
         role="slider"
         className={cn(
-          "absolute top-1 z-10 flex h-9 w-9 items-center justify-center rounded-md bg-destructive text-destructive-foreground shadow-sm touch-none",
+          "absolute top-1/2 z-10 flex h-11 w-11 md:h-9 md:w-9 -translate-y-1/2 items-center justify-center rounded-md bg-destructive text-destructive-foreground shadow-sm touch-none",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           !inactive && "cursor-grab active:cursor-grabbing",
           !dragging && "transition-[left] duration-150 ease-out",
@@ -198,7 +206,7 @@ export function SwipeToLock({
         onPointerCancel={onPointerUp}
         onKeyDown={onKeyDown}
       >
-        <Lock className="h-4 w-4" aria-hidden="true" />
+        <Lock className="h-4 w-4 md:h-4 md:w-4" aria-hidden="true" />
       </button>
     </div>
   );

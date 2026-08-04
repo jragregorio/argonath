@@ -22,9 +22,9 @@ const variants = {
 };
 
 const sizes = {
-  sm: "min-h-9 px-3 py-1.5 text-sm",
-  md: "min-h-11 px-4 py-2.5 text-sm sm:text-base",
-  lg: "min-h-12 px-6 py-3 text-base sm:text-lg",
+  sm: "min-h-10 md:min-h-9 px-3 py-1.5 text-sm",
+  md: "min-h-14 md:min-h-11 px-4 py-2.5 text-sm md:text-base",
+  lg: "min-h-14 md:min-h-12 px-6 py-3 text-base md:text-lg",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

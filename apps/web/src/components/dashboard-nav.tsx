@@ -358,7 +358,7 @@ function MobileBottomTabs({
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       aria-label="Primary"
     >
-      <div className="flex items-stretch justify-around px-1 pt-1 pb-1">
+      <div className="flex items-stretch justify-around px-1 pt-1.5 pb-1.5">
         {primaryTabs.map(({ href, label, icon: Icon }) => {
           const active = !moreOpen && isNavActive(pathname, href);
           const count = badgeFor(href);
@@ -366,12 +366,12 @@ function MobileBottomTabs({
             <Link
               key={href}
               href={href}
-              className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 min-h-14 px-1 py-1.5 text-[11px] font-medium transition-colors ${focusRing} ${
+              className={`relative flex flex-1 flex-col items-center justify-center gap-1 min-h-16 px-1 py-2 text-xs font-medium transition-colors ${focusRing} ${
                 active ? "text-primary" : "text-muted-foreground"
               }`}
             >
               <span className="relative">
-                <Icon className="w-5 h-5" />
+                <Icon className="w-6 h-6" />
                 {count > 0 && (
                   <span className="absolute -top-1.5 -right-2.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">
                     {count > 9 ? "9+" : count}
@@ -385,7 +385,7 @@ function MobileBottomTabs({
         <button
           type="button"
           onClick={onMoreToggle}
-          className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 min-h-14 px-1 py-1.5 text-[11px] font-medium transition-colors ${focusRing} ${
+          className={`relative flex flex-1 flex-col items-center justify-center gap-1 min-h-16 px-1 py-2 text-xs font-medium transition-colors ${focusRing} ${
             moreOpen || settingsActive
               ? "text-primary"
               : "text-muted-foreground"
@@ -393,7 +393,7 @@ function MobileBottomTabs({
           aria-label="More"
           aria-expanded={moreOpen}
         >
-          <MoreHorizontal className="w-5 h-5" />
+          <MoreHorizontal className="w-6 h-6" />
           <span>More</span>
         </button>
       </div>
