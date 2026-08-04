@@ -8,7 +8,7 @@ type TrpcUtils = ReturnType<typeof trpc.useUtils>;
 
 /** Invalidate main dashboard query families (shared across pages). */
 export async function invalidateDashboardQueries(utils: TrpcUtils) {
-  await Promise.all([
+  await Promise.allSettled([
     utils.dashboard.overview.invalidate(),
     utils.dashboard.activity.invalidate(),
     utils.dashboard.navBadges.invalidate(),
@@ -33,6 +33,8 @@ export function useDashboardRefresh() {
     try {
       await invalidateDashboardQueries(utils);
       router.refresh();
+    } catch (error) {
+      console.error("[warden] dashboard refresh failed:", error);
     } finally {
       inFlightRef.current = false;
     }
