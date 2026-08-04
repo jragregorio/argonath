@@ -50,16 +50,6 @@ function isNavActive(pathname: string, href: string) {
   );
 }
 
-function pageTitle(pathname: string) {
-  if (pathname.startsWith("/dashboard/children/")) return "Child";
-  if (pathname.startsWith("/dashboard/children")) return "Children";
-  if (pathname.startsWith("/dashboard/extensions")) return "Requests";
-  if (pathname.startsWith("/dashboard/snapshots")) return "Snapshots";
-  if (pathname.startsWith("/dashboard/settings")) return "Settings";
-  if (pathname === "/dashboard") return "Overview";
-  return "Warden";
-}
-
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { badgeFor } = useNavBadges();
@@ -227,24 +217,15 @@ function NavFooter({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function Brand({ compact = false }: { compact?: boolean }) {
+function Brand() {
   return (
-    <div className={`flex items-center gap-2.5 ${compact ? "" : "px-2"}`}>
-      <Shield
-        className={`${compact ? "h-6 w-6" : "h-7 w-7"} text-attention`}
-        aria-hidden="true"
-      />
+    <div className="flex items-center gap-2.5 px-2">
+      <Shield className="h-7 w-7 text-attention" aria-hidden="true" />
       <div>
-        <span
-          className={`font-display font-semibold tracking-tight ${
-            compact ? "text-base" : "text-lg"
-          }`}
-        >
+        <span className="font-display text-lg font-semibold tracking-tight">
           Warden
         </span>
-        {!compact && (
-          <div className="mt-2 h-px w-10 bg-attention/50" aria-hidden="true" />
-        )}
+        <div className="mt-2 h-px w-10 bg-attention/50" aria-hidden="true" />
       </div>
     </div>
   );
@@ -482,25 +463,10 @@ export function DashboardNav() {
 
   return (
     <>
-      {/* Mobile top bar — fixed (sticky fails under overflow-x-hidden ancestors) */}
-      <div
-        className="md:hidden fixed top-0 inset-x-0 z-40 flex items-center justify-between gap-3 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90 px-4"
-        style={{
-          paddingTop: "env(safe-area-inset-top, 0px)",
-          height: "calc(3.5rem + env(safe-area-inset-top, 0px))",
-        }}
-      >
-        <Brand compact />
-        <span className="text-sm font-medium text-muted-foreground truncate">
-          {pageTitle(pathname)}
-        </span>
-      </div>
-      {/* Reserves space so content starts below the fixed top bar */}
+      {/* Mobile safe-area — status bar / notch only (no chrome bar) */}
       <div
         className="md:hidden shrink-0"
-        style={{
-          height: "calc(3.5rem + env(safe-area-inset-top, 0px))",
-        }}
+        style={{ height: "env(safe-area-inset-top, 0px)" }}
         aria-hidden
       />
 
