@@ -1521,7 +1521,7 @@ export default function ChildDetailPage() {
               </Button>
             )}
 
-            <div className="space-y-2 pt-4 border-t border-border">
+            <div className="hidden space-y-2 border-t border-border pt-4 md:block">
               <Button
                 variant="outline"
                 className="w-full sm:w-auto"
