@@ -45,10 +45,8 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { NudgeControls } from "@/components/nudge-controls";
 import { RecentActivityCard } from "@/components/recent-activity-card";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
-import {
-  formatClockInText,
-  formatWindowsSummary,
-} from "@/lib/time-format";
+import { AllowedWindowsSummary } from "@/components/allowed-windows-summary";
+import { formatClockInText } from "@/lib/time-format";
 
 const AllowedWindowsEditor = dynamic(
   () =>
@@ -937,12 +935,12 @@ export default function ChildDetailPage() {
               Edit schedule
             </Button>
           </div>
-          <p
-            className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground"
-            aria-live="polite"
-          >
-            {formatWindowsSummary(currentWindows)}
-          </p>
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+            <AllowedWindowsSummary
+              windows={currentWindows}
+              aria-live="polite"
+            />
+          </div>
         </div>
       ) : (
         <div className="space-y-2">
@@ -1617,7 +1615,10 @@ export default function ChildDetailPage() {
                 </span>
                 {currentActive ? "" : " · policy off"}
               </p>
-              <p className="mt-0.5">{formatWindowsSummary(currentWindows)}</p>
+              <AllowedWindowsSummary
+                windows={currentWindows}
+                className="mt-0.5"
+              />
             </div>
 
             <Button
@@ -1693,7 +1694,10 @@ export default function ChildDetailPage() {
             </span>
             {currentActive ? "" : " · policy off"}
           </p>
-          <p className="mt-0.5">{formatWindowsSummary(currentWindows)}</p>
+          <AllowedWindowsSummary
+            windows={currentWindows}
+            className="mt-0.5"
+          />
         </div>
         {renderPolicyEditor("sheet", "sheet")}
       </BottomSheet>

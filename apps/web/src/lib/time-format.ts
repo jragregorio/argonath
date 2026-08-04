@@ -39,11 +39,22 @@ export function formatClockInText(text: string): string {
   );
 }
 
-export function formatWindowsSummary(windows: AllowedWindow[]): string {
-  if (windows.length === 0) {
-    return "Allowed any time (within daily limit)";
-  }
+export type WindowRangeGroup = {
+  start: string;
+  end: string;
+  days: number[];
+};
 
+export function formatDayLabels(days: number[]): string {
+  return days
+    .map((day) => DAY_LABELS[day] ?? `Day ${day}`)
+    .join(", ");
+}
+
+/** Group windows that share the same start|end into sorted weekday lists. */
+export function groupWindowsByRange(
+  windows: AllowedWindow[]
+): WindowRangeGroup[] {
   const byRange = new Map<string, number[]>();
   for (const window of windows) {
     const key = `${window.start}|${window.end}`;
@@ -52,13 +63,27 @@ export function formatWindowsSummary(windows: AllowedWindow[]): string {
     byRange.set(key, days);
   }
 
-  return [...byRange.entries()]
-    .map(([key, days]) => {
-      const [start, end] = key.split("|");
-      const labels = days
-        .sort((a, b) => a - b)
-        .map((day) => DAY_LABELS[day] ?? `Day ${day}`);
-      return `${labels.join(", ")} ${formatTimeRange12(start, end)}`;
+  return [...byRange.entries()].map(([key, days]) => {
+    const [start, end] = key.split("|");
+    return {
+      start,
+      end,
+      days: days.sort((a, b) => a - b),
+    };
+  });
+}
+
+export const ALLOWED_ANY_TIME_MESSAGE =
+  "Allowed any time (within daily limit)";
+
+export function formatWindowsSummary(windows: AllowedWindow[]): string {
+  if (windows.length === 0) {
+    return ALLOWED_ANY_TIME_MESSAGE;
+  }
+
+  return groupWindowsByRange(windows)
+    .map(({ days, start, end }) => {
+      return `${formatDayLabels(days)} ${formatTimeRange12(start, end)}`;
     })
     .join(" · ");
 }
