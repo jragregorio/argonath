@@ -1,16 +1,17 @@
 "use client";
 
 import { DashboardNav } from "@/components/dashboard-nav";
+import { NativePushDeepLink } from "@/components/native-push-deeplink";
 import { PushTokenSync } from "@/components/native-push-bootstrap";
 import { FamilyRealtimeProvider } from "@/lib/family-realtime";
 
 /**
- * PTR + FCM deep-link listeners removed again after remote WebView client crash.
- * Re-introduce one feature at a time via window.Capacitor only.
+ * FCM deep links only (window.Capacitor bridge). PTR stays disabled until validated alone.
  */
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <FamilyRealtimeProvider>
+      <NativePushDeepLink />
       <PushTokenSync />
       <div className="flex w-full min-h-dvh flex-col overflow-x-hidden md:h-dvh md:min-h-0 md:flex-row md:overflow-hidden">
         <DashboardNav />
