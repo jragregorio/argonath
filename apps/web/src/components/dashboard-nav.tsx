@@ -17,6 +17,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/dev-config";
 import { trpc } from "@/lib/trpc";
+import { useDashboardRefresh } from "@/lib/dashboard-refresh";
 import { useNavBadges } from "@/lib/family-realtime";
 import { APP_VERSION } from "@warden/shared";
 import { InteractiveMenu, type InteractiveMenuItem } from "@/components/ui/modern-mobile-menu";
@@ -332,6 +333,7 @@ function MobileBottomTabs({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { refreshDashboard } = useDashboardRefresh();
   const { badgeFor } = useNavBadges();
   const settingsActive = isNavActive(pathname, "/dashboard/settings");
 
@@ -360,6 +362,10 @@ function MobileBottomTabs({
     const item = menuItems[index];
     if (!item) return;
     if ("href" in item && item.href) {
+      if (index === activeIndex) {
+        void refreshDashboard();
+        return;
+      }
       router.push(item.href);
       return;
     }

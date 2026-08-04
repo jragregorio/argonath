@@ -1,12 +1,14 @@
 "use client";
 
 import { DashboardNav } from "@/components/dashboard-nav";
+import { NativeAppResumeRefresh } from "@/components/native-app-resume-refresh";
 import { PushTokenSync } from "@/components/native-push-bootstrap";
 import { FamilyRealtimeProvider } from "@/lib/family-realtime";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <FamilyRealtimeProvider>
+      <NativeAppResumeRefresh />
       <PushTokenSync />
       <div className="flex w-full min-h-dvh flex-col overflow-x-hidden md:h-dvh md:min-h-0 md:flex-row md:overflow-hidden">
         <DashboardNav />
