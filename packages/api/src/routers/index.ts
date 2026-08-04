@@ -23,6 +23,7 @@ import {
   broadcastToDevice,
   isSupabaseConfigured,
 } from "../lib/supabase";
+import { logAudit } from "../lib/audit";
 import { notifyFamilyParents } from "../lib/fcm";
 import {
   getCachedSignedSnapshotUrl,
@@ -123,17 +124,6 @@ async function getChildForFamily(childId: string, familyId: string) {
     ...child,
     devices: toDeviceClientViews(child.devices),
   };
-}
-
-async function logAudit(
-  familyId: string,
-  userId: string,
-  action: string,
-  metadata?: Prisma.InputJsonValue
-) {
-  await prisma.auditLog.create({
-    data: { familyId, userId, action, metadata: metadata ?? {} },
-  });
 }
 
 function getCanonicalAppUrl() {
@@ -1932,6 +1922,14 @@ export const agentRouter = router({
         }).catch(() => {});
 
         if (child) {
+          void logAudit(child.familyId, "agent", "device_online", {
+            childId: device.childId,
+            deviceId: device.id,
+            machineName: input.machineName,
+            displayName: device.displayName,
+          }).catch((error) => {
+            console.error("[audit] device_online failed", error);
+          });
           const now = new Date();
           const timeLabel = new Intl.DateTimeFormat("en-US", {
             timeZone: timeZone,

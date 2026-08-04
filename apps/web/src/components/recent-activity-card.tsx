@@ -28,7 +28,7 @@ type RecentActivityCardProps = {
   items: RecentActivityItem[] | undefined;
   /** Hide child name in the detail line (useful on the child detail page). */
   hideChildName?: boolean;
-  /** Denser rows for narrow columns (timestamp under detail). */
+  /** Denser rows (timestamp always under detail, including desktop). */
   compact?: boolean;
   initialVisible?: number;
   emptyDescription?: string;
@@ -88,10 +88,10 @@ export function RecentActivityCard({
             <li
               key={item.id}
               className={cn(
-                "px-4 py-3",
+                "px-4 py-3 sm:px-5 sm:py-3.5",
                 compact
                   ? "space-y-1"
-                  : "flex flex-wrap items-start justify-between gap-3 sm:px-5 sm:py-3.5"
+                  : "flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-3"
               )}
             >
               <div className="min-w-0 space-y-0.5">
@@ -108,14 +108,18 @@ export function RecentActivityCard({
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
-                {compact && (
-                  <p className="text-xs tabular-nums text-muted-foreground">
-                    {when}
-                  </p>
-                )}
+                {/* Stacked timestamp: always on mobile; also when compact on desktop */}
+                <p
+                  className={cn(
+                    "text-xs tabular-nums text-muted-foreground",
+                    !compact && "md:hidden"
+                  )}
+                >
+                  {when}
+                </p>
               </div>
               {!compact && (
-                <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                <p className="hidden shrink-0 text-xs tabular-nums text-muted-foreground md:block">
                   {when}
                 </p>
               )}

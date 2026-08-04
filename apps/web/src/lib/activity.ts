@@ -16,6 +16,8 @@ const ACTION_LABELS: Record<string, string> = {
   child_deleted: "Removed a child",
   device_renamed: "Renamed a device",
   device_deleted: "Removed a device",
+  device_online: "Device came online",
+  device_offline: "Device went offline",
   family_renamed: "Renamed the family",
   pin_updated: "Updated the parent PIN",
   timezone_updated: "Updated family time zone",

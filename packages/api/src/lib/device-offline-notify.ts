@@ -4,6 +4,7 @@ import {
   DEVICE_OFFLINE_PUSH_THRESHOLD_SECONDS,
   getDeviceDisplayName,
 } from "@warden/shared";
+import { logAudit } from "./audit";
 import { notifyFamilyParents } from "./fcm";
 
 export type DeviceOfflineNotifyResult = {
@@ -70,7 +71,14 @@ export async function notifyStaleDeviceOffline(
     const timeLabel = formatOfflineTime(lastSeenAt, timeZone);
 
     try {
-      const result = await notifyFamilyParents(device.child.familyId, {
+      void logAudit(device.child.familyId, "agent", "device_offline", {
+        childId: device.childId,
+        deviceId: device.id,
+      }).catch((error) => {
+        console.error("[audit] device_offline failed", error);
+      });
+
+      await notifyFamilyParents(device.child.familyId, {
         title: "Device offline",
         body: `${device.child.displayName}'s ${deviceLabel} went offline at ${timeLabel}`,
         data: {
@@ -81,15 +89,11 @@ export async function notifyStaleDeviceOffline(
         },
       });
 
-      if (result.sent > 0 || (result.sent === 0 && result.failed === 0)) {
-        await prisma.device.update({
-          where: { id: device.id },
-          data: { offlineNotifiedAt: now },
-        });
-        notified += 1;
-      } else {
-        failed += 1;
-      }
+      await prisma.device.update({
+        where: { id: device.id },
+        data: { offlineNotifiedAt: now },
+      });
+      notified += 1;
     } catch (error) {
       failed += 1;
       console.error("[device-offline] notify failed", device.id, error);
