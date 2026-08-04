@@ -7,9 +7,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Capacitor } from "@capacitor/core";
 import { Loader2 } from "lucide-react";
 import { cn } from "@warden/ui";
+import { isNativeCapacitor } from "@/lib/capacitor-native";
 import { useDashboardRefresh } from "@/lib/dashboard-refresh";
 
 const PULL_THRESHOLD = 72;
@@ -61,7 +61,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
   }, [refreshing]);
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform() || !isMobileViewport()) {
+    if (!isNativeCapacitor() || !isMobileViewport()) {
       return;
     }
 

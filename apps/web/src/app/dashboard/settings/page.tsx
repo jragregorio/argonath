@@ -455,7 +455,7 @@ export default function SettingsPage() {
               },
             ] as const
           ).map(({ key, label, description }) => {
-            const checked = me?.user[key] ?? true;
+            const checked = me?.user?.[key] ?? true;
             return (
               <label
                 key={key}

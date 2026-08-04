@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Capacitor } from "@capacitor/core";
+import { getCapacitorPlugins, isNativeCapacitor } from "@/lib/capacitor-native";
 import {
   consumePendingPushPath,
   extractPathFromPushPayload,
@@ -35,18 +35,15 @@ export function NativePushDeepLink() {
   routerRef.current = router;
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) {
+    if (!isNativeCapacitor()) {
       return;
     }
 
     navigateIfSafe(routerRef.current, consumePendingPushPath());
 
-    const capacitor = (
-      window as Window & {
-        Capacitor?: { Plugins?: { PushNotifications?: CapacitorPushPlugin } };
-      }
-    ).Capacitor;
-    const push = capacitor?.Plugins?.PushNotifications;
+    const push = getCapacitorPlugins()?.PushNotifications as
+      | CapacitorPushPlugin
+      | undefined;
     if (!push) {
       return;
     }
