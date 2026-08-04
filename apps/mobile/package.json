@@ -1,0 +1,32 @@
+{
+  "name": "@warden/mobile",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Capacitor Android shell loading the Warden dashboard from Vercel (remote URL mode).",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "cap:sync": "npm run build && npx cap sync android",
+    "cap:open": "npx cap open android",
+    "android:debug": "npm run cap:sync && cd android && .\\gradlew.bat assembleDebug",
+    "android:release": "npm run cap:sync && cd android && .\\gradlew.bat bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/keyboard": "^8.0.0",
+    "@capacitor/push-notifications": "^8.1.2",
+    "@capacitor/splash-screen": "^8.0.0",
+    "@capacitor/status-bar": "^8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.0.0",
+    "typescript": "^5.8.3"
+  },
+  "capacitor": {
+    "platforms": [
+      "android"
+    ]
+  }
+}

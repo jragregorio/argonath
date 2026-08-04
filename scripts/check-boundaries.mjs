@@ -96,6 +96,9 @@ const webFiles = walk(path.join(root, "apps", "web")).filter((f) =>
 const agentFiles = walk(path.join(root, "apps", "agent")).filter((f) =>
   /\.(ts|tsx|js|jsx|cs)$/i.test(f),
 );
+const mobileFiles = walk(path.join(root, "apps", "mobile")).filter((f) =>
+  /\.(ts|tsx|js|jsx)$/i.test(f),
+);
 
 for (const file of webFiles) {
   const text = read(file);
@@ -103,10 +106,16 @@ for (const file of webFiles) {
     if (spec.includes("apps/agent") || spec.includes("Warden.")) {
       violations.push(`${rel(file)}: web must not import agent (${spec})`);
     }
+    if (spec.includes("apps/mobile") || spec.includes("@warden/mobile")) {
+      violations.push(`${rel(file)}: web must not import mobile (${spec})`);
+    }
     if (spec.startsWith(".")) {
       const resolved = rel(path.resolve(path.dirname(file), spec));
       if (resolved.startsWith("apps/agent/")) {
         violations.push(`${rel(file)}: web must not import agent (${spec})`);
+      }
+      if (resolved.startsWith("apps/mobile/")) {
+        violations.push(`${rel(file)}: web must not import mobile (${spec})`);
       }
     }
   }
@@ -120,7 +129,42 @@ for (const file of agentFiles) {
       if (spec.includes("apps/web") || spec.includes("@warden/web")) {
         violations.push(`${rel(file)}: agent must not import web sources (${spec})`);
       }
+      if (spec.includes("apps/mobile") || spec.includes("@warden/mobile")) {
+        violations.push(`${rel(file)}: agent must not import mobile sources (${spec})`);
+      }
     }
+  }
+}
+
+for (const file of mobileFiles) {
+  const text = read(file);
+  for (const spec of collectImports(file, text)) {
+    if (
+      spec.includes("apps/web") ||
+      spec.includes("apps/agent") ||
+      spec.startsWith("@warden/")
+    ) {
+      violations.push(`${rel(file)}: mobile must not import web/packages (${spec})`);
+    }
+    if (spec.startsWith(".")) {
+      const resolved = rel(path.resolve(path.dirname(file), spec));
+      if (
+        resolved.startsWith("apps/web/") ||
+        resolved.startsWith("apps/agent/") ||
+        resolved.startsWith("packages/")
+      ) {
+        violations.push(`${rel(file)}: mobile must not import web/packages (${spec})`);
+      }
+    }
+  }
+}
+
+const mobileDeps = packageJsonDeps(path.join(root, "apps", "mobile"));
+for (const dep of mobileDeps) {
+  if (dep.startsWith("@warden/")) {
+    violations.push(
+      `apps/mobile/package.json: mobile shell must not depend on ${dep}`,
+    );
   }
 }
 

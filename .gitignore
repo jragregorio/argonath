@@ -24,6 +24,11 @@ publish/
 .env.local
 .env.*.local
 
+# Secrets (never commit)
+**/*firebase-adminsdk*.json
+**/*-firebase-adminsdk-*.json
+apps/web/.secrets/
+
 # IDE
 .idea/
 .vscode/
@@ -42,6 +47,15 @@ yarn-error.log*
 
 # Agent local config
 apps/agent/**/appsettings.Development.json
+
+# Mobile Android local / build outputs
+apps/mobile/android/.gradle/
+apps/mobile/android/app/build/
+apps/mobile/android/build/
+apps/mobile/android/local.properties
+apps/mobile/android/*.jks
+apps/mobile/android/*.keystore
+apps/mobile/android/keystore.properties
 
 # Agent installer outputs
 apps/agent/artifacts/

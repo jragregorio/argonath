@@ -1,0 +1,19 @@
+node_modules/
+.DS_Store
+www/js/
+
+# Android local / build outputs
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/captures/
+android/.idea/
+
+# Signing (never commit)
+*.jks
+*.keystore
+keystore.properties
+
+# Firebase (commit example only)
+android/app/google-services.json

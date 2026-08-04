@@ -38,4 +38,6 @@ Application and package directories **unchanged** (ADR-0001). Added AI guardrail
 
 ## Active work
 
-None. Completed task: [docs/work/archive/repository-restructure.md](../work/archive/repository-restructure.md).
+- [Mobile Capacitor Android shell](../work/active/mobile-capacitor-android.md) — `apps/mobile`, remote URL `https://warden-alpha.vercel.app/sign-in`, package `com.warden.gard`, FCM client wired (needs `google-services.json`).
+
+Completed task: [docs/work/archive/repository-restructure.md](../work/archive/repository-restructure.md).

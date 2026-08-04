@@ -16,12 +16,20 @@
     "CRON_SECRET",
     "VERCEL_URL",
     "PORT",
-    "BASE_URL"
+    "BASE_URL",
+    "FIREBASE_SERVICE_ACCOUNT_JSON",
+    "FIREBASE_PROJECT_ID",
+    "FIREBASE_CLIENT_EMAIL",
+    "FIREBASE_PRIVATE_KEY"
   ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "@warden/mobile#build": {
+      "dependsOn": [],
+      "outputs": ["www/js/**"]
     },
     "@warden/db#build": {
       "dependsOn": ["^build"],

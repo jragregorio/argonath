@@ -12,6 +12,7 @@ Parental screen-time control: a parent web dashboard and a Windows enforcement a
 |------|------|
 | `apps/web` | Next.js 15 parent dashboard + API host (`@warden/web`). Deployed on Vercel. |
 | `apps/agent` | .NET 8 Windows solution (`Warden.sln`). Primary exe: `Warden.Tray`. |
+| `apps/mobile` | Capacitor 8 Android shell (`@warden/mobile`). WebView loads remote dashboard URL; no bundled Next.js. |
 | `packages/api` | tRPC routers, JWT auth, Supabase helpers (`@warden/api`). |
 | `packages/db` | Prisma schema + sole `PrismaClient` owner (`@warden/db`). |
 | `packages/shared` | Shared types + policy engine (`@warden/shared`). |
@@ -21,14 +22,15 @@ Parental screen-time control: a parent web dashboard and a Windows enforcement a
 
 `apps/agent` has no `package.json` and is invisible to npm workspaces / Turborepo.
 
-## Versioning (two independent lines)
+## Versioning (three independent lines)
 
 | Product line | Owned by | Notes |
 |--------------|----------|--------|
 | Web / `@warden/*` npm | `apps/web/package.json`, `packages/shared` (`package.json` + `APP_VERSION`) | Dashboard releases |
 | Windows agent / MSI | `apps/agent/Directory.Build.props` (`$(Version)`) | Child-PC agent only |
+| Android shell | `apps/mobile/package.json` | Capacitor wrapper; remote URL — store release only for native shell changes |
 
-Do **not** bump one when releasing the other. Agent versions must increase monotonically forever (ADR-0004). Runtime agent version comes from the assembly via `AgentVersionInfo.Current` — no hardcoded agent version literals.
+Do **not** bump one when releasing the others. Agent versions must increase monotonically forever (ADR-0004). Runtime agent version comes from the assembly via `AgentVersionInfo.Current` — no hardcoded agent version literals.
 
 ### Base-10 carry (strict)
 

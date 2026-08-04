@@ -21,6 +21,10 @@ Do not put secret values in documentation. Use `.env.example` files for placehol
 | `VERCEL_URL` | Provided by Vercel; used for absolute URLs |
 | `PORT` | Local port fallback |
 | `NODE_ENV` | Node environment |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Optional; full Firebase service account JSON for FCM send |
+| `FIREBASE_PROJECT_ID` | Optional alt to JSON; Firebase project id |
+| `FIREBASE_CLIENT_EMAIL` | Optional alt to JSON; service account email |
+| `FIREBASE_PRIVATE_KEY` | Optional alt to JSON; PEM with `\n` newlines |
 
 Files: `apps/web/.env.local` (gitignored), template `apps/web/.env.example`.
 

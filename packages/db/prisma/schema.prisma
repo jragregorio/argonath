@@ -28,6 +28,7 @@ model User {
 
   memberships   FamilyMember[]
   refreshTokens RefreshToken[]
+  pushTokens    PushToken[]
 }
 
 model Family {
@@ -44,6 +45,7 @@ model Family {
   members       FamilyMember[]
   refreshTokens RefreshToken[]
   nudges        Nudge[]
+  pushTokens    PushToken[]
 }
 
 model FamilyMember {
@@ -258,6 +260,23 @@ model AuditLog {
   @@index([familyId])
   @@index([createdAt])
   @@index([familyId, createdAt])
+}
+
+/// Parent phone FCM registration (Capacitor Android shell).
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  familyId  String
+  token     String   @unique
+  platform  String   @default("android")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([userId])
 }
 
 model CaptureRateLimit {

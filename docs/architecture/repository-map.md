@@ -14,6 +14,7 @@ Guardian/
       Warden.Core/       Shared .NET library
       Warden.LockUI/     Lock overlay
       Warden.Agent/      Optional Windows Service
+    mobile/              @warden/mobile — Capacitor Android shell (remote URL)
   packages/
     api/                 @warden/api — tRPC + auth
     db/                  @warden/db — Prisma

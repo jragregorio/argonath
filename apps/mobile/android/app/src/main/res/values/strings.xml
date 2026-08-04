@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Warden</string>
+    <string name="title_activity_main">Warden</string>
+    <string name="package_name">com.warden.gard</string>
+    <string name="custom_url_scheme">com.warden.gard</string>
+    <string name="default_notification_channel_id">warden_default</string>
+    <string name="default_notification_channel_name">Warden</string>
+    <string name="default_notification_channel_description">Alerts for extension requests and account activity</string>
+</resources>

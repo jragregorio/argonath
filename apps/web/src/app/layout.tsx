@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Outfit, Source_Sans_3 } from "next/font/google";
+import { NativePushBootstrap } from "@/components/native-push-bootstrap";
 import { TRPCProvider } from "@/lib/trpc-provider";
 import "./globals.css";
 
@@ -36,6 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${outfit.variable} ${sourceSans.variable}`}>
       <body>
+        <NativePushBootstrap />
         <TRPCProvider>{children}</TRPCProvider>
       </body>
     </html>

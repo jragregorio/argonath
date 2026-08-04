@@ -22,6 +22,7 @@ import {
   broadcastToDevice,
   isSupabaseConfigured,
 } from "../lib/supabase";
+import { notifyFamilyParents } from "../lib/fcm";
 import {
   getCachedSignedSnapshotUrl,
   invalidateSignedSnapshotUrl,
@@ -2010,6 +2011,25 @@ export const agentRouter = router({
         timestamp: new Date().toISOString(),
       }).catch(() => {});
 
+      const child = await prisma.child.findUnique({
+        where: { id: ctx.device.childId },
+        select: { displayName: true, familyId: true },
+      });
+      if (child) {
+        void notifyFamilyParents(child.familyId, {
+          title: "More time requested",
+          body: `${child.displayName} asked for ${input.requestedMinutes} more minutes`,
+          data: {
+            type: "extension:requested",
+            requestId: request.id,
+            childId: ctx.device.childId,
+            path: "/dashboard/extensions",
+          },
+        }).catch((error) => {
+          console.error("[fcm] extension notify failed", error);
+        });
+      }
+
       return request;
     }),
 
@@ -2377,6 +2397,40 @@ export const agentReleaseRouter = router({
     }),
 });
 
+export const pushRouter = router({
+  registerToken: parentProcedure
+    .input(
+      z.object({
+        token: z.string().min(10).max(4096),
+        platform: z.enum(["android"]).default("android"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const family = await getFamilyForUser({
+        userId: ctx.userId!,
+        familyId: ctx.familyId!,
+        loadFamily: ctx.loadFamily,
+      });
+
+      await prisma.pushToken.upsert({
+        where: { token: input.token },
+        create: {
+          token: input.token,
+          userId: ctx.userId!,
+          familyId: family.id,
+          platform: input.platform,
+        },
+        update: {
+          userId: ctx.userId!,
+          familyId: family.id,
+          platform: input.platform,
+        },
+      });
+
+      return { ok: true as const };
+    }),
+});
+
 export const appRouter = router({
   auth: authRouter,
   family: familyRouter,
@@ -2388,6 +2442,7 @@ export const appRouter = router({
   snapshot: snapshotRouter,
   agent: agentRouter,
   agentRelease: agentReleaseRouter,
+  push: pushRouter,
 });
 
 export type AppRouter = typeof appRouter;

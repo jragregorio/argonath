@@ -13,7 +13,8 @@
 Forbidden:
 
 - Any import from `packages/**` into `apps/**` paths (packages → apps)
-- `apps/web` importing `apps/agent` sources or vice versa
+- `apps/web` importing `apps/agent` or `apps/mobile` sources (and vice versa)
+- `apps/mobile` importing `apps/web`, `apps/agent`, or any `@warden/*` package (remote URL shell only)
 - `new PrismaClient()` outside `packages/db`
 - Domain/tRPC/Prisma imports inside `packages/ui`
 
@@ -35,7 +36,7 @@ Run `npm run check:boundaries` (`scripts/check-boundaries.mjs`). Included in `np
 Checks:
 
 - No `packages → apps` imports
-- No cross-app source imports (`web` ↔ `agent`)
+- No cross-app source imports (`web` ↔ `agent` ↔ `mobile`)
 - Acyclic `@warden/*` graph matching allowed edges
 - Every `@warden/*` import is declared in the consumer `package.json`
 - `PrismaClient` construction only in `packages/db` (root `scripts/` exempt)
