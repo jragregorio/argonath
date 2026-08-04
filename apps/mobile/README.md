@@ -6,7 +6,7 @@ Capacitor 8 Android app that loads the live Warden parent dashboard from Vercel 
 |---------|-------|
 | Package / `applicationId` | `com.warden.gard` |
 | Display name | Warden |
-| Remote URL | `https://warden-alpha.vercel.app/sign-in` |
+| Remote URL | `https://warden-alpha.vercel.app/dashboard` |
 
 ## Prerequisites
 
@@ -99,7 +99,7 @@ npm run cap:open -w @warden/mobile
 
 ## Native behavior
 
-- **Launch URL:** `/sign-in` on the Vercel host.
+- **Launch URL:** `/dashboard` on the Vercel host (middleware refreshes session or redirects to sign-in).
 - **Splash / status bar:** dark slate (`#0f172a`) to match the dashboard chrome.
 - **App icon:** `warden_icon.png` (generated into `res/mipmap-*`; regenerate with `python scripts/generate-icons.py`).
 - **Hardware back:** WebView `history.back()` when possible; otherwise `App.exitApp()`.

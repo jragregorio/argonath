@@ -24,6 +24,30 @@ function isPublicPath(pathname: string) {
   );
 }
 
+function safeRedirectPath(next: string | null, defaultPath = "/dashboard"): string {
+  if (!next || !next.startsWith("/")) {
+    return defaultPath;
+  }
+  return next;
+}
+
+async function redirectIfAuthenticated(
+  req: NextRequest,
+  defaultNext: string
+): Promise<NextResponse | null> {
+  if (await hasValidAccess(req)) {
+    return NextResponse.redirect(new URL(defaultNext, req.url));
+  }
+
+  if (req.cookies.get(REFRESH_COOKIE)?.value) {
+    const refreshUrl = new URL("/api/auth/refresh", req.url);
+    refreshUrl.searchParams.set("next", defaultNext);
+    return NextResponse.redirect(refreshUrl);
+  }
+
+  return null;
+}
+
 async function hasValidAccess(req: NextRequest): Promise<boolean> {
   const token = req.cookies.get(ACCESS_COOKIE)?.value;
   if (!token) return false;
@@ -51,6 +75,19 @@ async function hasValidAccess(req: NextRequest): Promise<boolean> {
 
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
+
+  if (pathname === "/sign-in" || pathname === "/sign-up") {
+    if (!devAuthBypassEnabled) {
+      const destination = safeRedirectPath(
+        req.nextUrl.searchParams.get("next")
+      );
+      const authRedirect = await redirectIfAuthenticated(req, destination);
+      if (authRedirect) {
+        return authRedirect;
+      }
+    }
+    return NextResponse.next();
+  }
 
   if (devAuthBypassEnabled || isPublicPath(pathname)) {
     return NextResponse.next();

@@ -6,7 +6,7 @@ const config: CapacitorConfig = {
   appName: "Warden",
   webDir: "www",
   server: {
-    url: "https://warden-alpha.vercel.app/sign-in",
+    url: "https://warden-alpha.vercel.app/dashboard",
     cleartext: false,
     allowNavigation: [
       "warden-alpha.vercel.app",

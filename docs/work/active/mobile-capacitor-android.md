@@ -10,7 +10,7 @@
 | Decision | Choice |
 |----------|--------|
 | Approach | Capacitor **remote URL** (WebView loads live Next.js on Vercel) |
-| Server URL | `https://warden-alpha.vercel.app/sign-in` |
+| Server URL | `https://warden-alpha.vercel.app/dashboard` |
 | Package path | `apps/mobile` |
 | Android applicationId | `com.warden.gard` |
 | Display name | Warden |
@@ -20,7 +20,7 @@
 
 ### What “remote URL” means
 
-The APK does **not** bundle the Next.js build. The Capacitor WebView opens the deployed site at **`https://warden-alpha.vercel.app/sign-in`**. Auth cookies, tRPC, middleware, and realtime keep working against that origin. Web deploys update the app content without a new store release.
+The APK does **not** bundle the Next.js build. The Capacitor WebView opens the deployed site at **`https://warden-alpha.vercel.app/dashboard`**. Auth cookies, tRPC, middleware, and realtime keep working against that origin. Web deploys update the app content without a new store release.
 
 ### What “push” means (enabled)
 
@@ -125,7 +125,7 @@ Signing prep: `android/keystore.properties.example`, conditional `signingConfigs
 
 ### Phase 6 — follow-up mods (2026-08-04)
 
-- Launch URL → `https://warden-alpha.vercel.app/sign-in`
+- Launch URL → `https://warden-alpha.vercel.app/dashboard` (was `/sign-in`; see `mobile-session-persist.md`)
 - Package rename `com.wargen.gard` → `com.warden.gard` (config, gradle, MainActivity package)
 - Push: `@capacitor/push-notifications`, Android channel + `POST_NOTIFICATIONS`, web `NativePushBootstrap`, `google-services.json.example`
 - `npm run cap:sync -w @warden/mobile` — exit 0

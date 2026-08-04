@@ -16,7 +16,7 @@ Options considered: static export of Next.js (rejected — breaks server feature
 
 ## Decision
 
-1. Add **`apps/mobile`** (`@warden/mobile`) as a **Capacitor 8** project with **remote URL mode**: `server.url` loads the live Vercel deployment at **`https://warden-alpha.vercel.app/sign-in`**; `webDir` holds only a minimal local placeholder and shell bootstrap JS.
+1. Add **`apps/mobile`** (`@warden/mobile`) as a **Capacitor 8** project with **remote URL mode**: `server.url` loads the live Vercel deployment at **`https://warden-alpha.vercel.app/dashboard`** (middleware refreshes session or redirects to sign-in); `webDir` holds only a minimal local placeholder and shell bootstrap JS.
 2. **Android only** for v1; `applicationId` / `appId` **`com.warden.gard`**, display name **Warden**.
 3. **Push / FCM** enabled for both debug and release builds via `@capacitor/push-notifications` + `google-services.json` (same package id). Web bootstraps registration inside the Capacitor WebView (`NativePushBootstrap`); backend send path is a follow-up.
 4. **Independent version line** — `@warden/mobile` `package.json` version is not tied to `@warden/web` or the Windows agent (`ADR-0004` pattern).
