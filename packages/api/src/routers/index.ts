@@ -316,7 +316,15 @@ export const authRouter = router({
     const [user, memberships] = await Promise.all([
       prisma.user.findUnique({
         where: { id: ctx.userId },
-        select: { id: true, email: true, name: true, createdAt: true },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          createdAt: true,
+          notifyExtensionRequests: true,
+          notifyDeviceOnline: true,
+          notifyDeviceOffline: true,
+        },
       }),
       prisma.familyMember.findMany({
         where: { userId: ctx.userId },
@@ -439,6 +447,50 @@ export const authRouter = router({
       );
 
       return { ok: true };
+    }),
+
+  updateNotificationPrefs: protectedProcedure
+    .input(
+      z.object({
+        notifyExtensionRequests: z.boolean().optional(),
+        notifyDeviceOnline: z.boolean().optional(),
+        notifyDeviceOffline: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const data: {
+        notifyExtensionRequests?: boolean;
+        notifyDeviceOnline?: boolean;
+        notifyDeviceOffline?: boolean;
+      } = {};
+      if (input.notifyExtensionRequests !== undefined) {
+        data.notifyExtensionRequests = input.notifyExtensionRequests;
+      }
+      if (input.notifyDeviceOnline !== undefined) {
+        data.notifyDeviceOnline = input.notifyDeviceOnline;
+      }
+      if (input.notifyDeviceOffline !== undefined) {
+        data.notifyDeviceOffline = input.notifyDeviceOffline;
+      }
+      if (Object.keys(data).length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No notification preferences to update",
+        });
+      }
+      return prisma.user.update({
+        where: { id: ctx.userId },
+        data,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          createdAt: true,
+          notifyExtensionRequests: true,
+          notifyDeviceOnline: true,
+          notifyDeviceOffline: true,
+        },
+      });
     }),
 });
 
@@ -1941,7 +1993,7 @@ export const agentRouter = router({
             displayName: device.displayName,
             machineName: input.machineName,
           });
-          void notifyFamilyParents(child.familyId, {
+          void notifyFamilyParents(child.familyId, "device_online", {
             title: "Device online",
             body: `${child.displayName}'s ${deviceLabel} came online at ${timeLabel}`,
             data: {
@@ -2046,7 +2098,7 @@ export const agentRouter = router({
         select: { displayName: true, familyId: true },
       });
       if (child) {
-        void notifyFamilyParents(child.familyId, {
+        void notifyFamilyParents(child.familyId, "extension", {
           title: "More time requested",
           body: `${child.displayName} asked for ${input.requestedMinutes} more minutes`,
           data: {

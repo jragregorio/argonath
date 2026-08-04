@@ -8,6 +8,20 @@ export type PushNotificationPayload = {
   data?: Record<string, string>;
 };
 
+export type NotificationCategory =
+  | "extension"
+  | "device_online"
+  | "device_offline";
+
+const CATEGORY_PREF_FIELD: Record<
+  NotificationCategory,
+  "notifyExtensionRequests" | "notifyDeviceOnline" | "notifyDeviceOffline"
+> = {
+  extension: "notifyExtensionRequests",
+  device_online: "notifyDeviceOnline",
+  device_offline: "notifyDeviceOffline",
+};
+
 function readServiceAccount(): ServiceAccount | null {
   const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
   if (json) {
@@ -56,6 +70,7 @@ function ensureApp() {
  */
 export async function notifyFamilyParents(
   familyId: string,
+  category: NotificationCategory,
   payload: PushNotificationPayload
 ): Promise<{ sent: number; failed: number }> {
   const messaging = ensureApp();
@@ -66,8 +81,13 @@ export async function notifyFamilyParents(
     return { sent: 0, failed: 0 };
   }
 
+  const prefField = CATEGORY_PREF_FIELD[category];
+
   const rows = await prisma.pushToken.findMany({
-    where: { familyId },
+    where: {
+      familyId,
+      user: { [prefField]: true },
+    },
     select: { id: true, token: true },
   });
 

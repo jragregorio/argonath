@@ -78,7 +78,7 @@ export async function notifyStaleDeviceOffline(
         console.error("[audit] device_offline failed", error);
       });
 
-      await notifyFamilyParents(device.child.familyId, {
+      await notifyFamilyParents(device.child.familyId, "device_offline", {
         title: "Device offline",
         body: `${device.child.displayName}'s ${deviceLabel} went offline at ${timeLabel}`,
         data: {

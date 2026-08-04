@@ -152,6 +152,7 @@ export function SwipeToLock({
   return (
     <div
       ref={trackRef}
+      data-swipe-lock
       className={cn(
         "relative h-14 md:h-11 w-full min-w-0 shrink-0 select-none overflow-hidden rounded-lg border border-destructive/40 bg-destructive/15",
         inactive && "opacity-50",

@@ -103,6 +103,11 @@ export default function SettingsPage() {
       utils.family.get.invalidate();
     },
   });
+  const updateNotificationPrefs = trpc.auth.updateNotificationPrefs.useMutation({
+    onSuccess: () => {
+      utils.auth.me.invalidate();
+    },
+  });
 
   const isAdmin = me?.role === "Admin";
 
@@ -422,6 +427,68 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Notifications</CardTitle>
+          <CardDescription>
+            Choose which push alerts you receive on your phone
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {(
+            [
+              {
+                key: "notifyExtensionRequests" as const,
+                label: "Extension requests",
+                description: "When a child asks for more screen time",
+              },
+              {
+                key: "notifyDeviceOnline" as const,
+                label: "Device online",
+                description: "When a paired PC comes back online",
+              },
+              {
+                key: "notifyDeviceOffline" as const,
+                label: "Device offline",
+                description: "When a paired PC stops checking in",
+              },
+            ] as const
+          ).map(({ key, label, description }) => {
+            const checked = me?.user[key] ?? true;
+            return (
+              <label
+                key={key}
+                className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-border/70 bg-muted/10 px-3 py-3"
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">{label}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {description}
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-input accent-primary"
+                  checked={checked}
+                  disabled={updateNotificationPrefs.isPending || !me?.user}
+                  onChange={(e) => {
+                    updateNotificationPrefs.mutate({ [key]: e.target.checked });
+                  }}
+                />
+              </label>
+            );
+          })}
+          {updateNotificationPrefs.isError && (
+            <p className="text-sm text-destructive">
+              {mutationErrorMessage(
+                updateNotificationPrefs.error,
+                "Could not update notification preferences"
+              )}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

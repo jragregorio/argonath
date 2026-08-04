@@ -23,6 +23,12 @@ model User {
   email        String   @unique
   passwordHash String
   name         String
+  /// FCM: extension request notifications (default on).
+  notifyExtensionRequests Boolean @default(true)
+  /// FCM: device came online notifications (default on).
+  notifyDeviceOnline      Boolean @default(true)
+  /// FCM: device went offline notifications (default on).
+  notifyDeviceOffline     Boolean @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

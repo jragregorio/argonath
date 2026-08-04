@@ -2,6 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
+import {
+  extractPathFromPushPayload,
+  isSafeDashboardPath,
+  storePendingPushPath,
+} from "@/lib/push-deeplink";
 
 const FCM_TOKEN_KEY = "warden_fcm_token";
 
@@ -86,6 +91,12 @@ export function NativePushBootstrap() {
         });
         await push.addListener("registrationError", (error) => {
           console.error("[warden] Push registration error:", error);
+        });
+        await push.addListener("pushNotificationActionPerformed", (payload) => {
+          const path = extractPathFromPushPayload(payload);
+          if (path && isSafeDashboardPath(path)) {
+            storePendingPushPath(path);
+          }
         });
 
         if (capacitor.getPlatform?.() === "android") {
