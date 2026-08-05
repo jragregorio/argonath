@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@warden/ui";
 
 /** Soft fel / gold / violet glows + inset gold window + masked dot grid. */
@@ -56,16 +56,18 @@ export function GoldEyebrow({
 export function FramedStage({
   children,
   className,
+  ...props
 }: {
   children: ReactNode;
   className?: string;
-}) {
+} & HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
         "overflow-hidden rounded-2xl border border-border bg-card shadow-[0_24px_80px_rgba(0,0,0,0.45)]",
         className,
       )}
+      {...props}
     >
       {children}
     </div>

@@ -419,6 +419,8 @@ export type TrayPanelProps = {
   runningOpacity?: number;
   pairingCode?: string;
   pairingSuccess?: boolean;
+  showPairingCaret?: boolean;
+  pairButtonPressed?: boolean;
   childName?: string;
   timerMinutes?: number;
   timerSeconds?: number;
@@ -430,11 +432,44 @@ export type TrayPanelProps = {
 function TrayPairingScreen({
   pairingCode,
   pairingSuccess,
+  showPairingCaret = false,
+  pairButtonPressed = false,
+  animate = false,
 }: {
   pairingCode: string;
   pairingSuccess: boolean;
+  showPairingCaret?: boolean;
+  pairButtonPressed?: boolean;
+  animate?: boolean;
 }) {
-  const displayCode = pairingCode.padEnd(6, "·").slice(0, 6);
+  const slots = Array.from({ length: 6 }, (_, index) => {
+    const digit = pairingCode[index];
+    const isCaretSlot =
+      showPairingCaret && index === pairingCode.length && pairingCode.length < 6;
+
+    return (
+      <span
+        key={index}
+        className={cn(
+          "inline-block w-[1ch] text-center",
+          digit ? "text-foreground" : "text-muted-foreground/45"
+        )}
+      >
+        {isCaretSlot ? (
+          <span
+            className={cn(
+              "text-foreground",
+              animate && "tray-preview-pairing-caret"
+            )}
+          >
+            |
+          </span>
+        ) : (
+          digit ?? "·"
+        )}
+      </span>
+    );
+  });
 
   return (
     <TrayWindowShell title="Warden — Device Pairing">
@@ -450,10 +485,16 @@ function TrayPairingScreen({
         <div className="space-y-2">
           <p className="text-sm font-semibold text-foreground">Pairing code</p>
           <div className="rounded-lg border border-border bg-card px-4 py-3 text-center font-mono text-2xl tracking-[0.35em] text-foreground">
-            {displayCode}
+            {slots}
           </div>
         </div>
-        <span className="block w-full rounded-[14px] bg-primary py-2.5 text-center text-sm font-semibold text-primary-foreground">
+        <span
+          className={cn(
+            "block w-full rounded-[14px] bg-primary py-2.5 text-center text-sm font-semibold text-primary-foreground",
+            animate && "tray-preview-pair-button",
+            pairButtonPressed && "tray-preview-pair-button-pressed"
+          )}
+        >
           Pair Device
         </span>
         <p
@@ -544,6 +585,8 @@ export function TrayPanel({
   runningOpacity = 1,
   pairingCode = "",
   pairingSuccess = false,
+  showPairingCaret = false,
+  pairButtonPressed = false,
   childName = "Alex",
   timerMinutes = 42,
   timerSeconds = 0,
@@ -566,6 +609,9 @@ export function TrayPanel({
         <TrayPairingScreen
           pairingCode={pairingCode}
           pairingSuccess={pairingSuccess}
+          showPairingCaret={showPairingCaret}
+          pairButtonPressed={pairButtonPressed}
+          animate={animate}
         />
       </div>
       <div

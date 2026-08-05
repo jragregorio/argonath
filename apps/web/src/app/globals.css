@@ -182,8 +182,22 @@ body {
   }
 
   .tray-preview-layer-animated,
-  .tray-preview-usage-fill {
+  .tray-preview-usage-fill,
+  .tray-preview-pairing-caret {
     transition: none !important;
+    animation: none !important;
+  }
+
+  .home-sticky-card {
+    position: relative !important;
+    min-height: 0 !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .home-sticky-card {
+    position: relative !important;
+    min-height: 0 !important;
   }
 }
 
@@ -231,6 +245,27 @@ body {
 
 .tray-preview-usage-fill {
   transition: width ease-linear;
+}
+
+.tray-preview-pairing-caret {
+  animation: tray-preview-caret-blink 1s step-end infinite;
+}
+
+.tray-preview-pair-button {
+  transition:
+    transform 0.12s ease,
+    filter 0.12s ease;
+}
+
+.tray-preview-pair-button-pressed {
+  transform: scale(0.98);
+  filter: brightness(0.92);
+}
+
+@keyframes tray-preview-caret-blink {
+  50% {
+    opacity: 0;
+  }
 }
 .nudge-preview-child {
   transition:
