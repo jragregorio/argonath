@@ -1186,16 +1186,16 @@ export default function ChildDetailPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-2">
-        <Card className="order-1 flex h-full w-full flex-col">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
+        <Card className="order-1 flex w-full flex-col">
           <CardHeader>
             <CardTitle>Devices</CardTitle>
             <CardDescription>
               Pair the Windows agent using a one-time code
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-1 flex-col gap-4">
-            <div className="flex flex-1 flex-col gap-4">
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4">
             {child.devices.map((device) => {
               const pendingLock = pendingLocks[device.id];
               const effectiveAdminLock =
@@ -1576,7 +1576,7 @@ export default function ChildDetailPage() {
           </CardContent>
         </Card>
 
-        <Card className="order-2 flex h-full w-full flex-col">
+        <Card className="order-2 flex w-full flex-col">
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
