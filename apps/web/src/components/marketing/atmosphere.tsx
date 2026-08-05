@@ -73,6 +73,7 @@ export function FramedStage({
         tone === "alt" ? "bg-secondary" : "bg-card",
         className,
       )}
+      data-home-framed-stage=""
       {...props}
     >
       {children}

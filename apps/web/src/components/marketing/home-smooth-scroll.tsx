@@ -9,6 +9,24 @@ import { cn } from "@warden/ui";
 const COVER_BLUR_PX = 8;
 const COVER_MIN_OPACITY = 0.78;
 
+/**
+ * Next framed panel visibility at which cover/blur begins, as a fraction of
+ * *viewport height* (not section/shell/buffer height). 0.05 = 5% of the screen
+ * showing the next FramedStage.
+ */
+const COVER_START_VIEWPORT_RATIO = 0.05;
+
+/** Marks the framed panel content box inside each sticky slot. */
+const STICKY_CONTENT_ATTR = "data-home-sticky-content";
+/** Marks the FramedStage card itself (excludes shell padding + scroll buffer). */
+const FRAMED_STAGE_ATTR = "data-home-framed-stage";
+
+/**
+ * Scroll runway after each card before the next sticks.
+ * Desktop 350px; mobile shorter. Literal class so Tailwind picks it up.
+ */
+const stickyCardScrollBufferClassName = "h-20 shrink-0 md:h-[350px]";
+
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false);
 
@@ -37,13 +55,41 @@ function useMdUp() {
   return mdUp;
 }
 
+function framedStageOf(slotContent: HTMLElement): HTMLElement {
+  return (
+    slotContent.querySelector<HTMLElement>(`[${FRAMED_STAGE_ATTR}]`) ??
+    slotContent
+  );
+}
+
+/**
+ * Cover progress for the current framed panel.
+ *
+ * Uses the next *FramedStage* rect only (never the sticky section / shell /
+ * scroll buffer). Blur stays 0 until that stage occupies
+ * COVER_START_VIEWPORT_RATIO of the viewport from the bottom, then ramps to 1
+ * as its top reaches the current stage’s top.
+ */
 function coverProgress(
-  current: DOMRectReadOnly,
-  next: DOMRectReadOnly
+  currentStage: DOMRectReadOnly,
+  nextStage: DOMRectReadOnly,
+  viewportBottom: number
 ): number {
-  const overlap = current.bottom - next.top;
-  if (overlap <= 0) return 0;
-  return Math.min(1, overlap / Math.max(current.height, 1));
+  const visiblePx = viewportBottom - nextStage.top;
+  if (visiblePx <= 0) return 0;
+
+  // 5% of the viewport — ignores buffer/shell inflation of panel height.
+  const startVisiblePx = viewportBottom * COVER_START_VIEWPORT_RATIO;
+  if (visiblePx < startVisiblePx) return 0;
+
+  if (nextStage.top <= currentStage.top) return 1;
+
+  const startTop = viewportBottom - startVisiblePx;
+  const endTop = currentStage.top;
+  return Math.min(
+    1,
+    Math.max(0, (startTop - nextStage.top) / Math.max(startTop - endTop, 1))
+  );
 }
 
 /**
@@ -98,13 +144,6 @@ export function HomeSmoothScroll({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * Scroll runway after each card before the next sticks (~2–3 wheel ticks mobile,
- * a bit more on desktop). In-flow spacer (not margin) so the slot fill color
- * shows in the gap between panels.
- */
-const stickyCardScrollBufferClassName = "h-20 shrink-0 md:h-[350px]";
-
 export type StickyHomeCardTone = "default" | "alt";
 
 /** Sticky card slot on md+; normal stacked sections on mobile. */
@@ -158,9 +197,22 @@ export function StickyHomeCard({
         return;
       }
 
+      const nextContent = next.querySelector<HTMLElement>(
+        `[${STICKY_CONTENT_ATTR}]`
+      );
+      if (!nextContent) {
+        if (lastProgressRef.current !== 0) clearCover();
+        return;
+      }
+
+      // FramedStage only — shell padding + scroll buffer must not affect timing.
+      const currentStage = framedStageOf(content);
+      const nextStage = framedStageOf(nextContent);
+
       const progress = coverProgress(
-        section.getBoundingClientRect(),
-        next.getBoundingClientRect()
+        currentStage.getBoundingClientRect(),
+        nextStage.getBoundingClientRect(),
+        window.innerHeight
       );
 
       if (Math.abs(progress - lastProgressRef.current) < 0.004) return;
@@ -228,6 +280,7 @@ export function StickyHomeCard({
       >
         <div
           ref={contentRef}
+          data-home-sticky-content=""
           className="mx-auto w-full max-w-6xl"
         >
           {children}
