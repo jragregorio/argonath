@@ -221,6 +221,71 @@ describe("policy engine", () => {
     expect(shouldLock(result)).toBe(false);
   });
 
+  describe("extension outside allowed window", () => {
+    const wedWindowPolicy: ScreenTimePolicyInput = {
+      dailyLimitMinutes: 120,
+      allowedWindows: [{ day: 3, start: "04:00", end: "19:00" }],
+      isActive: true,
+    };
+    // Wednesday 2026-01-07 20:00 UTC — outside 04:00–19:00 window
+    const wed8pm = new Date("2026-01-07T20:00:00.000Z");
+    const activeBonus = [
+      { extraMinutes: 15, expiresAt: new Date("2026-01-08T00:00:00.000Z") },
+    ];
+
+    it("allows unused bonus only, not full daily leftover (Wed 8 PM +15 min)", () => {
+      const result = evaluatePolicy(
+        wedWindowPolicy,
+        30,
+        activeBonus,
+        wed8pm,
+        "UTC"
+      );
+      expect(result.status).toBe("allowed");
+      expect(result.remainingMinutes).toBe(15);
+      expect(result.dailyRemainingMinutes).toBe(105);
+      expect(result.limitingFactor).toBe("daily_limit");
+      expect(shouldLock(result)).toBe(false);
+    });
+
+    it("allows partially consumed bonus outside window", () => {
+      const result = evaluatePolicy(
+        wedWindowPolicy,
+        130,
+        activeBonus,
+        wed8pm,
+        "UTC"
+      );
+      expect(result.status).toBe("allowed");
+      expect(result.remainingMinutes).toBe(5);
+      expect(result.limitingFactor).toBe("daily_limit");
+      expect(shouldLock(result)).toBe(false);
+    });
+
+    it("locks when bonus fully consumed outside window", () => {
+      const result = evaluatePolicy(
+        wedWindowPolicy,
+        135,
+        activeBonus,
+        wed8pm,
+        "UTC"
+      );
+      expect(result.status).toBe("outside_window");
+      expect(result.remainingMinutes).toBe(0);
+      expect(result.limitingFactor).toBe("window");
+      expect(shouldLock(result)).toBe(true);
+    });
+
+    it("stays outside_window with daily leftover but no bonus", () => {
+      const result = evaluatePolicy(wedWindowPolicy, 30, [], wed8pm, "UTC");
+      expect(result.status).toBe("outside_window");
+      expect(result.remainingMinutes).toBe(0);
+      expect(result.dailyRemainingMinutes).toBe(90);
+      expect(result.limitingFactor).toBe("window");
+      expect(shouldLock(result)).toBe(true);
+    });
+  });
+
   it("computes window remaining in a non-UTC family timezone", () => {
     const policy: ScreenTimePolicyInput = {
       dailyLimitMinutes: 200,

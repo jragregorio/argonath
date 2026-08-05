@@ -174,6 +174,24 @@ public static class PolicyEngine
 
         if (!inWindow)
         {
+            var bonusRemaining = Math.Max(
+                0,
+                bonusMinutes - Math.Max(0, usedMinutesToday - policy.DailyLimitMinutes));
+            if (bonusRemaining > 0)
+            {
+                return new PolicyEvaluation
+                {
+                    Status = "allowed",
+                    RemainingMinutes = bonusRemaining,
+                    DailyRemainingMinutes = dailyRemainingMinutes,
+                    LimitingFactor = "daily_limit",
+                    ReachableMinutesToday = reachableMinutesToday,
+                    UsedMinutes = usedMinutesToday,
+                    DailyLimitMinutes = policy.DailyLimitMinutes,
+                    BonusMinutes = bonusMinutes
+                };
+            }
+
             return new PolicyEvaluation
             {
                 Status = "outside_window",

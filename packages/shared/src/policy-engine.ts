@@ -231,6 +231,23 @@ export function evaluatePolicy(
   );
 
   if (!inWindow) {
+    const bonusRemaining = Math.max(
+      0,
+      bonusMinutes - Math.max(0, usedMinutesToday - policy.dailyLimitMinutes)
+    );
+    if (bonusRemaining > 0) {
+      return {
+        status: "allowed",
+        remainingMinutes: bonusRemaining,
+        dailyRemainingMinutes,
+        limitingFactor: "daily_limit",
+        reachableMinutesToday,
+        usedMinutes: usedMinutesToday,
+        dailyLimitMinutes: policy.dailyLimitMinutes,
+        bonusMinutes,
+      };
+    }
+
     return {
       status: "outside_window",
       remainingMinutes: 0,
