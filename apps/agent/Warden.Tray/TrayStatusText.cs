@@ -22,12 +22,7 @@ internal static class TrayStatusText
             return "Warden — Syncing policy...";
         }
 
-        var limitSeconds = Math.Max(1, eval.DailyLimitMinutes + eval.BonusMinutes) * 60;
-        var remainingSeconds = Math.Max(
-            0,
-            (int)Math.Floor(limitSeconds - engine.UsedSecondsToday)
-        );
-        remainingSeconds = Math.Min(remainingSeconds, Math.Max(0, eval.RemainingMinutes) * 60);
+        var remainingSeconds = engine.GetRemainingSeconds();
 
         if (remainingSeconds <= 0)
         {

@@ -397,15 +397,7 @@ public class MainWindow : Window
         limitMinutes = Math.Max(1, eval.DailyLimitMinutes + eval.BonusMinutes);
 
         var limitSeconds = Math.Max(1, limitMinutes) * 60.0;
-        var remainingSeconds = Math.Max(
-            0,
-            (int)Math.Floor(limitSeconds - _engine.UsedSecondsToday)
-        );
-        // Cap at session remaining so the countdown never promises past a closing window.
-        remainingSeconds = Math.Min(remainingSeconds, Math.Max(0, eval.RemainingMinutes) * 60);
-
-        if (_engine.IsLocked || _engine.IsAdminLocked)
-            remainingSeconds = 0;
+        var remainingSeconds = _engine.GetRemainingSeconds();
 
         _remainingFraction = Math.Clamp(remainingSeconds / limitSeconds, 0, 1);
         SetTimerDisplay(remainingSeconds);
@@ -512,6 +504,7 @@ public class MainWindow : Window
         {
             _requestStatusLine.Text = "";
             _requestValidationLine.Text = "";
+            _customMinutesBox.Text = "";
         }
     }
 

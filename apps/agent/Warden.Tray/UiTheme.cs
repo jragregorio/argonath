@@ -305,31 +305,37 @@ internal static class UiTheme
     /// </summary>
     public static void ApplyPlaceholder(WpfTextBox box, string placeholder)
     {
-        void Sync()
+        void Clear()
         {
-            // Watermark lives as an Adorner when empty.
             var layer = AdornerLayer.GetAdornerLayer(box);
             if (layer == null) return;
 
             var existing = layer.GetAdorners(box);
-            if (existing != null)
-            {
-                foreach (var a in existing)
-                {
-                    if (a is PlaceholderAdorner) layer.Remove(a);
-                }
-            }
+            if (existing == null) return;
 
-            if (string.IsNullOrEmpty(box.Text))
-                layer.Add(new PlaceholderAdorner(box, placeholder));
+            foreach (var a in existing)
+            {
+                if (a is PlaceholderAdorner) layer.Remove(a);
+            }
+        }
+
+        void Sync()
+        {
+            Clear();
+            // Adorners live on a parent AdornerLayer and do not auto-hide with Collapsed
+            // ancestors — only draw when the box is actually visible and empty.
+            if (!box.IsVisible || !string.IsNullOrEmpty(box.Text)) return;
+
+            var layer = AdornerLayer.GetAdornerLayer(box);
+            if (layer == null) return;
+
+            layer.Add(new PlaceholderAdorner(box, placeholder));
         }
 
         box.Loaded += (_, _) => Sync();
+        box.Unloaded += (_, _) => Clear();
         box.TextChanged += (_, _) => Sync();
-        box.IsVisibleChanged += (_, _) =>
-        {
-            if (box.IsVisible) Sync();
-        };
+        box.IsVisibleChanged += (_, _) => Sync();
     }
 
     private sealed class PlaceholderAdorner : Adorner

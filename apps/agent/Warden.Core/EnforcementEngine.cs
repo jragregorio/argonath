@@ -47,6 +47,39 @@ public class EnforcementEngine
     public double UsedSecondsToday => _otherDevicesMinutes * 60.0 + _activeSecondsToday;
     public PolicyEvaluation? CurrentEvaluation { get; private set; }
 
+    /// <summary>
+    /// Session remaining with second precision. Daily budget uses accrued usage seconds;
+    /// schedule windows use wall-clock seconds until window end so the UI does not freeze on :00.
+    /// </summary>
+    public int GetRemainingSeconds()
+    {
+        if (IsLocked || IsAdminLocked) return 0;
+
+        var eval = CurrentEvaluation;
+        if (eval == null || eval.RemainingMinutes <= 0) return 0;
+        // Paused / inactive policy sentinel.
+        if (eval.RemainingMinutes >= 999) return eval.RemainingMinutes * 60;
+
+        var limitSeconds = Math.Max(1, eval.DailyLimitMinutes + eval.BonusMinutes) * 60.0;
+        var dailyRemainingSeconds = Math.Max(
+            0,
+            (int)Math.Floor(limitSeconds - UsedSecondsToday)
+        );
+
+        if (_currentPolicy == null || _currentPolicy.Policy.AllowedWindows.Count == 0)
+            return dailyRemainingSeconds;
+
+        var now = PolicyEngine.ResolveNow(_currentPolicy.Timezone);
+        var windowRemainingSeconds = PolicyEngine.GetWindowRemainingSeconds(
+            _currentPolicy.Policy.AllowedWindows,
+            now
+        );
+        if (windowRemainingSeconds is null)
+            return dailyRemainingSeconds;
+
+        return Math.Min(dailyRemainingSeconds, windowRemainingSeconds.Value);
+    }
+
     public EnforcementEngine(WardenApiClient api, ConfigStore configStore)
     {
         _api = api;

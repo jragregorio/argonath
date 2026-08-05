@@ -30,6 +30,26 @@ public static class PolicyEngine
         return date.Hour * 60 + date.Minute;
     }
 
+    private static int GetSecondsSinceMidnight(DateTime date)
+    {
+        return date.Hour * 3600 + date.Minute * 60 + date.Second;
+    }
+
+    /// <summary>
+    /// Seconds left in the current allowed window, or null when there is no active window end.
+    /// </summary>
+    public static int? GetWindowRemainingSeconds(
+        IReadOnlyList<AllowedWindow> windows,
+        DateTime now)
+    {
+        if (windows.Count == 0) return null;
+
+        var (inWindow, _, windowEndMinutes) = ResolveWindowState(windows.ToList(), now);
+        if (!inWindow || windowEndMinutes is null) return null;
+
+        return Math.Max(0, windowEndMinutes.Value * 60 - GetSecondsSinceMidnight(now));
+    }
+
     /// <summary>
     /// Per day, sort by start and merge overlapping and adjacent runs.
     /// Does not merge across different days.
