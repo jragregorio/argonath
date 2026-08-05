@@ -14,7 +14,7 @@ export function MarketingAtmosphere({
       className={cn("pointer-events-none absolute inset-0 overflow-hidden", className)}
       aria-hidden="true"
     >
-      <div className="absolute inset-0 bg-[#121a16]" />
+      <div className="absolute inset-0 bg-background" />
       <div className="absolute -left-16 top-6 h-56 w-56 rounded-full bg-primary/25 blur-[80px] md:top-10 md:h-72 md:w-72 md:blur-[90px]" />
       <div className="absolute -right-10 bottom-0 h-52 w-52 rounded-full bg-attention/20 blur-[80px] md:h-80 md:w-80 md:blur-[100px]" />
       <div className="absolute left-1/3 top-1/2 h-40 w-40 -translate-y-1/2 rounded-full bg-plume/25 blur-[70px] md:h-56 md:w-56 md:blur-[80px]" />
@@ -64,7 +64,7 @@ export function FramedStage({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-2xl border border-border bg-card shadow-[0_24px_80px_rgba(0,0,0,0.45)]",
+        "overflow-hidden rounded-2xl border border-border bg-card [box-shadow:var(--home-framed-shadow)]",
         className,
       )}
       {...props}

@@ -2,9 +2,10 @@
 
 @theme {
   /*
-   * Maiev mock v3 — local preview only
+   * Maiev mock v3 — default (dark)
    * Surfaces: sage/teal. Interactive primary: Warden/fel green (readable on dark).
    * Gold trim + silver text; violet only as subtle undertone.
+   * Homepage light overrides: html.home-theme-light (removed when leaving /).
    */
   --color-background: #1a2420;
   --color-foreground: #e0e0e0;
@@ -34,6 +35,64 @@
   --radius-lg: 0.75rem;
   --font-display: var(--font-outfit), system-ui, sans-serif;
   --font-sans: var(--font-source-sans), system-ui, sans-serif;
+}
+
+/* Homepage light theme — scoped to html class; HomeThemeProvider strips on unmount */
+html.home-theme-light {
+  color-scheme: light;
+  --color-background: #e9efe9;
+  --color-foreground: #1a2a22;
+  --color-card: #f3f6f4;
+  --color-card-foreground: #1a2a22;
+  --color-primary: #2f8f52;
+  --color-primary-foreground: #f5faf7;
+  --color-secondary: #d4e0d8;
+  --color-secondary-foreground: #1a2a22;
+  --color-muted: #dce5df;
+  --color-muted-foreground: #5a6b62;
+  --color-accent: #267a44;
+  --color-accent-foreground: #f5faf7;
+  --color-destructive: #c04a3d;
+  --color-destructive-foreground: #ffffff;
+  --color-attention: #a6842e;
+  --color-attention-foreground: #f5faf7;
+  --color-border: #b8c8bc;
+  --color-input: #b8c8bc;
+  --color-ring: #c5a059;
+  --color-plume: #e8e0f0;
+  --color-live: #2f8f52;
+  --color-fel: #2ecc71;
+  --color-armor: #3d6b52;
+  --home-framed-shadow: 0 20px 60px color-mix(in srgb, var(--color-armor) 14%, transparent);
+}
+
+/* Marketing device previews — always dark chrome regardless of page theme */
+.mock-device-chrome {
+  color-scheme: dark;
+  --color-background: #1a2420;
+  --color-foreground: #e0e0e0;
+  --color-card: #24302c;
+  --color-card-foreground: #e0e0e0;
+  --color-primary: #50c878;
+  --color-primary-foreground: #0f1a12;
+  --color-secondary: #283c3c;
+  --color-secondary-foreground: #e0e0e0;
+  --color-muted: #2a3530;
+  --color-muted-foreground: #a8b0b0;
+  --color-accent: #3b9b5c;
+  --color-accent-foreground: #0f1a12;
+  --color-destructive: #b54a3f;
+  --color-destructive-foreground: #ffffff;
+  --color-attention: #c5a059;
+  --color-attention-foreground: #1a2420;
+  --color-border: #36454f;
+  --color-input: #36454f;
+  --color-ring: #d4af37;
+  --color-plume: #2e1a47;
+  --color-live: #50c878;
+  --color-fel: #39ff14;
+  --color-armor: #2f4f39;
+  --home-framed-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
 }
 
 * {
@@ -301,6 +360,7 @@ body {
 
 /* modern mobile menu */
 :root {
+  --home-framed-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
   --component-inactive-color: var(--color-muted-foreground);
   /* Elevated chrome: darker than cards, distinct from page background */
   --component-bg: color-mix(in srgb, var(--color-background) 58%, var(--color-card));

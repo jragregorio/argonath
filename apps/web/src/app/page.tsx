@@ -18,6 +18,17 @@ import {
   GoldEyebrow,
   MarketingAtmosphere,
 } from "@/components/marketing/atmosphere";
+import {
+  HomeThemeProvider,
+  HomeThemeToggle,
+  HomeHeaderSignInLink,
+} from "@/components/marketing/home-theme";
+import {
+  homeHeaderActionsClassName,
+  homeHeaderCtaClassName,
+} from "@/components/marketing/home-header-nav-styles";
+import { homeThemeFoucScript } from "@/components/marketing/home-theme-constants";
+import { MockDeviceChrome } from "@/components/marketing/mock-device-chrome";
 
 const faqItems = [
   {
@@ -44,7 +55,10 @@ const faqItems = [
 
 export default function HomePage() {
   return (
-    <HomeSmoothScroll>
+    <>
+      <script dangerouslySetInnerHTML={{ __html: homeThemeFoucScript }} />
+      <HomeThemeProvider>
+        <HomeSmoothScroll>
       <div className="relative min-h-screen bg-background">
         <div
           className="pointer-events-none absolute inset-0 -z-10"
@@ -63,17 +77,10 @@ export default function HomePage() {
                 Warden
               </span>
             </div>
-            <div className="flex items-center gap-2 sm:gap-4">
-              <Link
-                href="/sign-in"
-                className="px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground sm:px-4"
-              >
-                Sign in
-              </Link>
-              <Link
-                href="/sign-up"
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-accent"
-              >
+            <div className={homeHeaderActionsClassName}>
+              <HomeThemeToggle />
+              <HomeHeaderSignInLink />
+              <Link href="/sign-up" className={homeHeaderCtaClassName}>
                 Get started
               </Link>
             </div>
@@ -116,7 +123,9 @@ export default function HomePage() {
 
               <div className="relative flex flex-col justify-center border-t border-border bg-card/80 p-5 sm:p-8 md:border-t-0 md:border-l md:p-10">
                 <div className="home-rise home-rise-delay-3">
-                  <AnimatedDashboardPanel />
+                  <MockDeviceChrome>
+                    <AnimatedDashboardPanel />
+                  </MockDeviceChrome>
                 </div>
               </div>
             </FramedStage>
@@ -185,7 +194,9 @@ export default function HomePage() {
                       on the device.
                     </p>
                   </div>
-                  <AnimatedShowcasePanels />
+                  <MockDeviceChrome>
+                    <AnimatedShowcasePanels />
+                  </MockDeviceChrome>
                   <p className="mt-6 max-w-xl text-sm text-muted-foreground text-pretty">
                     When the day&apos;s allowance is gone, kids see a clear lock —
                     and a way to ask for more time instead of arguing at the door.
@@ -232,7 +243,9 @@ export default function HomePage() {
                       </li>
                     </ul>
                     <div className="mt-8 overflow-visible pb-2">
-                      <AnimatedParentNudgeMock />
+                      <MockDeviceChrome>
+                        <AnimatedParentNudgeMock />
+                      </MockDeviceChrome>
                     </div>
                   </div>
                 </div>
@@ -268,7 +281,9 @@ export default function HomePage() {
                       </li>
                     </ul>
                     <div className="mt-8 overflow-visible pb-2">
-                      <AnimatedChildNudgeMock />
+                      <MockDeviceChrome>
+                        <AnimatedChildNudgeMock />
+                      </MockDeviceChrome>
                     </div>
                   </div>
                 </div>
@@ -293,7 +308,9 @@ export default function HomePage() {
                     with Windows keeps it ready after reboot.
                   </p>
                 </div>
-                <AnimatedTrayPreview />
+                <MockDeviceChrome>
+                  <AnimatedTrayPreview />
+                </MockDeviceChrome>
               </div>
             </FramedStage>
           </StickyHomeCard>
@@ -384,5 +401,7 @@ export default function HomePage() {
         </footer>
       </div>
     </HomeSmoothScroll>
+      </HomeThemeProvider>
+    </>
   );
 }
