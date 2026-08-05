@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { Shield } from "lucide-react";
+import { AnimatedDashboardPanel } from "@/components/marketing/dashboard-preview-motion";
+import { AnimatedTrayPreview } from "@/components/marketing/tray-preview-motion";
+import { AnimatedShowcasePanels } from "@/components/marketing/showcase-preview-motion";
 import {
-  DashboardPanel,
-  LockPanel,
-} from "@/components/marketing/product-panels";
+  AnimatedChildNudgeMock,
+  AnimatedParentNudgeMock,
+  NudgePreviewProvider,
+} from "@/components/marketing/nudge-preview-motion";
 import {
   FramedStage,
   GoldEyebrow,
@@ -100,7 +104,7 @@ export default function HomePage() {
 
             <div className="relative flex flex-col justify-center border-t border-border bg-card/80 p-5 sm:p-8 md:border-t-0 md:border-l md:p-10">
               <div className="home-rise home-rise-delay-3">
-                <DashboardPanel />
+                <AnimatedDashboardPanel />
               </div>
             </div>
           </FramedStage>
@@ -169,10 +173,7 @@ export default function HomePage() {
                     on the device.
                   </p>
                 </div>
-                <div className="mt-12 grid items-start gap-8 lg:grid-cols-2">
-                  <DashboardPanel />
-                  <LockPanel />
-                </div>
+                <AnimatedShowcasePanels />
                 <p className="mt-6 max-w-xl text-sm text-muted-foreground text-pretty">
                   When the day&apos;s allowance is gone, kids see a clear lock —
                   and a way to ask for more time instead of arguing at the door.
@@ -184,7 +185,8 @@ export default function HomePage() {
 
         {/* Parents / kids split */}
         <section className="px-4 py-8 sm:px-6 sm:py-12 md:px-8">
-          <FramedStage className="mx-auto grid max-w-6xl md:grid-cols-2">
+          <NudgePreviewProvider>
+            <FramedStage className="mx-auto grid max-w-6xl md:grid-cols-2">
             <div className="relative overflow-hidden border-b border-border p-8 sm:p-10 md:border-b-0 md:border-r">
               <MarketingAtmosphere />
               <div className="relative z-10">
@@ -214,6 +216,9 @@ export default function HomePage() {
                     </span>
                   </li>
                 </ul>
+                <div className="mt-8 overflow-visible pb-2">
+                  <AnimatedParentNudgeMock />
+                </div>
               </div>
             </div>
             <div className="relative overflow-hidden p-8 sm:p-10">
@@ -247,26 +252,33 @@ export default function HomePage() {
                     </span>
                   </li>
                 </ul>
+                <div className="mt-8 overflow-visible pb-2">
+                  <AnimatedChildNudgeMock />
+                </div>
               </div>
             </div>
-          </FramedStage>
+            </FramedStage>
+          </NudgePreviewProvider>
         </section>
 
         {/* Windows agent */}
         <section className="px-4 py-8 sm:px-6 sm:py-12 md:px-8">
           <FramedStage className="relative mx-auto max-w-6xl overflow-hidden">
             <MarketingAtmosphere />
-            <div className="relative z-10 px-6 py-12 sm:px-10 sm:py-14">
-              <GoldEyebrow>Windows agent</GoldEyebrow>
-              <h2 className="mt-5 max-w-xl font-display text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-                Built for Windows, not just the browser
-              </h2>
-              <p className="mt-4 max-w-2xl text-lg text-muted-foreground text-pretty">
-                Warden.Tray runs on the child&apos;s PC for system-wide
-                enforcement — pairing with a short code, tracking active use,
-                and locking the session when the day is done. Optional start
-                with Windows keeps it ready after reboot.
-              </p>
+            <div className="relative z-10 grid items-center gap-10 px-6 py-12 sm:px-10 sm:py-14 md:grid-cols-2 md:gap-8 lg:gap-12">
+              <div>
+                <GoldEyebrow>Windows agent</GoldEyebrow>
+                <h2 className="mt-5 max-w-xl font-display text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+                  Built for Windows, not just the browser
+                </h2>
+                <p className="mt-4 max-w-xl text-lg text-muted-foreground text-pretty">
+                  Warden.Tray runs on the child&apos;s PC for system-wide
+                  enforcement — pairing with a short code, tracking active use,
+                  and locking the session when the day is done. Optional start
+                  with Windows keeps it ready after reboot.
+                </p>
+              </div>
+              <AnimatedTrayPreview />
             </div>
           </FramedStage>
         </section>

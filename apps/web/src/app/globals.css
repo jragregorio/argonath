@@ -148,6 +148,120 @@ body {
   .skeleton-shimmer::after {
     animation: none;
   }
+
+  .nudge-preview-child,
+  .nudge-preview-child-glow,
+  .nudge-preview-chip {
+    transition: none !important;
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .nudge-preview-child-hidden {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .dashboard-preview-bar,
+  .dashboard-preview-minutes,
+  .dashboard-preview-extension-layer {
+    transition: none !important;
+  }
+
+  .lock-preview-panel,
+  .lock-preview-subtitle,
+  .lock-preview-lock-layer-animated {
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .lock-preview-lock-overlay {
+    opacity: 1 !important;
+  }
+
+  .tray-preview-layer-animated,
+  .tray-preview-usage-fill {
+    transition: none !important;
+  }
+}
+
+/* Landing-page hero dashboard preview motion */
+.dashboard-preview-bar {
+  transition: width ease-linear;
+}
+
+.dashboard-preview-minutes {
+  transition: opacity 0.35s ease;
+}
+
+.dashboard-preview-extension-layer {
+  transition:
+    opacity 0.5s ease,
+    box-shadow 0.5s ease;
+}
+
+/* Landing-page showcase lock preview motion */
+.lock-preview-panel {
+  transition:
+    opacity 0.8s ease,
+    transform 0.8s ease;
+}
+
+.lock-preview-subtitle {
+  transition: opacity 0.4s ease;
+}
+
+.lock-preview-lock-layer-animated {
+  transition: opacity 0.85s ease;
+}
+
+.lock-desktop-wallpaper {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 20%, rgba(80, 200, 120, 0.18), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 85% 75%, rgba(197, 160, 89, 0.14), transparent 50%),
+    linear-gradient(145deg, #1a3348 0%, #2a3f52 38%, #1e2a36 100%);
+}
+
+/* Landing-page Windows agent tray preview motion */
+.tray-preview-layer-animated {
+  transition: opacity 0.45s ease;
+}
+
+.tray-preview-usage-fill {
+  transition: width ease-linear;
+}
+.nudge-preview-child {
+  transition:
+    opacity 0.75s ease,
+    transform 0.75s ease;
+}
+
+.nudge-preview-child-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.nudge-preview-child-hidden {
+  opacity: 0;
+  transform: translateY(0.5rem) scale(0.98);
+}
+
+.nudge-preview-child-glow {
+  animation: nudge-preview-glow 2.4s ease-in-out 1;
+}
+
+@keyframes nudge-preview-glow {
+  0%,
+  100% {
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  }
+  40% {
+    box-shadow:
+      0 16px 48px rgba(0, 0, 0, 0.45),
+      0 0 0 1px color-mix(in srgb, var(--color-attention) 35%, transparent);
+  }
 }
 
 /* modern mobile menu */
