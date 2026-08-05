@@ -25,6 +25,7 @@ type CapacitorBridge = {
         importance: number;
         visibility: number;
         vibration: boolean;
+        sound?: string;
       }) => Promise<void>;
       addListener: (
         event: string,
@@ -35,7 +36,7 @@ type CapacitorBridge = {
   };
 };
 
-const DEFAULT_CHANNEL_ID = "warden_default";
+const DEFAULT_CHANNEL_ID = "warden_alerts";
 
 function readStoredToken(): string | null {
   try {
@@ -107,6 +108,7 @@ export function NativePushBootstrap() {
             importance: 5,
             visibility: 1,
             vibration: true,
+            sound: "warden_notif",
           });
         }
 

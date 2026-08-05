@@ -103,7 +103,7 @@ npm run cap:open -w @warden/mobile
 - **Splash / status bar:** dark slate (`#0f172a`) to match the dashboard chrome.
 - **App icon:** `warden_icon.png` (generated into `res/mipmap-*`; regenerate with `python scripts/generate-icons.py`).
 - **Hardware back:** WebView `history.back()` when possible; otherwise `App.exitApp()`.
-- **Notifications:** default channel `warden_default`; permission + FCM register on launch (when Firebase is configured).
+- **Notifications:** default channel `warden_alerts` with custom sound `warden_notif` (`res/raw/warden_notif.mp3`); permission + FCM register on launch (when Firebase is configured). Bumping the channel id creates a fresh channel on upgrade so the custom sound applies without clearing app data.
 - **Safe area:** relies on the web app’s `viewport-fit=cover` and `env(safe-area-inset-*)`.
 
 ## Play Console checklist (packaging only)

@@ -4,7 +4,7 @@ import { PushNotifications } from "@capacitor/push-notifications";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { StatusBar, Style } from "@capacitor/status-bar";
 
-const DEFAULT_CHANNEL_ID = "warden_default";
+const DEFAULT_CHANNEL_ID = "warden_alerts";
 
 async function initPushNotifications(): Promise<void> {
   await PushNotifications.removeAllListeners();
@@ -36,6 +36,7 @@ async function initPushNotifications(): Promise<void> {
       importance: 5,
       visibility: 1,
       vibration: true,
+      sound: "warden_notif",
     });
   }
 

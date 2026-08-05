@@ -4,6 +4,8 @@ import android.Manifest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.pm.PackageManager;
+import android.media.AudioAttributes;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import androidx.core.app.ActivityCompat;
@@ -11,7 +13,7 @@ import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
-    public static final String DEFAULT_CHANNEL_ID = "warden_default";
+    public static final String DEFAULT_CHANNEL_ID = "warden_alerts";
     private static final int REQ_POST_NOTIFICATIONS = 1001;
 
     @Override
@@ -42,6 +44,14 @@ public class MainActivity extends BridgeActivity {
             NotificationManager.IMPORTANCE_HIGH
         );
         channel.setDescription(getString(R.string.default_notification_channel_description));
+        AudioAttributes audioAttributes = new AudioAttributes.Builder()
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            .build();
+        Uri soundUri = Uri.parse(
+            "android.resource://" + getPackageName() + "/" + R.raw.warden_notif
+        );
+        channel.setSound(soundUri, audioAttributes);
         manager.createNotificationChannel(channel);
     }
 

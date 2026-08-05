@@ -119,7 +119,7 @@ export async function notifyFamilyParents(
           android: {
             priority: "high",
             notification: {
-              channelId: "warden_default",
+              channelId: "warden_alerts",
               priority: "high",
             },
           },

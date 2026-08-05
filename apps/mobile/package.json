@@ -1,6 +1,6 @@
 {
   "name": "@warden/mobile",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Capacitor Android shell loading the Warden dashboard from Vercel (remote URL mode).",
   "scripts": {
