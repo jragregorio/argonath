@@ -10,6 +10,7 @@ import { RecentActivityCard } from "@/components/recent-activity-card";
 import { getDeviceDisplayName } from "@warden/shared";
 import { Check, X, Clock } from "lucide-react";
 import { POLL_SAFETY_MS } from "@/lib/query-defaults";
+import { useToast } from "@/lib/toast";
 
 const ACTIVITY_LIMIT = 100;
 
@@ -20,6 +21,7 @@ function formatWhen(value: Date | string | null | undefined) {
 
 export default function ActivityPage() {
   const utils = trpc.useUtils();
+  const { showToast } = useToast();
   const { data: requests, isLoading: pendingLoading } =
     trpc.extension.listPending.useQuery(undefined, {
       refetchInterval: POLL_SAFETY_MS,
@@ -34,12 +36,13 @@ export default function ActivityPage() {
     onMutate: async ({ requestId }) => {
       await utils.extension.listPending.cancel();
       const previousPending = utils.extension.listPending.getData();
+      const request = previousPending?.find((r) => r.id === requestId);
       utils.extension.listPending.setData(undefined, (old) =>
         old?.filter((request) => request.id !== requestId)
       );
-      return { previousPending };
+      return { previousPending, request };
     },
-    onError: (_err, _vars, context) => {
+    onError: (err, _vars, context) => {
       if (context?.previousPending !== undefined) {
         utils.extension.listPending.setData(
           undefined,
@@ -47,8 +50,22 @@ export default function ActivityPage() {
         );
       }
       void utils.extension.listPending.invalidate();
+      showToast(err.message || "Could not resolve extension request", "error");
     },
-    onSuccess: () => {
+    onSuccess: (_data, { approved }, context) => {
+      const request = context?.request;
+      if (approved) {
+        const minutes = request?.requestedMinutes;
+        const childName = request?.child.displayName ?? "Child";
+        showToast(
+          minutes != null
+            ? `Extension approved — ${childName} now has +${minutes} min.`
+            : `Extension approved for ${childName}.`,
+          "success"
+        );
+      } else {
+        showToast("Extension request denied.");
+      }
       void utils.extension.listPending.invalidate();
       void utils.dashboard.navBadges.invalidate();
       void utils.dashboard.overview.invalidate();

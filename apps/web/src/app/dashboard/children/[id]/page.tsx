@@ -47,6 +47,7 @@ import { RecentActivityCard } from "@/components/recent-activity-card";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 import { AllowedWindowsSummary } from "@/components/allowed-windows-summary";
 import { formatClockInText } from "@/lib/time-format";
+import { useToast } from "@/lib/toast";
 
 const AllowedWindowsEditor = dynamic(
   () =>
@@ -186,6 +187,7 @@ export default function ChildDetailPage() {
   const router = useRouter();
   const childId = params.id as string;
   const utils = trpc.useUtils();
+  const { showToast } = useToast();
 
   const { data: child, isLoading } = trpc.children.get.useQuery(
     { childId },
@@ -318,10 +320,12 @@ export default function ChildDetailPage() {
       }));
     },
     onSuccess: (data, { deviceId }) => {
+      const childName = child?.displayName ?? "Child";
       setNudgeByDevice((prev) => ({
         ...prev,
         [deviceId]: { nudgeId: data.id, label: "Waiting…" },
       }));
+      showToast(`Nudge sent to ${childName}.`, "success");
       void utils.dashboard.activity.invalidate();
     },
     onError: (err, { deviceId }) => {
@@ -329,6 +333,7 @@ export default function ChildDetailPage() {
         ...prev,
         [deviceId]: { nudgeId: "", label: err.message },
       }));
+      showToast(err.message || "Could not send nudge", "error");
     },
   });
 
@@ -435,6 +440,7 @@ export default function ChildDetailPage() {
       ...prev,
       [deviceId]: { message: "Capture received", tone: "success" },
     }));
+    showToast("Capture received", "success");
     clearCaptureFeedbackSoon(deviceId, 4000);
   };
 
@@ -444,6 +450,7 @@ export default function ChildDetailPage() {
       ...prev,
       [deviceId]: { message, tone: "error" },
     }));
+    showToast(message, "error");
     clearCaptureFeedbackSoon(deviceId, 6000);
   };
 
@@ -489,27 +496,24 @@ export default function ChildDetailPage() {
 
   const requestCapture = trpc.snapshot.requestCapture.useMutation({
     onMutate: ({ deviceId, type }) => {
+      const startedMessage =
+        type === "screen"
+          ? "Requesting screenshot…"
+          : "Requesting webcam capture…";
       setCaptureFeedback((prev) => ({
         ...prev,
-        [deviceId]: {
-          message:
-            type === "screen"
-              ? "Requesting screenshot…"
-              : "Requesting webcam capture…",
-          tone: "pending",
-        },
+        [deviceId]: { message: startedMessage, tone: "pending" },
       }));
+      showToast(startedMessage);
     },
     onSuccess: (data, { deviceId, type }) => {
+      const waitingMessage =
+        type === "screen"
+          ? "Screenshot requested — waiting for device…"
+          : "Webcam capture requested — waiting for device…";
       setCaptureFeedback((prev) => ({
         ...prev,
-        [deviceId]: {
-          message:
-            type === "screen"
-              ? "Screenshot requested — waiting for device…"
-              : "Webcam capture requested — waiting for device…",
-          tone: "pending",
-        },
+        [deviceId]: { message: waitingMessage, tone: "pending" },
       }));
       watchCaptureStatus(deviceId, data.id);
     },
@@ -1475,7 +1479,7 @@ export default function ChildDetailPage() {
                       </div>
                     </div>
                   </div>
-                  {feedback && (
+                  {feedback?.tone === "pending" && (
                     <p
                       className={`text-xs ${captureToneClass(feedback.tone)}`}
                       role="status"

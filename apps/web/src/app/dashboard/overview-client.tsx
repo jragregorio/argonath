@@ -32,6 +32,7 @@ import {
   rollbackAdminLock,
 } from "@/lib/device-cache";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
+import { useToast } from "@/lib/toast";
 
 function remainingPercent(remaining: number, limit: number) {
   if (limit <= 0) return 0;
@@ -53,6 +54,7 @@ function statusBadgeVariant(status: PolicyStatus) {
 export default function DashboardOverviewPage() {
   const router = useRouter();
   const utils = trpc.useUtils();
+  const { showToast } = useToast();
   const { data: overview, isLoading } = trpc.dashboard.overview.useQuery(
     undefined,
     {
@@ -100,10 +102,15 @@ export default function DashboardOverviewPage() {
       }));
     },
     onSuccess: (data, { deviceId }) => {
+      const childName =
+        overview?.children.find((child) =>
+          child.devices.some((d) => d.id === deviceId)
+        )?.displayName ?? "Child";
       setNudgeByDevice((prev) => ({
         ...prev,
         [deviceId]: { nudgeId: data.id, label: "Waiting…" },
       }));
+      showToast(`Nudge sent to ${childName}.`, "success");
       void utils.dashboard.activity.invalidate();
     },
     onError: (err, { deviceId }) => {
@@ -111,6 +118,7 @@ export default function DashboardOverviewPage() {
         ...prev,
         [deviceId]: { nudgeId: "", label: err.message },
       }));
+      showToast(err.message || "Could not send nudge", "error");
     },
   });
 
