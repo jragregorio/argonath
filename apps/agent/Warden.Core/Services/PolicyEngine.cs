@@ -19,6 +19,23 @@ public static class PolicyEngine
         return $"{hours:D2}:{minutes:D2}";
     }
 
+    /// <summary>
+    /// Display-only: convert stored 24h "HH:mm" to "h:mm AM/PM" (matches web formatTime12).
+    /// </summary>
+    private static string FormatTime12(string time)
+    {
+        var parts = time.Split(':');
+        if (parts.Length != 2) return time;
+        if (!int.TryParse(parts[0], out var hours) || !int.TryParse(parts[1], out var minutes))
+            return time;
+        if (hours is < 0 or > 23 || minutes is < 0 or > 59) return time;
+
+        var period = hours >= 12 ? "PM" : "AM";
+        var hour12 = hours % 12;
+        if (hour12 == 0) hour12 = 12;
+        return $"{hour12}:{minutes:D2} {period}";
+    }
+
     private static int GetDayOfWeek(DateTime date)
     {
         var day = (int)date.DayOfWeek;
@@ -286,14 +303,14 @@ public static class PolicyEngine
             var start = ParseTime(window.Start);
             if (window.Day > currentDay || (window.Day == currentDay && start > currentMinutes))
             {
-                return (false, $"{DayNames[window.Day]} {window.Start}", null);
+                return (false, $"{DayNames[window.Day]} {FormatTime12(window.Start)}", null);
             }
         }
 
         if (merged.Count > 0)
         {
             var first = merged[0];
-            return (false, $"{DayNames[first.Day]} {first.Start}", null);
+            return (false, $"{DayNames[first.Day]} {FormatTime12(first.Start)}", null);
         }
 
         return (false, null, null);

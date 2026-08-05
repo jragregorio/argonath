@@ -392,25 +392,43 @@ public class MainWindow : Window
 
         int usedMinutes;
         int limitMinutes;
+        string usageLabel;
 
-        usedMinutes = eval.UsedMinutes;
-        limitMinutes = Math.Max(1, eval.DailyLimitMinutes + eval.BonusMinutes);
+        var remainingSeconds = _engine.GetRemainingSeconds();
+        var extensionOutsideWindow = _engine.TryGetOutsideExtensionUsage(
+            out var extensionUsedMinutes,
+            out var extensionLimitMinutes
+        );
+
+        if (extensionOutsideWindow)
+        {
+            usedMinutes = extensionUsedMinutes;
+            limitMinutes = extensionLimitMinutes;
+            usageLabel = $"{usedMinutes} / {limitMinutes} min extension";
+        }
+        else
+        {
+            usedMinutes = eval.UsedMinutes;
+            limitMinutes = Math.Max(1, eval.DailyLimitMinutes + eval.BonusMinutes);
+            usageLabel = $"{usedMinutes} / {limitMinutes} min used";
+        }
 
         var limitSeconds = Math.Max(1, limitMinutes) * 60.0;
-        var remainingSeconds = _engine.GetRemainingSeconds();
 
         _remainingFraction = Math.Clamp(remainingSeconds / limitSeconds, 0, 1);
         SetTimerDisplay(remainingSeconds);
 
         if (remainingSeconds <= 0)
         {
-            _usageDetail.Text = $"{usedMinutes} / {limitMinutes} min used · time is up";
+            _usageDetail.Text = extensionOutsideWindow
+                ? $"{usedMinutes} / {limitMinutes} min extension · time is up"
+                : $"{usedMinutes} / {limitMinutes} min used · time is up";
             _usageFill.Background = UiTheme.DangerFillBrush;
             _remainingFraction = 0;
         }
         else
         {
-            _usageDetail.Text = $"{usedMinutes} / {limitMinutes} min used";
+            _usageDetail.Text = usageLabel;
             _usageFill.Background =
                 _remainingFraction <= 0.2 ? UiTheme.DangerFillBrush : UiTheme.AccentFillBrush;
         }

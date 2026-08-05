@@ -31,6 +31,13 @@ public class EnforcementEngine
     private int? _lastRemainingMinutes;
     private DateTime _usageDayLocal = DateTime.Today;
 
+    /// <summary>
+    /// When an extension unlocks outside the allowed window, usage is counted from this
+    /// baseline so leftover daily budget is not required before the timer moves.
+    /// </summary>
+    private double? _outsideExtensionBaselineSeconds;
+    private int _outsideExtensionBonusMinutes;
+
     public event Action<PolicyEvaluation>? PolicyChanged;
     public event Action? LockRequired;
     public event Action? UnlockRequired;
@@ -50,6 +57,7 @@ public class EnforcementEngine
     /// <summary>
     /// Session remaining with second precision. Daily budget uses accrued usage seconds;
     /// schedule windows use wall-clock seconds until window end so the UI does not freeze on :00.
+    /// Outside the window, only unused bonus seconds remain (extension schedule pierce).
     /// </summary>
     public int GetRemainingSeconds()
     {
@@ -74,10 +82,100 @@ public class EnforcementEngine
             _currentPolicy.Policy.AllowedWindows,
             now
         );
+        // Outside allowed hours: GetWindowRemainingSeconds is null — do not fall back to
+        // full daily leftover; only unused extension/bonus time may remain.
         if (windowRemainingSeconds is null)
-            return dailyRemainingSeconds;
+            return GetOutsideExtensionRemainingSeconds(eval.BonusMinutes);
 
         return Math.Min(dailyRemainingSeconds, windowRemainingSeconds.Value);
+    }
+
+    /// <summary>
+    /// True when a schedule exists and the family clock is outside every allowed window.
+    /// </summary>
+    public bool IsOutsideAllowedWindow()
+    {
+        if (_currentPolicy == null || _currentPolicy.Policy.AllowedWindows.Count == 0)
+            return false;
+
+        var now = PolicyEngine.ResolveNow(_currentPolicy.Timezone);
+        return PolicyEngine.GetWindowRemainingSeconds(
+            _currentPolicy.Policy.AllowedWindows,
+            now
+        ) is null;
+    }
+
+    /// <summary>
+    /// Extension pool progress while unlocked outside the allowed window.
+    /// </summary>
+    public bool TryGetOutsideExtensionUsage(out int usedMinutes, out int limitMinutes)
+    {
+        usedMinutes = 0;
+        limitMinutes = 0;
+        if (
+            !IsOutsideAllowedWindow()
+            || _currentPolicy == null
+            || _currentPolicy.BonusMinutes <= 0
+            || _outsideExtensionBaselineSeconds is null
+        )
+        {
+            return false;
+        }
+
+        limitMinutes = Math.Max(1, _outsideExtensionBonusMinutes);
+        var consumed = Math.Max(0, UsedSecondsToday - _outsideExtensionBaselineSeconds.Value);
+        usedMinutes = Math.Min(limitMinutes, (int)Math.Floor(consumed / 60.0));
+        return true;
+    }
+
+    /// <summary>
+    /// Sync grant baseline with current bonus, then return remaining grant seconds.
+    /// </summary>
+    private int GetOutsideExtensionRemainingSeconds(int bonusMinutes)
+    {
+        SyncOutsideExtensionGrant(bonusMinutes);
+        if (bonusMinutes <= 0 || _outsideExtensionBaselineSeconds is null) return 0;
+
+        var bonusSeconds = bonusMinutes * 60.0;
+        var consumed = Math.Max(0, UsedSecondsToday - _outsideExtensionBaselineSeconds.Value);
+        return Math.Max(0, (int)Math.Floor(bonusSeconds - consumed));
+    }
+
+    private void SyncOutsideExtensionGrant(int bonusMinutes)
+    {
+        if (bonusMinutes <= 0)
+        {
+            _outsideExtensionBaselineSeconds = null;
+            _outsideExtensionBonusMinutes = 0;
+            return;
+        }
+
+        if (_outsideExtensionBaselineSeconds is null)
+        {
+            _outsideExtensionBaselineSeconds = UsedSecondsToday;
+            _outsideExtensionBonusMinutes = bonusMinutes;
+            return;
+        }
+
+        if (bonusMinutes > _outsideExtensionBonusMinutes)
+        {
+            // Additional approved minutes — keep baseline so prior grant usage still counts.
+            _outsideExtensionBonusMinutes = bonusMinutes;
+            return;
+        }
+
+        if (bonusMinutes < _outsideExtensionBonusMinutes)
+        {
+            // Bonus cleared/reduced then re-granted — start a fresh grant from now.
+            _outsideExtensionBaselineSeconds = UsedSecondsToday;
+            _outsideExtensionBonusMinutes = bonusMinutes;
+        }
+    }
+
+    private void ClearOutsideExtensionGrant()
+    {
+        _outsideExtensionBaselineSeconds = null;
+        _outsideExtensionBonusMinutes = 0;
     }
 
     public EnforcementEngine(WardenApiClient api, ConfigStore configStore)
@@ -213,6 +311,7 @@ public class EnforcementEngine
             _lastRemainingMinutes = null;
             _activeSecondsToday = 0;
             _idleSecondsToday = 0;
+            ClearOutsideExtensionGrant();
         }
 
         if (IdleTimeDetector.IsUserActive())
@@ -256,6 +355,50 @@ public class EnforcementEngine
             evaluation.DailyRemainingMinutes = 0;
             evaluation.LimitingFactor = "daily_limit";
             evaluation.Message = "Locked down by parent";
+            ClearOutsideExtensionGrant();
+        }
+        else if (IsOutsideAllowedWindow())
+        {
+            // PolicyEngine treats bonus as daily-pool top-up (consumed only after dailyLimit).
+            // Outside the window the approved extension is a session grant from unlock usage.
+            var bonus = _currentPolicy.BonusMinutes;
+            if (bonus > 0)
+            {
+                var grantSeconds = GetOutsideExtensionRemainingSeconds(bonus);
+                if (grantSeconds <= 0)
+                {
+                    var lockedEval = PolicyEngine.Evaluate(
+                        _currentPolicy.Policy,
+                        UsedMinutesForEnforcement(),
+                        bonusMinutes: 0,
+                        timeZoneIana: _currentPolicy.Timezone
+                    );
+                    evaluation.Status = "outside_window";
+                    evaluation.RemainingMinutes = 0;
+                    evaluation.LimitingFactor = "window";
+                    evaluation.NextWindowStart = lockedEval.NextWindowStart;
+                    evaluation.Message = lockedEval.Message;
+                }
+                else
+                {
+                    evaluation.Status = "allowed";
+                    evaluation.RemainingMinutes = Math.Max(
+                        1,
+                        (int)Math.Ceiling(grantSeconds / 60.0)
+                    );
+                    evaluation.LimitingFactor = "daily_limit";
+                    evaluation.NextWindowStart = null;
+                    evaluation.Message = null;
+                }
+            }
+            else
+            {
+                ClearOutsideExtensionGrant();
+            }
+        }
+        else
+        {
+            ClearOutsideExtensionGrant();
         }
 
         CurrentEvaluation = evaluation;
