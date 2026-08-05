@@ -287,13 +287,22 @@ export default function ChildDetailPage() {
       setPendingLocks((prev) => ({ ...prev, [deviceId]: locked }));
       return optimisticAdminLock(utils, deviceId, locked, childId);
     },
-    onError: (_err, vars, context) => {
+    onSuccess: (_data, { deviceId, locked }) => {
+      const device = child?.devices.find((d) => d.id === deviceId);
+      const deviceName = device ? getDeviceDisplayName(device) : "Device";
+      showToast(
+        locked ? `${deviceName} locked down.` : `${deviceName} lock released.`,
+        locked ? "default" : "success"
+      );
+    },
+    onError: (err, vars, context) => {
       rollbackAdminLock(utils, context);
       setPendingLocks((prev) => {
         const next = { ...prev };
         delete next[vars.deviceId];
         return next;
       });
+      showToast(err.message || "Could not update device lock", "error");
     },
     onSettled: () => {
       void utils.children.get.invalidate({ childId });

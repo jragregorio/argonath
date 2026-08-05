@@ -71,110 +71,133 @@ export default function DemoChildDetailPage() {
         description="Device controls and today's usage (demo)"
       />
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <CardTitle>Today&apos;s screen time</CardTitle>
-              <CardDescription className="mt-1">
-                {evaluation.usedMinutes} / {effectiveLimit} min used
-                {evaluation.bonusMinutes > 0 &&
-                  ` (+${evaluation.bonusMinutes} bonus)`}
-              </CardDescription>
-            </div>
-            <Badge variant={statusBadgeVariant(evaluation.status)}>
-              {getPolicyStatusLabel(evaluation.status)}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className={`h-full rounded-full ${progressBarClass(
-                evaluation.status
-              )}`}
-              style={{ width: `${percent}%` }}
-            />
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {evaluation.remainingMinutes} min left now
-            {evaluation.status === "outside_window" &&
-              evaluation.nextWindowStart &&
-              ` · Available again ${formatClockInText(evaluation.nextWindowStart)}`}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Daily limit {child.dailyLimitMinutes} min · editing policies
-            requires a real account
-          </p>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
+        <Card className="order-1 flex w-full flex-col">
+          <CardHeader>
+            <CardTitle>Devices</CardTitle>
+            <CardDescription>
+              Nudge or lock devices paired with this child
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {child.devices.map((device) => {
+              const pendingLock = pendingLocks[device.id];
+              const effectiveAdminLock =
+                pendingLock !== undefined ? pendingLock : device.adminLock;
+              const nudgeState = nudgeByDevice[device.id];
+              const nudgeBusy = Boolean(nudgeState?.nudgeId);
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Devices</h2>
-        {child.devices.map((device) => {
-          const pendingLock = pendingLocks[device.id];
-          const effectiveAdminLock =
-            pendingLock !== undefined ? pendingLock : device.adminLock;
-          const nudgeState = nudgeByDevice[device.id];
-          const nudgeBusy = Boolean(nudgeState?.nudgeId);
-
-          return (
-            <Card key={device.id}>
-              <CardHeader>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Monitor className="h-4 w-4 text-muted-foreground" />
-                    {getDeviceDisplayName(device)}
-                  </CardTitle>
-                  <div className="flex flex-wrap gap-1.5">
-                    <Badge variant={device.isOnline ? "success" : "secondary"}>
-                      {device.isOnline ? "Online" : "Offline"}
-                    </Badge>
-                    {effectiveAdminLock && (
-                      <Badge variant="destructive">Locked down</Badge>
+              return (
+                <div
+                  key={device.id}
+                  className="space-y-4 rounded-lg border border-border p-4 max-md:p-5 sm:p-5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Monitor className="h-5 w-5 shrink-0 text-muted-foreground" />
+                      <p className="truncate text-lg font-semibold tracking-tight">
+                        {getDeviceDisplayName(device)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Badge
+                        variant={device.isOnline ? "success" : "secondary"}
+                      >
+                        {device.isOnline ? "Online" : "Offline"}
+                      </Badge>
+                      {effectiveAdminLock && (
+                        <Badge variant="destructive">Locked down</Badge>
+                      )}
+                      {pendingLock !== undefined && (
+                        <Badge variant="secondary">
+                          {pendingLock
+                            ? "Sending lock..."
+                            : "Waiting for unlock..."}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 max-md:gap-3">
+                    {nudgeState?.label && (
+                      <span className="text-sm md:text-xs text-muted-foreground">
+                        {nudgeState.label}
+                      </span>
                     )}
+                    <div className="flex flex-col gap-2 max-md:gap-3 sm:flex-row sm:items-stretch">
+                      <NudgeControls
+                        className="w-full sm:w-52 sm:shrink-0"
+                        disabled={
+                          !device.isPaired || !device.isOnline || nudgeBusy
+                        }
+                        isSending={nudgeState?.label === "Sending…"}
+                        onSend={(message) => sendNudge(device.id, message)}
+                      />
+                      <div className="flex w-full min-w-0 items-stretch sm:flex-1">
+                        {effectiveAdminLock ? (
+                          <Button
+                            variant="outline"
+                            className="w-full min-w-0 sm:flex-1"
+                            onClick={() => setAdminLock(device.id, false)}
+                            disabled={pendingLock !== undefined}
+                          >
+                            <Unlock className="mr-1.5 h-4 w-4" />
+                            Release
+                          </Button>
+                        ) : (
+                          <SwipeToLock
+                            className="w-full min-w-0 sm:flex-1"
+                            onConfirm={() => setAdminLock(device.id, true)}
+                            disabled={!device.isPaired}
+                            pending={pendingLock === true}
+                          />
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {nudgeState?.label && (
-                  <p className="text-sm text-muted-foreground">
-                    {nudgeState.label}
-                  </p>
-                )}
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                  <NudgeControls
-                    className="w-full sm:w-52 sm:shrink-0"
-                    disabled={
-                      !device.isPaired || !device.isOnline || nudgeBusy
-                    }
-                    isSending={nudgeState?.label === "Sending…"}
-                    onSend={(message) => sendNudge(device.id, message)}
-                  />
-                  {effectiveAdminLock ? (
-                    <Button
-                      variant="outline"
-                      className="w-full min-w-0 sm:flex-1"
-                      onClick={() => setAdminLock(device.id, false)}
-                      disabled={pendingLock !== undefined}
-                    >
-                      <Unlock className="mr-1.5 h-4 w-4" />
-                      Release
-                    </Button>
-                  ) : (
-                    <SwipeToLock
-                      className="w-full min-w-0 sm:flex-1"
-                      onConfirm={() => setAdminLock(device.id, true)}
-                      disabled={!device.isPaired}
-                      pending={pendingLock === true}
-                    />
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </section>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        <Card className="order-2 flex w-full flex-col">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle>Today&apos;s screen time</CardTitle>
+                <CardDescription className="mt-1">
+                  {evaluation.usedMinutes} / {effectiveLimit} min used
+                  {evaluation.bonusMinutes > 0 &&
+                    ` (+${evaluation.bonusMinutes} bonus)`}
+                </CardDescription>
+              </div>
+              <Badge variant={statusBadgeVariant(evaluation.status)}>
+                {getPolicyStatusLabel(evaluation.status)}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className={`h-full rounded-full ${progressBarClass(
+                  evaluation.status
+                )}`}
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {evaluation.remainingMinutes} min left now
+              {evaluation.status === "outside_window" &&
+                evaluation.nextWindowStart &&
+                ` · Available again ${formatClockInText(evaluation.nextWindowStart)}`}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Daily limit {child.dailyLimitMinutes} min · editing policies
+              requires a real account
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-3">
