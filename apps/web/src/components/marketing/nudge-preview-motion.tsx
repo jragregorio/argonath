@@ -14,25 +14,42 @@ import {
   type ParentNudgeMockProps,
 } from "@/components/marketing/product-panels";
 
-type PreviewPhase = "idle" | "sending" | "waiting" | "delivered" | "seen" | "reset";
+type PreviewPhase =
+  | "idle"
+  | "sending"
+  | "waiting"
+  | "countdown-3"
+  | "countdown-2"
+  | "countdown-1"
+  | "ok-ready"
+  | "ok-pressed"
+  | "seen"
+  | "reset";
 
 type PreviewState = {
   chip: NonNullable<ParentNudgeMockProps["chip"]>;
   sending: boolean;
   childVisible: boolean;
   animate: boolean;
+  okSeconds: number;
+  okEnabled: boolean;
+  okPressed: boolean;
 };
 
 const STEPS: { phase: PreviewPhase; ms: number }[] = [
   { phase: "idle", ms: 1400 },
   { phase: "sending", ms: 700 },
   { phase: "waiting", ms: 600 },
-  { phase: "delivered", ms: 2600 },
+  { phase: "countdown-3", ms: 1000 },
+  { phase: "countdown-2", ms: 1000 },
+  { phase: "countdown-1", ms: 1000 },
+  { phase: "ok-ready", ms: 700 },
+  { phase: "ok-pressed", ms: 350 },
   { phase: "seen", ms: 1600 },
   { phase: "reset", ms: 1200 },
 ];
 
-/** Full loop duration (~8.1s). */
+/** Full loop duration (~9.55s). */
 export const NUDGE_PREVIEW_LOOP_MS = STEPS.reduce((sum, step) => sum + step.ms, 0);
 
 const STATIC_PREVIEW: PreviewState = {
@@ -40,32 +57,113 @@ const STATIC_PREVIEW: PreviewState = {
   sending: false,
   childVisible: true,
   animate: false,
+  okSeconds: 0,
+  okEnabled: true,
+  okPressed: false,
 };
 
 function phaseToState(phase: PreviewPhase): PreviewState {
   switch (phase) {
     case "idle":
-      return { chip: "none", sending: false, childVisible: false, animate: true };
+      return {
+        chip: "none",
+        sending: false,
+        childVisible: false,
+        animate: true,
+        okSeconds: 3,
+        okEnabled: false,
+        okPressed: false,
+      };
     case "sending":
-      return { chip: "none", sending: true, childVisible: false, animate: true };
+      return {
+        chip: "none",
+        sending: true,
+        childVisible: false,
+        animate: true,
+        okSeconds: 3,
+        okEnabled: false,
+        okPressed: false,
+      };
     case "waiting":
       return {
         chip: "waiting",
         sending: false,
         childVisible: false,
         animate: true,
+        okSeconds: 3,
+        okEnabled: false,
+        okPressed: false,
       };
-    case "delivered":
+    case "countdown-3":
       return {
         chip: "waiting",
         sending: false,
         childVisible: true,
         animate: true,
+        okSeconds: 3,
+        okEnabled: false,
+        okPressed: false,
+      };
+    case "countdown-2":
+      return {
+        chip: "waiting",
+        sending: false,
+        childVisible: true,
+        animate: true,
+        okSeconds: 2,
+        okEnabled: false,
+        okPressed: false,
+      };
+    case "countdown-1":
+      return {
+        chip: "waiting",
+        sending: false,
+        childVisible: true,
+        animate: true,
+        okSeconds: 1,
+        okEnabled: false,
+        okPressed: false,
+      };
+    case "ok-ready":
+      return {
+        chip: "waiting",
+        sending: false,
+        childVisible: true,
+        animate: true,
+        okSeconds: 0,
+        okEnabled: true,
+        okPressed: false,
+      };
+    case "ok-pressed":
+      return {
+        chip: "waiting",
+        sending: false,
+        childVisible: true,
+        animate: true,
+        okSeconds: 0,
+        okEnabled: true,
+        okPressed: true,
       };
     case "seen":
-      return { chip: "seen", sending: false, childVisible: true, animate: true };
+      return {
+        chip: "seen",
+        sending: false,
+        childVisible: true,
+        animate: true,
+        okSeconds: 0,
+        okEnabled: true,
+        okPressed: false,
+      };
     case "reset":
-      return { chip: "none", sending: false, childVisible: false, animate: true };
+      return {
+        chip: "none",
+        sending: false,
+        childVisible: false,
+        animate: true,
+        okSeconds: 3,
+        okEnabled: false,
+        okPressed: false,
+      };
   }
 }
 
@@ -115,10 +213,14 @@ export function AnimatedParentNudgeMock() {
 }
 
 export function AnimatedChildNudgeMock() {
-  const { childVisible, animate } = useContext(PreviewContext);
+  const { childVisible, animate, okSeconds, okEnabled, okPressed } =
+    useContext(PreviewContext);
   const childProps: ChildNudgeMockProps = {
     visible: childVisible,
     animate,
+    okSeconds,
+    okEnabled,
+    okPressed,
   };
   return <ChildNudgeMock {...childProps} />;
 }

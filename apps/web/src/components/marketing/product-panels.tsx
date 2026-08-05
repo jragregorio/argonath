@@ -11,6 +11,12 @@ export type ParentNudgeMockProps = {
 export type ChildNudgeMockProps = {
   visible?: boolean;
   animate?: boolean;
+  /** Remaining OK delay seconds; omit or 0 when ready / showing plain "OK". */
+  okSeconds?: number;
+  /** When true, OK is enabled (primary styling). */
+  okEnabled?: boolean;
+  /** Brief pressed state for the marketing click animation. */
+  okPressed?: boolean;
 };
 
 export type DashboardExtensionPhase = "pending" | "focus" | "approved" | "empty";
@@ -729,7 +735,13 @@ export function ParentNudgeMock({
 export function ChildNudgeMock({
   visible = true,
   animate = false,
+  okSeconds = 3,
+  okEnabled = false,
+  okPressed = false,
 }: ChildNudgeMockProps = {}) {
+  const okLabel =
+    okEnabled || okSeconds <= 0 ? "OK" : `OK (${okSeconds})`;
+
   return (
     <div
       className={cn(
@@ -751,8 +763,17 @@ export function ChildNudgeMock({
         <p className="mt-2 text-lg font-semibold leading-snug text-foreground">
           Dinner time
         </p>
-        <span className="mt-5 block w-full rounded-[14px] bg-border px-4 py-3 text-center text-sm font-semibold text-muted-foreground opacity-55">
-          OK (5)
+        <span
+          className={cn(
+            "mt-5 block w-full rounded-[14px] px-4 py-3 text-center text-sm font-semibold",
+            animate && "nudge-preview-ok-button",
+            okEnabled
+              ? "bg-primary text-primary-foreground"
+              : "bg-border text-muted-foreground opacity-55",
+            okPressed && "nudge-preview-ok-button-pressed"
+          )}
+        >
+          {okLabel}
         </span>
       </div>
     </div>

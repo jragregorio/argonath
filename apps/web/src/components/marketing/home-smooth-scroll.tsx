@@ -98,6 +98,13 @@ export function HomeSmoothScroll({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Scroll runway after each card before the next sticks (~2–3 wheel ticks mobile,
+ * a bit more on desktop). Margin (not padding) so border-box min-height
+ * centering stays unchanged.
+ */
+const stickyCardScrollBufferClassName = "mb-20 md:mb-[350px]";
+
 /** Sticky card slot on md+; normal stacked sections on mobile. */
 export function StickyHomeCard({
   children,
@@ -191,6 +198,7 @@ export function StickyHomeCard({
       ref={sectionRef}
       className={cn(
         "home-sticky-card relative flex w-full flex-col",
+        stickyCardScrollBufferClassName,
         "px-4 py-8 sm:px-6 sm:py-9",
         /* Clears floating home header (h-12 + md:top-4 when scrolled). */
         "md:sticky md:top-[4.75rem] md:min-h-[calc(100dvh-4.75rem)] md:px-8 md:py-6",

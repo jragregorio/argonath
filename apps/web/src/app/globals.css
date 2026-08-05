@@ -210,7 +210,8 @@ body {
 
   .nudge-preview-child,
   .nudge-preview-child-glow,
-  .nudge-preview-chip {
+  .nudge-preview-chip,
+  .nudge-preview-ok-button {
     transition: none !important;
     animation: none !important;
     opacity: 1 !important;
@@ -356,6 +357,20 @@ body {
       0 16px 48px rgba(0, 0, 0, 0.45),
       0 0 0 1px color-mix(in srgb, var(--color-attention) 35%, transparent);
   }
+}
+
+.nudge-preview-ok-button {
+  transition:
+    transform 0.12s ease,
+    filter 0.12s ease,
+    background-color 0.35s ease,
+    color 0.35s ease,
+    opacity 0.35s ease;
+}
+
+.nudge-preview-ok-button-pressed {
+  transform: scale(0.98);
+  filter: brightness(0.92);
 }
 
 /* modern mobile menu */
