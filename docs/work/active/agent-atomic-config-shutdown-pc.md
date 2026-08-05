@@ -39,8 +39,17 @@ dotnet build "c:\DEV\Guardian\apps\agent\Warden.sln" -c Release
 
 **Exit code: 0** — Build succeeded, 0 Warning(s), 0 Error(s).
 
+### Push + MSI (2026-08-05)
+
+- Pushed `a72ca1d` to `origin/main`.
+- `powershell -File apps/agent/build-installer.ps1` → exit **0** (ICE61 only, expected).
+- MSI: `apps/agent/artifacts/Warden-0.6.2-x64.msi`
+- Size: 88004880 bytes
+- SHA-256: `b4c579c8bc58657482f57c498b99c8106b6dfb35b2c01e99654663e6210adf0e`
+
 ## Next steps
 
-- MSI build/publish for child PC: `powershell -File apps/agent/build-installer.ps1`
+- Install MSI on child PC (elevated), pick Niccolo.
 - Manual test: lock screen → Shutdown PC (no PIN) → PC powers off; reboot → config still paired.
 - Manual test: hard power-off during lock still safe (config not empty on next boot).
+- Optional: `npm run publish:agent` if dashboard Download should serve 0.6.2.
