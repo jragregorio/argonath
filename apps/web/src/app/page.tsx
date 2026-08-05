@@ -97,12 +97,18 @@ export default function HomePage() {
                     Set daily limits and enforce them on your child&apos;s Windows
                     PC — from one parent dashboard.
                   </p>
-                  <div className="home-rise home-rise-delay-2">
+                  <div className="home-rise home-rise-delay-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <Link
+                      href="/demo"
+                      className="inline-flex justify-center rounded-lg bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-accent sm:px-7 sm:py-3.5 sm:text-base"
+                    >
+                      Try demo now
+                    </Link>
                     <Link
                       href="/sign-up"
-                      className="inline-flex rounded-lg bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-accent sm:px-7 sm:py-3.5 sm:text-base"
+                      className="inline-flex justify-center rounded-lg border border-border px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary sm:px-7 sm:py-3.5 sm:text-base"
                     >
-                      Start protecting your family
+                      Create free account
                     </Link>
                   </div>
                 </div>

@@ -9,6 +9,7 @@ const devAuthBypassEnabled =
 
 const publicPaths = [
   "/",
+  "/demo",
   "/sign-in",
   "/sign-up",
   "/api/agent",
