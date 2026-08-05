@@ -1274,17 +1274,17 @@ export default function ChildDetailPage() {
                             </Button>
                           </div>
                         )}
-                        <p className="text-sm md:text-xs text-muted-foreground">
-                          {device.machineName &&
-                          device.displayName &&
-                          device.machineName !== device.displayName
-                            ? `${device.machineName} · `
-                            : ""}
-                          Agent v{device.agentVersion ?? "?"} ·{" "}
-                          {device.lastSeenAt
-                            ? `Last seen ${new Date(device.lastSeenAt).toLocaleString()}`
-                            : "Never connected"}
-                        </p>
+                        <div className="text-sm md:text-xs text-muted-foreground">
+                          <p>
+                            {child.displayName} Agent v
+                            {device.agentVersion ?? "?"}
+                          </p>
+                          <p>
+                            {device.lastSeenAt
+                              ? new Date(device.lastSeenAt).toLocaleString()
+                              : "Never connected"}
+                          </p>
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

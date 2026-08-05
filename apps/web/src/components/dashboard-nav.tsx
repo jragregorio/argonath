@@ -97,7 +97,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function NavFooter({ onNavigate }: { onNavigate?: () => void }) {
+function NavFooter() {
   const router = useRouter();
   const utils = trpc.useUtils();
   const meQuery = trpc.auth.me.useQuery(undefined, {
@@ -155,20 +155,22 @@ function NavFooter({ onNavigate }: { onNavigate?: () => void }) {
     meQuery.data?.user.email ||
     "Account";
 
+  const profileCard = (
+    <div className="rounded-lg border border-border bg-secondary px-3 py-3 text-sm">
+      <div className="font-medium truncate">{displayName}</div>
+      <div className="text-xs text-muted-foreground truncate">{activeFamily}</div>
+      <div className="text-xs text-muted-foreground truncate mt-0.5">
+        {meQuery.data?.role ?? "…"}
+        {meQuery.data?.user.email ? ` · ${meQuery.data.user.email}` : ""}
+      </div>
+    </div>
+  );
+
   return (
     <div className="pt-4 border-t border-border space-y-3">
       {memberships.length > 1 ? (
         <div className="space-y-2">
-          <Link
-            href="/dashboard/settings"
-            onClick={onNavigate}
-            className={`block rounded-lg border border-border bg-secondary px-3 py-3 text-sm hover:bg-secondary/80 min-h-11 ${focusRing}`}
-          >
-            <div className="font-medium truncate">{displayName}</div>
-            <div className="text-xs text-muted-foreground truncate">
-              Account settings
-            </div>
-          </Link>
+          {profileCard}
           <label className="block space-y-1">
             <span className="text-xs text-muted-foreground px-1">Family</span>
             <div className="relative">
@@ -189,27 +191,14 @@ function NavFooter({ onNavigate }: { onNavigate?: () => void }) {
           </label>
         </div>
       ) : (
-        <Link
-          href="/dashboard/settings"
-          onClick={onNavigate}
-          className={`block rounded-lg border border-border bg-secondary px-3 py-3 text-sm hover:bg-secondary/80 min-h-11 ${focusRing}`}
-        >
-          <div className="font-medium truncate">{displayName}</div>
-          <div className="text-xs text-muted-foreground truncate">
-            {activeFamily}
-          </div>
-          <div className="text-xs text-muted-foreground truncate mt-0.5">
-            {meQuery.data?.role ?? "…"}
-            {meQuery.data?.user.email ? ` · ${meQuery.data.user.email}` : ""}
-          </div>
-        </Link>
+        profileCard
       )}
 
       <button
         type="button"
         onClick={logout}
         disabled={loggingOut}
-        className={`flex w-full items-center gap-2 rounded-lg px-3 py-3 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground min-h-11 ${focusRing}`}
+        className={`flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-secondary px-3 py-3 text-sm font-medium text-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40 min-h-11 ${focusRing}`}
       >
         <LogOut className="w-4 h-4" />
         {loggingOut ? "Signing out…" : "Sign out"}
@@ -451,7 +440,7 @@ function MobileMoreSheet({
           <span className="font-medium">Settings</span>
         </Link>
 
-        <NavFooter onNavigate={onClose} />
+        <NavFooter />
 
         <VersionCredit className="pt-4" />
       </div>
