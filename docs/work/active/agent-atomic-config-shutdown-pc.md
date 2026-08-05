@@ -53,3 +53,4 @@ dotnet build "c:\DEV\Guardian\apps\agent\Warden.sln" -c Release
 - Manual test: lock screen → Shutdown PC (no PIN) → PC powers off; reboot → config still paired.
 - Manual test: hard power-off during lock still safe (config not empty on next boot).
 - Optional: `npm run publish:agent` if dashboard Download should serve 0.6.2.
+- Dashboard footer hardcoded desktop version synced to `0.6.2` (web bump `0.7.3` → `0.7.4` for deploy).
