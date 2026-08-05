@@ -156,8 +156,8 @@ export default function HomePage() {
           </StickyHomeCard>
 
           {/* Parents decide */}
-          <StickyHomeCard zIndex={20}>
-            <FramedStage className={stickyCardStageClassName}>
+          <StickyHomeCard zIndex={20} tone="alt">
+            <FramedStage tone="alt" className={stickyCardStageClassName}>
               <div className="relative overflow-hidden px-6 py-8 sm:px-10 sm:py-10 md:py-14">
                 <MarketingAtmosphere insetClassName="opacity-70" />
                 <div className="relative z-10">
@@ -228,8 +228,9 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div className="relative overflow-hidden p-6 sm:p-8 md:p-10">
+                  {/* Tracks stage tone (default card) — subtle sibling tint via muted */}
                   <div
-                    className="pointer-events-none absolute inset-0 bg-card"
+                    className="pointer-events-none absolute inset-0 bg-muted/40"
                     aria-hidden="true"
                   />
                   <div className="relative z-10">
@@ -270,8 +271,11 @@ export default function HomePage() {
           </StickyHomeCard>
 
           {/* Windows agent */}
-          <StickyHomeCard zIndex={40}>
-            <FramedStage className={`relative ${stickyCardStageClassName}`}>
+          <StickyHomeCard zIndex={40} tone="alt">
+            <FramedStage
+              tone="alt"
+              className={`relative ${stickyCardStageClassName}`}
+            >
               <MarketingAtmosphere />
               <div className="relative z-10 grid items-center gap-8 px-6 py-8 sm:px-10 sm:py-10 md:grid-cols-2 md:gap-8 md:py-14 lg:gap-12">
                 <div>
@@ -328,8 +332,9 @@ export default function HomePage() {
           </StickyHomeCard>
 
           {/* Get started */}
-          <StickyHomeCard zIndex={60}>
+          <StickyHomeCard zIndex={60} tone="alt">
             <FramedStage
+              tone="alt"
               className={`relative ${stickyCardStageClassName} mx-auto max-w-3xl`}
             >
               <MarketingAtmosphere />

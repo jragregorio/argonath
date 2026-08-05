@@ -100,10 +100,12 @@ export function HomeSmoothScroll({ children }: { children: ReactNode }) {
 
 /**
  * Scroll runway after each card before the next sticks (~2–3 wheel ticks mobile,
- * a bit more on desktop). Margin (not padding) so border-box min-height
- * centering stays unchanged.
+ * a bit more on desktop). In-flow spacer (not margin) so the slot fill color
+ * shows in the gap between panels.
  */
-const stickyCardScrollBufferClassName = "mb-20 md:mb-[350px]";
+const stickyCardScrollBufferClassName = "h-20 shrink-0 md:h-[350px]";
+
+export type StickyHomeCardTone = "default" | "alt";
 
 /** Sticky card slot on md+; normal stacked sections on mobile. */
 export function StickyHomeCard({
@@ -111,11 +113,14 @@ export function StickyHomeCard({
   zIndex,
   className,
   id,
+  tone = "default",
 }: {
   children: ReactNode;
   zIndex: number;
   className?: string;
   id?: string;
+  /** Slot page-fill behind the framed stage. default = background; alt = muted. */
+  tone?: StickyHomeCardTone;
 }) {
   const sectionRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -198,20 +203,29 @@ export function StickyHomeCard({
       ref={sectionRef}
       className={cn(
         "home-sticky-card relative flex w-full flex-col",
-        stickyCardScrollBufferClassName,
-        "px-4 py-8 sm:px-6 sm:py-9",
-        /* Clears floating home header (h-12 + md:top-4 when scrolled). */
-        "md:sticky md:top-[4.75rem] md:min-h-[calc(100dvh-4.75rem)] md:px-8 md:py-6",
+        /* Full-viewport sticky slot; fill covers behind the floating header. */
+        "md:sticky md:top-0",
         "scroll-mt-20 md:scroll-mt-24",
         className
       )}
       style={{ zIndex }}
     >
       <div
-        className="pointer-events-none absolute inset-0 hidden bg-background md:block"
+        className={cn(
+          "pointer-events-none absolute inset-0 hidden md:block",
+          tone === "alt" ? "bg-muted" : "bg-background"
+        )}
         aria-hidden="true"
       />
-      <div className="relative z-10 flex w-full flex-1 flex-col md:items-center md:justify-center">
+      {/* Viewport shell only — buffer is a sibling so it does not skew centering. */}
+      <div
+        className={cn(
+          "relative z-10 flex w-full flex-col px-4 py-8 sm:px-6 sm:py-9",
+          "md:min-h-dvh md:items-center md:justify-center md:px-8 md:py-6",
+          /* Clears floating home header (h-12 + md:top-4 when scrolled). */
+          "md:pt-[4.75rem]"
+        )}
+      >
         <div
           ref={contentRef}
           className="mx-auto w-full max-w-6xl"
@@ -219,6 +233,11 @@ export function StickyHomeCard({
           {children}
         </div>
       </div>
+      {/* Colored runway attached to this slot (visible between framed stages). */}
+      <div
+        className={cn("relative z-0", stickyCardScrollBufferClassName)}
+        aria-hidden="true"
+      />
     </section>
   );
 }
