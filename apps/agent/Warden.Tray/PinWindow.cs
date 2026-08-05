@@ -17,7 +17,6 @@ public class PinWindow : Window
         SizeToContent = SizeToContent.Height;
         UiTheme.ApplyWindowChrome(this);
         ResizeMode = ResizeMode.NoResize;
-        WindowStyle = WindowStyle.ToolWindow;
         ShowInTaskbar = false;
 
         var root = new StackPanel { Margin = new Thickness(24) };
@@ -76,7 +75,8 @@ public class PinWindow : Window
         buttons.Children.Add(confirm);
 
         root.Children.Add(buttons);
-        Content = root;
+
+        UiTheme.WithCustomTitleBar(this, root, "Warden — Parent PIN");
 
         Loaded += (_, _) => _pinBox.Focus();
         PreviewKeyDown += (_, e) =>

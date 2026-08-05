@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Warden.Core;
@@ -9,6 +10,8 @@ using FontFamily = System.Windows.Media.FontFamily;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using MessageBox = System.Windows.MessageBox;
 using Orientation = System.Windows.Controls.Orientation;
+using WpfButton = System.Windows.Controls.Button;
+using WpfTextBox = System.Windows.Controls.TextBox;
 
 namespace Warden.Tray;
 
@@ -26,8 +29,21 @@ public class MainWindow : Window
     private readonly Border _usageFill;
     private readonly Border _usageCard;
     private readonly DispatcherTimer _uiTimer;
+    private readonly WpfButton _requestToggleBtn;
+    private readonly StackPanel _requestPanel;
+    private readonly IReadOnlyList<WpfButton> _presetButtons;
+    private readonly WpfTextBox _customMinutesBox;
+    private readonly WpfButton _customSendBtn;
+    private readonly TextBlock _requestStatusLine;
+    private readonly TextBlock _requestValidationLine;
     private bool _allowClose;
+    private bool _requestExpanded;
+    private bool _requestBusy;
     private double _remainingFraction = 1;
+
+    private const int ExtensionMinMinutes = 1;
+    private const int ExtensionMaxMinutes = 120;
+    private static readonly int[] ExtensionPresets = [15, 30, 60];
 
     public MainWindow(
         EnforcementEngine engine,
@@ -166,6 +182,88 @@ public class MainWindow : Window
         };
         root.Children.Add(_usageCard);
 
+        var requestSection = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+
+        _requestToggleBtn = UiTheme.GoldButton("Request");
+        _requestToggleBtn.Margin = new Thickness(0, 0, 0, 0);
+        _requestToggleBtn.Click += (_, _) => ToggleRequestPanel();
+        requestSection.Children.Add(_requestToggleBtn);
+
+        _requestPanel = new StackPanel
+        {
+            Margin = new Thickness(0, 10, 0, 0),
+            Visibility = Visibility.Collapsed
+        };
+
+        var presetRow = new Grid();
+        for (var i = 0; i < ExtensionPresets.Length; i++)
+        {
+            presetRow.ColumnDefinitions.Add(
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+            );
+        }
+
+        var presetButtons = new List<WpfButton>();
+        for (var i = 0; i < ExtensionPresets.Length; i++)
+        {
+            var minutes = ExtensionPresets[i];
+            var presetBtn = UiTheme.SecondaryButton($"+{minutes} mins");
+            presetBtn.Margin = new Thickness(i == 0 ? 0 : 8, 0, 0, 0);
+            var requestedMinutes = minutes;
+            presetBtn.Click += async (_, _) => await SendExtensionRequestAsync(requestedMinutes);
+            Grid.SetColumn(presetBtn, i);
+            presetRow.Children.Add(presetBtn);
+            presetButtons.Add(presetBtn);
+        }
+
+        _presetButtons = presetButtons;
+        _requestPanel.Children.Add(presetRow);
+
+        _requestStatusLine = new TextBlock
+        {
+            FontSize = 12,
+            Foreground = UiTheme.MutedBrush,
+            Margin = new Thickness(0, 10, 0, 0),
+            TextWrapping = TextWrapping.Wrap
+        };
+
+        _requestValidationLine = new TextBlock
+        {
+            FontSize = 12,
+            Foreground = UiTheme.DangerBrush,
+            Margin = new Thickness(0, 4, 0, 0),
+            TextWrapping = TextWrapping.Wrap
+        };
+
+        var customRow = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+        customRow.ColumnDefinitions.Add(
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+        );
+        customRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
+        customRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        _customMinutesBox = UiTheme.TextField(placeholder: "Minutes (1–120)");
+        _customMinutesBox.MaxLength = 3;
+        _customMinutesBox.TextAlignment = TextAlignment.Center;
+        _customMinutesBox.PreviewTextInput += OnDigitsOnlyPreviewTextInput;
+        System.Windows.DataObject.AddPastingHandler(_customMinutesBox, OnDigitsOnlyPaste);
+        _customMinutesBox.TextChanged += (_, _) => _requestValidationLine.Text = "";
+        Grid.SetColumn(_customMinutesBox, 0);
+        customRow.Children.Add(_customMinutesBox);
+
+        _customSendBtn = UiTheme.PrimaryButton("Send");
+        _customSendBtn.Padding = new Thickness(16, 10, 16, 10);
+        _customSendBtn.Click += async (_, _) => await SendCustomExtensionRequestAsync();
+        Grid.SetColumn(_customSendBtn, 2);
+        customRow.Children.Add(_customSendBtn);
+
+        _requestPanel.Children.Add(customRow);
+        _requestPanel.Children.Add(_requestStatusLine);
+        _requestPanel.Children.Add(_requestValidationLine);
+
+        requestSection.Children.Add(_requestPanel);
+        root.Children.Add(requestSection);
+
         var exitBtn = UiTheme.DangerButton("PARENT");
         exitBtn.Content = new StackPanel
         {
@@ -206,7 +304,7 @@ public class MainWindow : Window
         };
         root.Children.Add(versionLabel);
 
-        Content = root;
+        UiTheme.WithCustomTitleBar(this, root, "Warden");
 
         Closing += (_, e) =>
         {
@@ -401,6 +499,121 @@ public class MainWindow : Window
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning
             );
+        }
+    }
+
+    private void ToggleRequestPanel()
+    {
+        if (_requestBusy) return;
+
+        _requestExpanded = !_requestExpanded;
+        _requestPanel.Visibility = _requestExpanded ? Visibility.Visible : Visibility.Collapsed;
+        if (!_requestExpanded)
+        {
+            _requestStatusLine.Text = "";
+            _requestValidationLine.Text = "";
+        }
+    }
+
+    private async Task SendCustomExtensionRequestAsync()
+    {
+        if (_requestBusy) return;
+
+        var raw = _customMinutesBox.Text.Trim();
+        if (string.IsNullOrEmpty(raw))
+        {
+            _requestValidationLine.Text = "Enter minutes (1–120).";
+            return;
+        }
+
+        if (!int.TryParse(raw, out var minutes)
+            || minutes < ExtensionMinMinutes
+            || minutes > ExtensionMaxMinutes)
+        {
+            _requestValidationLine.Text = $"Enter {ExtensionMinMinutes}–{ExtensionMaxMinutes} minutes.";
+            return;
+        }
+
+        _requestValidationLine.Text = "";
+        await SendExtensionRequestAsync(minutes);
+    }
+
+    private async Task SendExtensionRequestAsync(int minutes)
+    {
+        if (_requestBusy) return;
+
+        _requestBusy = true;
+        SetRequestControlsEnabled(false);
+        _requestStatusLine.Text = "Requesting…";
+        _requestValidationLine.Text = "";
+
+        var success = false;
+        try
+        {
+            success = await _engine.RequestExtensionAsync(minutes);
+        }
+        catch
+        {
+            success = false;
+        }
+
+        if (!IsLoaded)
+        {
+            return;
+        }
+
+        if (success)
+        {
+            _requestStatusLine.Text = "Request sent!";
+            await Task.Delay(1000);
+            if (!IsLoaded)
+            {
+                return;
+            }
+
+            _requestExpanded = false;
+            _requestPanel.Visibility = Visibility.Collapsed;
+            _requestStatusLine.Text = "";
+            _customMinutesBox.Text = "";
+        }
+        else
+        {
+            _requestStatusLine.Text = "Couldn't send — try again";
+        }
+
+        _requestBusy = false;
+        SetRequestControlsEnabled(true);
+    }
+
+    private void SetRequestControlsEnabled(bool enabled)
+    {
+        _requestToggleBtn.IsEnabled = enabled;
+        foreach (var btn in _presetButtons)
+        {
+            btn.IsEnabled = enabled;
+        }
+
+        _customMinutesBox.IsEnabled = enabled;
+        _customSendBtn.IsEnabled = enabled;
+    }
+
+    private static void OnDigitsOnlyPreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        e.Handled = e.Text.Length == 0 || e.Text.Any(c => !char.IsDigit(c));
+    }
+
+    private static void OnDigitsOnlyPaste(object sender, DataObjectPastingEventArgs e)
+    {
+        if (!e.DataObject.GetDataPresent(typeof(string)))
+        {
+            e.CancelCommand();
+            return;
+        }
+
+        var text = e.DataObject.GetData(typeof(string)) as string ?? "";
+        if (text.Length == 0 || text.Any(c => !char.IsDigit(c)))
+        {
+            e.CancelCommand();
         }
     }
 }

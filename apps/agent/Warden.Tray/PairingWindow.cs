@@ -67,7 +67,7 @@ public class PairingWindow : Window
         _pairButton.Click += async (_, _) => await PairAsync();
         root.Children.Add(_pairButton);
 
-        Content = root;
+        UiTheme.WithCustomTitleBar(this, root, "Warden — Device Pairing");
         Loaded += (_, _) => _codeInput.Focus();
     }
 
