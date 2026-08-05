@@ -95,7 +95,50 @@ public class ConfigStore
     public void Save(AgentConfig config)
     {
         var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(_configPath, json);
+        var directory = Path.GetDirectoryName(_configPath)!;
+        var tempPath = Path.Combine(directory, "config.json.tmp");
+        var backupPath = Path.Combine(directory, "config.json.bak");
+
+        try
+        {
+            File.WriteAllText(tempPath, json);
+
+            if (File.Exists(_configPath))
+            {
+                File.Replace(tempPath, _configPath, backupPath, ignoreMetadataErrors: true);
+                try
+                {
+                    if (File.Exists(backupPath))
+                    {
+                        File.Delete(backupPath);
+                    }
+                }
+                catch
+                {
+                    // Best-effort delete of replace backup.
+                }
+            }
+            else
+            {
+                File.Move(tempPath, _configPath);
+            }
+        }
+        catch
+        {
+            try
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+            catch
+            {
+                // Best-effort cleanup of partial temp file.
+            }
+
+            throw;
+        }
     }
 
     public bool IsPaired()

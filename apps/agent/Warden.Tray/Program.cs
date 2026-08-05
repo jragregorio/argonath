@@ -154,6 +154,19 @@ static class Program
 
                 LockWindowManager.Show(
                     minutes => _engine!.RequestExtensionAsync(minutes),
+                    async () =>
+                    {
+                        try
+                        {
+                            SessionMarker.ClearClean();
+                            return await Task.FromResult(SystemShutdown.Initiate());
+                        }
+                        catch (Exception ex)
+                        {
+                            WardenLog.Error("LockUI", "Shutdown PC handler failed", ex);
+                            return (false, "Unexpected error. Try the Start menu.");
+                        }
+                    },
                     async pin =>
                     {
                         try

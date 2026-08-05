@@ -141,7 +141,7 @@ public class EnforcementEngine
         }
 
         var config = _configStore.Load();
-        if (_currentPolicy.ParentPin != null)
+        if (_currentPolicy.ParentPin != null && config.ParentPin != _currentPolicy.ParentPin)
         {
             config.ParentPin = _currentPolicy.ParentPin;
             _configStore.Save(config);

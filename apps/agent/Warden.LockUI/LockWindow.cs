@@ -44,6 +44,7 @@ public class LockWindow : Window
     public LockWindow(
         MonitorBounds bounds,
         Func<int, Task<bool>> onExtensionRequest,
+        Func<Task<(bool ok, string? error)>> onShutdownPc,
         Func<string, Task<(bool ok, string? error)>> onParentShutdown)
     {
         _isPrimary = bounds.IsPrimary;
@@ -144,9 +145,21 @@ public class LockWindow : Window
         actionRow.Children.Add(
             CreateExtensionButton(15, onExtensionRequest, "Request +15 min", primary: true));
 
-        var shutDownReveal = CreateOutlinedButton("Shut down");
-        actionRow.Children.Add(shutDownReveal);
+        var shutdownPcButton = CreateShutdownPcButton(onShutdownPc);
+        actionRow.Children.Add(shutdownPcButton);
         mainPanel.Children.Add(actionRow);
+
+        var parentReveal = new TextBlock
+        {
+            Text = "For parents",
+            FontSize = 13,
+            Foreground = MutedBrush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            TextDecorations = TextDecorations.Underline,
+            Cursor = Cursors.Hand,
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        mainPanel.Children.Add(parentReveal);
 
         var moreTimeRow = new StackPanel
         {
@@ -206,9 +219,9 @@ public class LockWindow : Window
         pinPanel.Children.Add(_pinStatusText);
         mainPanel.Children.Add(pinPanel);
 
-        shutDownReveal.Click += (_, _) =>
+        parentReveal.MouseLeftButtonUp += (_, _) =>
         {
-            shutDownReveal.Visibility = Visibility.Collapsed;
+            parentReveal.Visibility = Visibility.Collapsed;
             pinPanel.Visibility = Visibility.Visible;
             pinBox.Focus();
         };
@@ -310,7 +323,7 @@ public class LockWindow : Window
 
         panel.Children.Add(new TextBlock
         {
-            Text = "Use the primary display to request more time, or shut down Warden with a parent PIN.",
+            Text = "Use the primary display to request more time or shut down the PC.",
             FontSize = 14,
             Foreground = MutedBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -363,6 +376,47 @@ public class LockWindow : Window
                 await Task.Delay(2000);
                 btn.Content = previous;
                 btn.IsEnabled = true;
+            }
+        };
+        return btn;
+    }
+
+    private Button CreateShutdownPcButton(Func<Task<(bool ok, string? error)>> onShutdownPc)
+    {
+        var btn = CreateFilledButton("Shutdown PC", DangerBrush);
+        btn.Click += async (_, _) =>
+        {
+            btn.IsEnabled = false;
+            btn.Content = "Shutting down...";
+            if (_statusText != null)
+            {
+                _statusText.Text = "Shutting down...";
+            }
+
+            try
+            {
+                var (ok, error) = await onShutdownPc();
+                if (!ok)
+                {
+                    btn.Content = "Shutdown PC";
+                    btn.IsEnabled = true;
+                    if (_statusText != null)
+                    {
+                        _statusText.Text =
+                            error ?? "Could not shut down. Try the Start menu.";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                btn.Content = "Shutdown PC";
+                btn.IsEnabled = true;
+                if (_statusText != null)
+                {
+                    _statusText.Text = "Could not shut down. Try the Start menu.";
+                }
+
+                WardenLog.Error("LockUI", "Shutdown PC handler failed", ex);
             }
         };
         return btn;
@@ -532,6 +586,7 @@ public static class LockWindowManager
 
     public static void Show(
         Func<int, Task<bool>> onExtensionRequest,
+        Func<Task<(bool ok, string? error)>> onShutdownPc,
         Func<string, Task<(bool ok, string? error)>> onParentShutdown,
         PolicyEvaluation? evaluation = null,
         IReadOnlyList<MonitorBounds>? monitors = null)
@@ -557,7 +612,7 @@ public static class LockWindowManager
             {
                 foreach (var screen in screens)
                 {
-                    var window = new LockWindow(screen, onExtensionRequest, onParentShutdown);
+                    var window = new LockWindow(screen, onExtensionRequest, onShutdownPc, onParentShutdown);
                     if (evaluation != null && screen.IsPrimary)
                     {
                         window.UpdateEvaluation(evaluation);

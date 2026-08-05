@@ -1,5 +1,6 @@
 using System.Windows.Forms;
 using Warden.Core;
+using Warden.Core.Diagnostics;
 using Warden.Core.Services;
 using Warden.LockUI;
 
@@ -44,6 +45,18 @@ public class Worker : BackgroundService
 
             LockWindowManager.Show(
                 minutes => _engine.RequestExtensionAsync(minutes),
+                async () =>
+                {
+                    try
+                    {
+                        SessionMarker.ClearClean();
+                        return await Task.FromResult(SystemShutdown.Initiate());
+                    }
+                    catch
+                    {
+                        return (false, "Unexpected error. Try the Start menu.");
+                    }
+                },
                 async pin =>
                 {
                     var result = _engine.ValidateParentPin(pin);
