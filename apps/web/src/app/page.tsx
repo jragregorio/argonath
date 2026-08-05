@@ -18,15 +18,8 @@ import {
   GoldEyebrow,
   MarketingAtmosphere,
 } from "@/components/marketing/atmosphere";
-import {
-  HomeThemeProvider,
-  HomeThemeToggle,
-  HomeHeaderSignInLink,
-} from "@/components/marketing/home-theme";
-import {
-  homeHeaderActionsClassName,
-  homeHeaderCtaClassName,
-} from "@/components/marketing/home-header-nav-styles";
+import { HomeThemeProvider } from "@/components/marketing/home-theme";
+import { HomeHeader } from "@/components/marketing/home-header";
 import { homeThemeFoucScript } from "@/components/marketing/home-theme-constants";
 import { MockDeviceChrome } from "@/components/marketing/mock-device-chrome";
 
@@ -69,23 +62,8 @@ export default function HomePage() {
           <div className="absolute bottom-0 left-1/3 h-[280px] w-[280px] rounded-full bg-plume/20 blur-[90px]" />
         </div>
 
-        <header className="home-fade sticky top-0 z-[100] border-b border-border/60 bg-background/85 px-4 py-5 backdrop-blur-md sm:px-6">
-          <div className="mx-auto flex max-w-6xl items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <Shield className="h-8 w-8 text-attention" aria-hidden="true" />
-              <span className="font-display text-xl font-bold tracking-tight">
-                Warden
-              </span>
-            </div>
-            <div className={homeHeaderActionsClassName}>
-              <HomeThemeToggle />
-              <HomeHeaderSignInLink />
-              <Link href="/sign-up" className={homeHeaderCtaClassName}>
-                Get started
-              </Link>
-            </div>
-          </div>
-        </header>
+        <HomeHeader />
+
 
         <main>
           {/* Hero — scrolls away; sticky stack begins below */}
@@ -132,7 +110,7 @@ export default function HomePage() {
           </section>
 
           {/* How it works */}
-          <StickyHomeCard zIndex={10}>
+          <StickyHomeCard zIndex={10} id="how-it-works">
             <FramedStage className={stickyCardStageClassName}>
               <div className="relative overflow-hidden px-6 py-8 sm:px-10 sm:py-10 md:py-14">
                 <MarketingAtmosphere className="opacity-90" />
@@ -207,7 +185,7 @@ export default function HomePage() {
           </StickyHomeCard>
 
           {/* For parents / for kids */}
-          <StickyHomeCard zIndex={30}>
+          <StickyHomeCard zIndex={30} id="features">
             <NudgePreviewProvider>
               <FramedStage
                 className={`${stickyCardStageClassName} grid md:grid-cols-2`}
@@ -316,7 +294,7 @@ export default function HomePage() {
           </StickyHomeCard>
 
           {/* FAQ */}
-          <StickyHomeCard zIndex={50}>
+          <StickyHomeCard zIndex={50} id="faq">
             <FramedStage
               className={`${stickyCardStageClassName} mx-auto max-w-3xl`}
             >
