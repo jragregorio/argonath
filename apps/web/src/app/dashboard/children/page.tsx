@@ -15,6 +15,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "@warden/ui";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+
+type DeleteConfirmState = {
+  childId: string;
+  displayName: string;
+  deviceCount: number;
+} | null;
 
 export default function ChildrenPage() {
   const router = useRouter();
@@ -22,6 +29,7 @@ export default function ChildrenPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
   const utils = trpc.useUtils();
   const { data: children, isLoading } = trpc.children.list.useQuery(undefined, {
     // Online badges / usage follow heartbeats; Realtime covers lock/policy/extension
@@ -227,10 +235,11 @@ export default function ChildrenPage() {
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      const ok = window.confirm(
-                        `Delete ${child.displayName} and ${child.devices.length} connected device${child.devices.length === 1 ? "" : "s"}? This cannot be undone.`
-                      );
-                      if (ok) deleteChild.mutate({ childId: child.id });
+                      setDeleteConfirm({
+                        childId: child.id,
+                        displayName: child.displayName,
+                        deviceCount: child.devices.length,
+                      });
                     }}
                   >
                     <Trash2 className="w-4 h-4 mr-1" />
@@ -250,6 +259,26 @@ export default function ChildrenPage() {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={deleteConfirm !== null}
+        onClose={() => setDeleteConfirm(null)}
+        title="Delete child?"
+        description={
+          deleteConfirm
+            ? `Delete ${deleteConfirm.displayName} and ${deleteConfirm.deviceCount} connected device${deleteConfirm.deviceCount === 1 ? "" : "s"}? This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete child"
+        busy={deleteChild.isPending}
+        onConfirm={() => {
+          if (!deleteConfirm) return;
+          deleteChild.mutate(
+            { childId: deleteConfirm.childId },
+            { onSuccess: () => setDeleteConfirm(null) }
+          );
+        }}
+      />
     </div>
   );
 }

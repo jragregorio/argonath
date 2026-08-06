@@ -1,27 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useDemo } from "@/lib/demo/demo-provider";
+import { useIsDesktopMd } from "@/lib/use-is-desktop-md";
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
-import { useDemo } from "@/lib/demo/demo-provider";
-
-function useIsDesktopMd() {
-  const [isDesktop, setIsDesktop] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
-    const update = () => setIsDesktop(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-
-  return isDesktop;
-}
-
 function SignupPromptBody() {
   return (
     <ul className="space-y-3 text-sm text-muted-foreground">

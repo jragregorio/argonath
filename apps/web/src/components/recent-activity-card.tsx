@@ -10,6 +10,10 @@ import {
   getActivityLabel,
   getActivityMessage,
 } from "@/lib/activity";
+import {
+  formatAbsoluteTime,
+  formatRelativeTime,
+} from "@/lib/format-relative-time";
 
 export type RecentActivityItem = {
   id: string;
@@ -82,7 +86,8 @@ export function RecentActivityCard({
             item.actor?.name?.trim() ||
             item.actor?.email ||
             (item.actor ? null : "Agent");
-          const when = new Date(item.createdAt).toLocaleString();
+          const when = formatRelativeTime(item.createdAt);
+          const whenTitle = formatAbsoluteTime(item.createdAt);
 
           return (
             <li
@@ -109,19 +114,25 @@ export function RecentActivityCard({
                     .join(" · ")}
                 </p>
                 {/* Stacked timestamp: always on mobile; also when compact on desktop */}
-                <p
+                <time
+                  dateTime={new Date(item.createdAt).toISOString()}
+                  title={whenTitle}
                   className={cn(
                     "text-xs tabular-nums text-muted-foreground",
                     !compact && "md:hidden"
                   )}
                 >
                   {when}
-                </p>
+                </time>
               </div>
               {!compact && (
-                <p className="hidden shrink-0 text-xs tabular-nums text-muted-foreground md:block">
+                <time
+                  dateTime={new Date(item.createdAt).toISOString()}
+                  title={whenTitle}
+                  className="hidden shrink-0 text-xs tabular-nums text-muted-foreground md:block"
+                >
                   {when}
-                </p>
+                </time>
               )}
             </li>
           );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { Bell, ChevronDown } from "lucide-react";
 import { DEFAULT_NUDGE_MESSAGE } from "@warden/shared";
 import { cn } from "@warden/ui";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { useIsDesktopMd } from "@/lib/use-is-desktop-md";
 
 const MAX_MESSAGE_LENGTH = 200;
 
@@ -26,20 +27,6 @@ type NudgeControlsProps = {
   onSend: (message?: string) => void;
   className?: string;
 };
-
-function useIsDesktopMd() {
-  const [isDesktop, setIsDesktop] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
-    const update = () => setIsDesktop(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-
-  return isDesktop;
-}
 
 function NudgeMessageForm({
   message,

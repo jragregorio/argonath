@@ -48,6 +48,8 @@ import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 import { AllowedWindowsSummary } from "@/components/allowed-windows-summary";
 import { formatClockInText } from "@/lib/time-format";
 import { useToast } from "@/lib/toast";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { useIsDesktopMd } from "@/lib/use-is-desktop-md";
 
 const AllowedWindowsEditor = dynamic(
   () =>
@@ -88,6 +90,12 @@ type PairingCodeState = {
   expiresAt: Date;
   deviceId: string;
 };
+
+type ConfirmState =
+  | { type: "delete-child" }
+  | { type: "clear-bonus" }
+  | { type: "delete-device"; deviceId: string; deviceLabel: string }
+  | null;
 
 function windowsEqual(a: AllowedWindow[], b: AllowedWindow[]) {
   if (a.length !== b.length) return false;
@@ -188,6 +196,7 @@ export default function ChildDetailPage() {
   const childId = params.id as string;
   const utils = trpc.useUtils();
   const { showToast } = useToast();
+  const isDesktop = useIsDesktopMd();
 
   const { data: child, isLoading } = trpc.children.get.useQuery(
     { childId },
@@ -540,6 +549,8 @@ export default function ChildDetailPage() {
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [deviceNameDraft, setDeviceNameDraft] = useState("");
   const [deviceMoreOpenId, setDeviceMoreOpenId] = useState<string | null>(null);
+  const [childActionsOpen, setChildActionsOpen] = useState(false);
+  const [confirmState, setConfirmState] = useState<ConfirmState>(null);
   const deviceMoreRef = useRef<HTMLDivElement | null>(null);
   const [policySavedAt, setPolicySavedAt] = useState<number | null>(null);
   const [policyEditorOpen, setPolicyEditorOpen] = useState(false);
@@ -576,7 +587,7 @@ export default function ChildDetailPage() {
   }, [policySavedAt]);
 
   useEffect(() => {
-    if (!deviceMoreOpenId) return;
+    if (!deviceMoreOpenId || !isDesktop) return;
 
     const onPointerDown = (event: MouseEvent) => {
       if (
@@ -596,7 +607,7 @@ export default function ChildDetailPage() {
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [deviceMoreOpenId]);
+  }, [deviceMoreOpenId, isDesktop]);
 
   useEffect(() => {
     if (!pairingCode) return;
@@ -770,21 +781,89 @@ export default function ChildDetailPage() {
     renameChild.mutate({ childId, displayName: next });
   };
 
-  const confirmDeleteChild = () => {
-    const deviceCount = child.devices.length;
-    const ok = window.confirm(
-      `Delete ${child.displayName} and ${deviceCount} connected device${deviceCount === 1 ? "" : "s"}? This cannot be undone.`
-    );
-    if (ok) deleteChild.mutate({ childId });
+  const requestDeleteChild = () => {
+    setConfirmState({ type: "delete-child" });
   };
 
-  const confirmClearBonus = () => {
+  const requestClearBonus = () => {
     if (!evaluation || evaluation.bonusMinutes <= 0) return;
-    const ok = window.confirm(
-      `Clear +${evaluation.bonusMinutes} bonus minutes for ${child.displayName}? Their daily limit returns to ${evaluation.dailyLimitMinutes} min. If they've already used more than that, devices will lock.`
-    );
-    if (ok) clearBonus.mutate({ childId });
+    setConfirmState({ type: "clear-bonus" });
   };
+
+  const requestDeleteDevice = (device: {
+    id: string;
+    displayName?: string | null;
+    machineName?: string | null;
+  }) => {
+    setConfirmState({
+      type: "delete-device",
+      deviceId: device.id,
+      deviceLabel: getDeviceDisplayName(device),
+    });
+  };
+
+  const handleConfirmDestructive = () => {
+    if (!confirmState) return;
+    switch (confirmState.type) {
+      case "delete-child":
+        deleteChild.mutate(
+          { childId },
+          { onSuccess: () => setConfirmState(null) }
+        );
+        break;
+      case "clear-bonus":
+        clearBonus.mutate(
+          { childId },
+          { onSuccess: () => setConfirmState(null) }
+        );
+        break;
+      case "delete-device":
+        deleteDevice.mutate(
+          { deviceId: confirmState.deviceId },
+          { onSuccess: () => setConfirmState(null) }
+        );
+        break;
+    }
+  };
+
+  const confirmDialogCopy = (() => {
+    if (!confirmState) {
+      return { title: "", description: "", confirmLabel: "Confirm", busy: false };
+    }
+    if (confirmState.type === "delete-child") {
+      const deviceCount = child.devices.length;
+      return {
+        title: "Delete child?",
+        description: `Delete ${child.displayName} and ${deviceCount} connected device${deviceCount === 1 ? "" : "s"}? This cannot be undone.`,
+        confirmLabel: "Delete child",
+        busy: deleteChild.isPending,
+      };
+    }
+    if (confirmState.type === "clear-bonus") {
+      if (!evaluation) {
+        return {
+          title: "",
+          description: "",
+          confirmLabel: "Confirm",
+          busy: false,
+        };
+      }
+      return {
+        title: "Clear bonus minutes?",
+        description: `Clear +${evaluation.bonusMinutes} bonus minutes for ${child.displayName}? Their daily limit returns to ${evaluation.dailyLimitMinutes} min. If they've already used more than that, devices will lock.`,
+        confirmLabel: "Clear bonus",
+        busy: clearBonus.isPending,
+      };
+    }
+    return {
+      title: "Remove device?",
+      description: `Remove device "${confirmState.deviceLabel}"? The agent will need to be paired again to reconnect.`,
+      confirmLabel: "Remove device",
+      busy: deleteDevice.isPending,
+    };
+  })();
+
+  const deviceMoreTarget = child.devices.find((d) => d.id === deviceMoreOpenId);
 
   const startRenameDevice = (device: {
     id: string;
@@ -802,18 +881,6 @@ export default function ChildDetailPage() {
       return;
     }
     renameDevice.mutate({ deviceId, displayName: next });
-  };
-
-  const confirmDeleteDevice = (device: {
-    id: string;
-    displayName?: string | null;
-    machineName?: string | null;
-  }) => {
-    const label = getDeviceDisplayName(device);
-    const ok = window.confirm(
-      `Remove device "${label}"? The agent will need to be paired again to reconnect.`
-    );
-    if (ok) deleteDevice.mutate({ deviceId: device.id });
   };
 
   const effectiveLimit = evaluation
@@ -1108,7 +1175,7 @@ export default function ChildDetailPage() {
             <Button
               variant="destructive"
               size="sm"
-              onClick={confirmDeleteChild}
+              onClick={requestDeleteChild}
               disabled={deleteChild.isPending}
             >
               <Trash2 className="w-4 h-4 mr-2" />
@@ -1119,26 +1186,37 @@ export default function ChildDetailPage() {
           <PageHeader
             title={child.displayName}
             action={
-              <div className="flex flex-wrap items-center gap-2">
+              <>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="max-md:min-h-11 max-md:min-w-11"
-                  onClick={startRenameChild}
-                  title="Rename child"
+                  className="md:hidden min-h-11 min-w-11"
+                  onClick={() => setChildActionsOpen(true)}
+                  aria-label="More actions"
+                  title="More actions"
                 >
-                  <Pencil className="w-4 h-4" />
+                  <MoreHorizontal className="w-5 h-5" />
                 </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={confirmDeleteChild}
-                  disabled={deleteChild.isPending}
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  {deleteChild.isPending ? "Deleting..." : "Delete child"}
-                </Button>
-              </div>
+                <div className="hidden md:flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={startRenameChild}
+                    title="Rename child"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={requestDeleteChild}
+                    disabled={deleteChild.isPending}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    {deleteChild.isPending ? "Deleting..." : "Delete child"}
+                  </Button>
+                </div>
+              </>
             }
           />
         )}
@@ -1174,7 +1252,7 @@ export default function ChildDetailPage() {
                     variant="outline"
                     size="sm"
                     className="h-7 px-2 text-xs"
-                    onClick={confirmClearBonus}
+                    onClick={requestClearBonus}
                     disabled={clearBonus.isPending}
                   >
                     {clearBonus.isPending ? "Clearing…" : "Clear bonus"}
@@ -1427,7 +1505,7 @@ export default function ChildDetailPage() {
                             <MoreHorizontal className="h-4 w-4" />
                             <span className="sr-only">More</span>
                           </Button>
-                          {deviceMoreOpenId === device.id && (
+                          {isDesktop && deviceMoreOpenId === device.id && (
                             <div
                               role="menu"
                               className="absolute right-0 z-20 mt-1.5 min-w-[12rem] overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg"
@@ -1476,7 +1554,7 @@ export default function ChildDetailPage() {
                                 disabled={deleteDevice.isPending}
                                 onClick={() => {
                                   setDeviceMoreOpenId(null);
-                                  confirmDeleteDevice(device);
+                                  requestDeleteDevice(device);
                                 }}
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -1737,6 +1815,116 @@ export default function ChildDetailPage() {
       >
         {renderPairingContent()}
       </BottomSheet>
+
+      <BottomSheet
+        open={childActionsOpen}
+        onClose={() => setChildActionsOpen(false)}
+        title={child.displayName}
+        showDone={false}
+      >
+        <div className="flex flex-col gap-3 pb-1">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full justify-start gap-3 max-md:min-h-14"
+            onClick={() => {
+              setChildActionsOpen(false);
+              startRenameChild();
+            }}
+          >
+            <Pencil className="h-5 w-5" />
+            Rename
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            className="w-full justify-start gap-3 max-md:min-h-14"
+            disabled={deleteChild.isPending}
+            onClick={() => {
+              setChildActionsOpen(false);
+              requestDeleteChild();
+            }}
+          >
+            <Trash2 className="h-5 w-5" />
+            Delete child
+          </Button>
+        </div>
+      </BottomSheet>
+
+      {deviceMoreTarget && (
+        <BottomSheet
+          open={!isDesktop && deviceMoreOpenId === deviceMoreTarget.id}
+          onClose={() => setDeviceMoreOpenId(null)}
+          title={getDeviceDisplayName(deviceMoreTarget)}
+          showDone={false}
+        >
+          <div className="flex flex-col gap-3 pb-1">
+            {deviceMoreTarget.isOnline && isSupabaseConfigured() && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-start gap-3 max-md:min-h-14"
+                  disabled={
+                    captureFeedback[deviceMoreTarget.id]?.tone === "pending"
+                  }
+                  onClick={() => {
+                    setDeviceMoreOpenId(null);
+                    requestCapture.mutate({
+                      deviceId: deviceMoreTarget.id,
+                      type: "screen",
+                    });
+                  }}
+                >
+                  <Camera className="h-5 w-5" />
+                  Screenshot
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-start gap-3 max-md:min-h-14"
+                  disabled={
+                    captureFeedback[deviceMoreTarget.id]?.tone === "pending"
+                  }
+                  onClick={() => {
+                    setDeviceMoreOpenId(null);
+                    requestCapture.mutate({
+                      deviceId: deviceMoreTarget.id,
+                      type: "webcam",
+                    });
+                  }}
+                >
+                  <Video className="h-5 w-5" />
+                  Webcam
+                </Button>
+              </>
+            )}
+            <Button
+              type="button"
+              variant="destructive"
+              className="w-full justify-start gap-3 max-md:min-h-14"
+              disabled={deleteDevice.isPending}
+              onClick={() => {
+                setDeviceMoreOpenId(null);
+                requestDeleteDevice(deviceMoreTarget);
+              }}
+            >
+              <Trash2 className="h-5 w-5" />
+              Remove device
+            </Button>
+          </div>
+        </BottomSheet>
+      )}
+
+      <ConfirmDialog
+        open={confirmState !== null}
+        onClose={() => setConfirmState(null)}
+        title={confirmDialogCopy.title}
+        description={confirmDialogCopy.description}
+        confirmLabel={confirmDialogCopy.confirmLabel}
+        busy={confirmDialogCopy.busy}
+        onConfirm={handleConfirmDestructive}
+      />
     </div>
   );
 }

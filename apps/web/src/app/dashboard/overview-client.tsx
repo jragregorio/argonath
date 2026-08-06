@@ -484,113 +484,142 @@ export default function DashboardOverviewPage() {
                             ? pendingLock
                             : device.adminLock;
 
+                        const deviceBadges = (
+                          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                            <Badge
+                              variant={
+                                device.isOnline ? "success" : "secondary"
+                              }
+                            >
+                              {device.isOnline ? "Online" : "Offline"}
+                            </Badge>
+                            {device.isLocked && !effectiveAdminLock && (
+                              <Badge variant="secondary">Locked</Badge>
+                            )}
+                            {effectiveAdminLock && (
+                              <Badge variant="destructive">Locked down</Badge>
+                            )}
+                            {pendingLock !== undefined && (
+                              <Badge variant="secondary">
+                                {pendingLock
+                                  ? "Sending lock..."
+                                  : "Waiting for unlock..."}
+                              </Badge>
+                            )}
+                          </div>
+                        );
+
+                        const navigateToManageDevice = () => {
+                          router.push(manageHref);
+                        };
+
+                        const handleDeviceRowKeyDown = (
+                          e: React.KeyboardEvent
+                        ) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            navigateToManageDevice();
+                          }
+                        };
+
                         return (
-                          <div
-                            key={device.id}
-                            className="space-y-2.5 max-md:space-y-3 rounded-lg border border-border/60 px-3 py-2.5 max-md:px-4 max-md:py-3"
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => e.stopPropagation()}
-                          >
-                            <div className="flex min-w-0 items-center gap-2">
+                          <div key={device.id} onClick={(e) => e.stopPropagation()}>
+                            {/* Mobile: compact status row (header navigates to child detail) */}
+                            <div
+                              className="md:hidden flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border border-border/60 px-3 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              role="link"
+                              tabIndex={0}
+                              onClick={navigateToManageDevice}
+                              onKeyDown={handleDeviceRowKeyDown}
+                            >
                               <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
                               <span className="min-w-0 flex-1 truncate text-sm font-medium">
                                 {getDeviceDisplayName(device)}
                               </span>
-                              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                                <Badge
-                                  variant={
-                                    device.isOnline ? "success" : "secondary"
-                                  }
-                                >
-                                  {device.isOnline ? "Online" : "Offline"}
-                                </Badge>
-                                {device.isLocked && !effectiveAdminLock && (
-                                  <Badge variant="secondary">Locked</Badge>
-                                )}
-                                {effectiveAdminLock && (
-                                  <Badge variant="destructive">
-                                    Locked down
-                                  </Badge>
-                                )}
-                                {pendingLock !== undefined && (
-                                  <Badge variant="secondary">
-                                    {pendingLock
-                                      ? "Sending lock..."
-                                      : "Waiting for unlock..."}
-                                  </Badge>
-                                )}
-                              </div>
+                              {deviceBadges}
                             </div>
 
-                            <div className="flex flex-col gap-2 max-md:gap-3">
-                              {nudgeByDevice[device.id]?.label && (
-                                <span className="text-sm md:text-xs text-muted-foreground">
-                                  {nudgeByDevice[device.id].label}
+                            {/* Desktop: full device controls */}
+                            <div className="hidden space-y-2.5 rounded-lg border border-border/60 px-3 py-2.5 md:block">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                                  {getDeviceDisplayName(device)}
                                 </span>
-                              )}
-                              <div className="flex flex-col gap-2 max-md:gap-3 sm:flex-row sm:items-stretch">
-                                <NudgeControls
-                                  className="w-full sm:w-52 sm:shrink-0"
-                                  disabled={
-                                    !device.isPaired ||
-                                    !device.isOnline ||
-                                    Boolean(nudgeByDevice[device.id]?.nudgeId)
-                                  }
-                                  isSending={
-                                    sendNudge.isPending &&
-                                    sendNudge.variables?.deviceId === device.id
-                                  }
-                                  title={
-                                    !device.isPaired
-                                      ? "Device must be paired first"
-                                      : !device.isOnline
-                                        ? "Device is offline"
-                                        : "Send a gentle attention nudge"
-                                  }
-                                  onSend={(message) =>
-                                    sendNudge.mutate({
-                                      deviceId: device.id,
-                                      message,
-                                    })
-                                  }
-                                />
-                                {effectiveAdminLock ? (
-                                  <Button
-                                    variant="outline"
-                                    className="w-full min-w-0 sm:flex-1"
-                                    onClick={() =>
-                                      setAdminLock.mutate({
-                                        deviceId: device.id,
-                                        locked: false,
-                                      })
+                                {deviceBadges}
+                              </div>
+
+                              <div className="space-y-2">
+                                {nudgeByDevice[device.id]?.label && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {nudgeByDevice[device.id].label}
+                                  </span>
+                                )}
+                                <div className="flex flex-row items-stretch gap-2">
+                                  <NudgeControls
+                                    className="w-52 shrink-0"
+                                    disabled={
+                                      !device.isPaired ||
+                                      !device.isOnline ||
+                                      Boolean(nudgeByDevice[device.id]?.nudgeId)
                                     }
-                                  >
-                                    <Unlock className="mr-1.5 h-4 w-4" />
-                                    Release
-                                  </Button>
-                                ) : (
-                                  <SwipeToLock
-                                    className="w-full min-w-0 sm:flex-1"
-                                    onConfirm={() =>
-                                      setAdminLock.mutate({
-                                        deviceId: device.id,
-                                        locked: true,
-                                      })
-                                    }
-                                    disabled={!device.isPaired}
-                                    pending={
-                                      setAdminLock.isPending &&
-                                      setAdminLock.variables?.deviceId ===
-                                        device.id &&
-                                      setAdminLock.variables?.locked === true
+                                    isSending={
+                                      sendNudge.isPending &&
+                                      sendNudge.variables?.deviceId ===
+                                        device.id
                                     }
                                     title={
                                       !device.isPaired
                                         ? "Device must be paired first"
-                                        : "Swipe to immediately lock this device"
+                                        : !device.isOnline
+                                          ? "Device is offline"
+                                          : "Send a gentle attention nudge"
+                                    }
+                                    onSend={(message) =>
+                                      sendNudge.mutate({
+                                        deviceId: device.id,
+                                        message,
+                                      })
                                     }
                                   />
-                                )}
+                                  {effectiveAdminLock ? (
+                                    <Button
+                                      variant="outline"
+                                      className="min-w-0 flex-1"
+                                      onClick={() =>
+                                        setAdminLock.mutate({
+                                          deviceId: device.id,
+                                          locked: false,
+                                        })
+                                      }
+                                    >
+                                      <Unlock className="mr-1.5 h-4 w-4" />
+                                      Release
+                                    </Button>
+                                  ) : (
+                                    <SwipeToLock
+                                      className="min-w-0 flex-1"
+                                      onConfirm={() =>
+                                        setAdminLock.mutate({
+                                          deviceId: device.id,
+                                          locked: true,
+                                        })
+                                      }
+                                      disabled={!device.isPaired}
+                                      pending={
+                                        setAdminLock.isPending &&
+                                        setAdminLock.variables?.deviceId ===
+                                          device.id &&
+                                        setAdminLock.variables?.locked === true
+                                      }
+                                      title={
+                                        !device.isPaired
+                                          ? "Device must be paired first"
+                                          : "Swipe to immediately lock this device"
+                                      }
+                                    />
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -598,14 +627,6 @@ export default function DashboardOverviewPage() {
                       })
                     )}
 
-                    <Link
-                      href={manageHref}
-                      className="inline-flex items-center text-sm text-primary hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Manage {child.displayName}
-                      <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                    </Link>
                   </CardContent>
                 </Card>
               );

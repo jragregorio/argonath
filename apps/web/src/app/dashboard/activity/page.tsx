@@ -14,13 +14,12 @@ import { getDeviceDisplayName } from "@warden/shared";
 import { Check, X, Clock } from "lucide-react";
 import { POLL_SAFETY_MS } from "@/lib/query-defaults";
 import { useToast } from "@/lib/toast";
+import {
+  formatAbsoluteTime,
+  formatRelativeTime,
+} from "@/lib/format-relative-time";
 
 const ACTIVITY_LIMIT = 100;
-
-function formatWhen(value: Date | string | null | undefined) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString();
-}
 
 export default function ActivityPage() {
   const utils = trpc.useUtils();
@@ -113,7 +112,12 @@ export default function ActivityPage() {
                     <CardDescription>
                       Requesting +{request.requestedMinutes} minutes on{" "}
                       {getDeviceDisplayName(request.device)} ·{" "}
-                      {formatWhen(request.createdAt)}
+                      <time
+                        dateTime={new Date(request.createdAt).toISOString()}
+                        title={formatAbsoluteTime(request.createdAt)}
+                      >
+                        {formatRelativeTime(request.createdAt)}
+                      </time>
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex flex-col sm:flex-row gap-3">

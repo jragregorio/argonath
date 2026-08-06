@@ -14,8 +14,14 @@ import { cn } from "@warden/ui";
 import { Camera, CheckSquare, Loader2, Square, Trash2, Video, X } from "lucide-react";
 import { ZoomableImage } from "@/components/zoomable-image";
 import { POLL_LIVE_MS, POLL_SAFETY_MS } from "@/lib/query-defaults";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 type SnapshotStatusFilter = "all" | "ready" | "pending" | "failed";
+
+type DeleteConfirmState =
+  | { type: "single"; snapshotId: string }
+  | { type: "bulk"; snapshotIds: string[] }
+  | null;
 
 function statusBadgeVariant(status: string) {
   if (status === "ready") return "success" as const;
@@ -63,6 +69,7 @@ export default function SnapshotsPage() {
     useState<SnapshotStatusFilter>("all");
   const [lightboxId, setLightboxId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
 
   const listInput = {
     ...(childFilter !== "all" ? { childId: childFilter } : {}),
@@ -187,17 +194,13 @@ export default function SnapshotsPage() {
   };
 
   const confirmDelete = (snapshotId: string) => {
-    const ok = window.confirm("Delete this snapshot? This cannot be undone.");
-    if (ok) deleteSnapshot.mutate({ snapshotId });
+    setDeleteConfirm({ type: "single", snapshotId });
   };
 
   const confirmBulkDelete = () => {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
-    const ok = window.confirm(
-      `Delete ${ids.length} snapshot${ids.length === 1 ? "" : "s"}? This cannot be undone.`
-    );
-    if (ok) deleteManySnapshots.mutate({ snapshotIds: ids });
+    setDeleteConfirm({ type: "bulk", snapshotIds: ids });
   };
 
   const statusChips: { value: SnapshotStatusFilter; label: string }[] = [
@@ -473,6 +476,35 @@ export default function SnapshotsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteConfirm !== null}
+        onClose={() => setDeleteConfirm(null)}
+        title={
+          deleteConfirm?.type === "bulk" ? "Delete snapshots?" : "Delete snapshot?"
+        }
+        description={
+          deleteConfirm?.type === "bulk"
+            ? `Delete ${deleteConfirm.snapshotIds.length} snapshot${deleteConfirm.snapshotIds.length === 1 ? "" : "s"}? This cannot be undone.`
+            : "Delete this snapshot? This cannot be undone."
+        }
+        confirmLabel="Delete"
+        busy={deleteSnapshot.isPending || deleteManySnapshots.isPending}
+        onConfirm={() => {
+          if (!deleteConfirm) return;
+          if (deleteConfirm.type === "single") {
+            deleteSnapshot.mutate(
+              { snapshotId: deleteConfirm.snapshotId },
+              { onSuccess: () => setDeleteConfirm(null) }
+            );
+          } else {
+            deleteManySnapshots.mutate(
+              { snapshotIds: deleteConfirm.snapshotIds },
+              { onSuccess: () => setDeleteConfirm(null) }
+            );
+          }
+        }}
+      />
     </div>
   );
 }
