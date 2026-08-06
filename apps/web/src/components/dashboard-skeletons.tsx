@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function OverviewSkeleton() {
   return (
     <div className="space-y-6 md:space-y-8">
-      <div className="hidden md:block space-y-2">
+      <div className="space-y-2">
         <Skeleton className="h-9 w-48" />
         <Skeleton className="h-5 w-80 max-w-full" />
       </div>
@@ -120,6 +120,47 @@ export function ExtensionRequestCardsSkeleton({ count = 3 }: { count?: number })
   );
 }
 
+export function ActivityFeedSkeleton({ count = 5 }: { count?: number }) {
+  return (
+    <Card className="overflow-hidden p-0">
+      <ul className="divide-y divide-border">
+        {Array.from({ length: count }, (_, i) => (
+          <li
+            key={i}
+            className="flex flex-col gap-1 px-4 py-3 sm:px-5 sm:py-3.5 md:flex-row md:items-start md:justify-between md:gap-3"
+          >
+            <div className="min-w-0 space-y-2 flex-1">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-4 w-56 max-w-full" />
+              <Skeleton className="h-3 w-24 md:hidden" />
+            </div>
+            <Skeleton className="hidden h-3 w-28 shrink-0 md:block" />
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+export function ActivityPageSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <Skeleton className="h-9 w-36" />
+        <Skeleton className="h-5 w-72 max-w-full" />
+      </div>
+      <section className="space-y-4">
+        <Skeleton className="h-6 w-24" />
+        <ExtensionRequestCardsSkeleton />
+      </section>
+      <section className="space-y-4">
+        <Skeleton className="h-6 w-28" />
+        <ActivityFeedSkeleton />
+      </section>
+    </div>
+  );
+}
+
 export function ExtensionsPageSkeleton() {
   return (
     <div className="space-y-8">
@@ -157,7 +198,7 @@ export function SnapshotsGridSkeleton() {
 export function SnapshotsPageSkeleton() {
   return (
     <div className="space-y-6 md:space-y-8">
-      <div className="hidden md:block space-y-2">
+      <div className="space-y-2">
         <Skeleton className="h-9 w-40" />
         <Skeleton className="h-5 w-96 max-w-full" />
       </div>

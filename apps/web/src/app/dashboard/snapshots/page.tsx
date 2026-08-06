@@ -12,6 +12,7 @@ import { SnapshotsGridSkeleton } from "@/components/dashboard-skeletons";
 import { getDeviceDisplayName } from "@warden/shared";
 import { cn } from "@warden/ui";
 import { Camera, CheckSquare, Loader2, Square, Trash2, Video, X } from "lucide-react";
+import { ZoomableImage } from "@/components/zoomable-image";
 import { POLL_LIVE_MS, POLL_SAFETY_MS } from "@/lib/query-defaults";
 
 type SnapshotStatusFilter = "all" | "ready" | "pending" | "failed";
@@ -208,12 +209,10 @@ export default function SnapshotsPage() {
 
   return (
     <div className="space-y-6 md:space-y-8">
-      <div className="hidden md:block">
-        <PageHeader
-          title="Snapshots"
-          description="On-demand screen and webcam captures from your children's devices"
-        />
-      </div>
+      <PageHeader
+        title="Snapshots"
+        description="On-demand screen and webcam captures from your children's devices"
+      />
 
       <div className="space-y-3">
         <div>
@@ -413,8 +412,8 @@ export default function SnapshotsPage() {
             <Camera className="w-12 h-12 mx-auto mb-3 opacity-50" />
             <p>No snapshots match these filters.</p>
             <p className="text-sm mt-1">
-              Use the capture buttons on a child&apos;s device card to take a
-              screenshot or webcam photo.
+              Open a child, then use More (⋯) on a device for Screenshot or
+              Webcam.
             </p>
           </CardContent>
         </Card>
@@ -467,10 +466,9 @@ export default function SnapshotsPage() {
                 </Button>
               </div>
             </div>
-            <img
+            <ZoomableImage
               src={lightbox.url}
               alt={`${lightbox.type} capture`}
-              className="w-full max-h-[80vh] object-contain rounded-lg bg-black"
             />
           </div>
         </div>

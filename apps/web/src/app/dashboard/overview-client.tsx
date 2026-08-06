@@ -257,13 +257,10 @@ export default function DashboardOverviewPage() {
 
   return (
     <div className="space-y-6 md:space-y-8">
-      {/* Desktop-only page title */}
-      <div className="hidden md:block">
-        <PageHeader
-          title="Dashboard"
-          description="Screen time, device status, and lockdowns at a glance"
-        />
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Screen time, device status, and lockdowns at a glance"
+      />
 
       {pendingRequests > 0 && (
         <Card className="border-yellow-500/50 bg-yellow-500/5">

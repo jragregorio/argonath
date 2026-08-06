@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { ExtensionRequestCardsSkeleton } from "@/components/dashboard-skeletons";
+import {
+  ActivityFeedSkeleton,
+  ExtensionRequestCardsSkeleton,
+} from "@/components/dashboard-skeletons";
 import { RecentActivityCard } from "@/components/recent-activity-card";
 import { getDeviceDisplayName } from "@warden/shared";
 import { Check, X, Clock } from "lucide-react";
@@ -160,7 +163,7 @@ export default function ActivityPage() {
         <h2 className="text-lg font-semibold">All activity</h2>
 
         {activityLoading && !activity ? (
-          <ExtensionRequestCardsSkeleton count={3} />
+          <ActivityFeedSkeleton />
         ) : (
           <RecentActivityCard
             items={activity}
