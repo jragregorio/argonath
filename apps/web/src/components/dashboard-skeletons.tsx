@@ -9,8 +9,8 @@ export function OverviewSkeleton() {
         <Skeleton className="h-5 w-80 max-w-full" />
       </div>
       <Skeleton className="h-16 w-full rounded-xl md:hidden" />
-      <div className="hidden md:grid md:grid-cols-3 gap-4">
-        {[0, 1, 2].map((i) => (
+      <div className="hidden md:grid md:grid-cols-2 gap-4">
+        {[0, 1].map((i) => (
           <Card key={i}>
             <CardHeader>
               <Skeleton className="h-4 w-24 mb-3" />

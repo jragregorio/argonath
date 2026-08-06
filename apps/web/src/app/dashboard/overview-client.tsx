@@ -12,7 +12,6 @@ import {
   AlertCircle,
   Unlock,
   Users,
-  History,
   ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
@@ -258,7 +257,7 @@ export default function DashboardOverviewPage() {
 
   return (
     <div className="space-y-6 md:space-y-8">
-      {/* Desktop title — mobile uses fixed top bar page title */}
+      {/* Desktop-only page title */}
       <div className="hidden md:block">
         <PageHeader
           title="Dashboard"
@@ -292,7 +291,7 @@ export default function DashboardOverviewPage() {
       )}
 
       {/* Mobile compact stats strip */}
-      <div className="md:hidden grid grid-cols-3 gap-2.5">
+      <div className="md:hidden grid grid-cols-2 gap-2.5">
         <Link href="/dashboard/children" className="block">
           <Card className="h-full p-3.5">
             <p className="text-xs text-muted-foreground truncate">Children</p>
@@ -310,18 +309,10 @@ export default function DashboardOverviewPage() {
             </span>
           </p>
         </Card>
-        <Link href="/dashboard/activity" className="block">
-          <Card className="h-full p-3.5">
-            <p className="text-xs text-muted-foreground truncate">Activity</p>
-            <p className="text-xl font-semibold tabular-nums mt-0.5">
-              {pendingRequests}
-            </p>
-          </Card>
-        </Link>
       </div>
 
       {/* Desktop summary cards */}
-      <div className="hidden md:grid md:grid-cols-3 gap-4">
+      <div className="hidden md:grid md:grid-cols-2 gap-4">
         <Link href="/dashboard/children" className="block group">
           <Card className="h-full transition-colors group-hover:border-primary/40">
             <CardHeader className="relative mb-0">
@@ -347,17 +338,6 @@ export default function DashboardOverviewPage() {
             </CardTitle>
           </CardHeader>
         </Card>
-        <Link href="/dashboard/activity" className="block group">
-          <Card className="h-full transition-colors group-hover:border-primary/40">
-            <CardHeader className="relative mb-0">
-              <div className="absolute top-0 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <History className="w-5 h-5 text-primary" />
-              </div>
-              <CardDescription>Pending requests</CardDescription>
-              <CardTitle className="text-3xl">{pendingRequests}</CardTitle>
-            </CardHeader>
-          </Card>
-        </Link>
       </div>
 
       <div>
