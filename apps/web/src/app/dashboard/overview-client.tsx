@@ -489,7 +489,7 @@ export default function DashboardOverviewPage() {
                             : device.adminLock;
 
                         const deviceBadges = (
-                          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                          <div className="flex shrink-0 flex-col items-end gap-1.5 md:flex-row md:items-center md:gap-2">
                             <Badge
                               variant={
                                 device.isOnline ? "success" : "secondary"
