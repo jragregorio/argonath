@@ -55,3 +55,14 @@ export async function prefetchDashboardShell() {
     return null;
   }
 }
+
+/** Prefetch dashboard overview for LCP (activity stays client-fetched). */
+export async function prefetchDashboardOverview() {
+  try {
+    const helpers = await createTRPCServerHelpers();
+    await helpers.dashboard.overview.prefetch();
+    return helpers.dehydrate();
+  } catch {
+    return null;
+  }
+}

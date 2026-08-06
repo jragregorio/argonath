@@ -6,7 +6,10 @@ import { useFamilyRealtimeEvent } from "@/lib/family-realtime";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { OverviewSkeleton } from "@/components/dashboard-skeletons";
+import {
+  ActivityFeedSkeleton,
+  OverviewSkeleton,
+} from "@/components/dashboard-skeletons";
 import {
   Monitor,
   AlertCircle,
@@ -61,10 +64,11 @@ export default function DashboardOverviewPage() {
       refetchInterval: POLL_HEARTBEAT_MS,
     }
   );
-  const { data: activity } = trpc.dashboard.activity.useQuery(
-    { limit: 20 },
-    { refetchInterval: POLL_HEARTBEAT_MS }
-  );
+  const { data: activity, isLoading: activityLoading } =
+    trpc.dashboard.activity.useQuery(
+      { limit: 20 },
+      { refetchInterval: POLL_HEARTBEAT_MS }
+    );
   const [pendingLocks, setPendingLocks] = useState<
     Record<string, boolean | undefined>
   >({});
@@ -247,7 +251,7 @@ export default function DashboardOverviewPage() {
     });
   }, [overview]);
 
-  if (isLoading) {
+  if (isLoading && !overview) {
     return <OverviewSkeleton />;
   }
 
@@ -645,7 +649,11 @@ export default function DashboardOverviewPage() {
             View all →
           </Link>
         </div>
-        <RecentActivityCard items={activity} />
+        {activity === undefined && activityLoading ? (
+          <ActivityFeedSkeleton />
+        ) : (
+          <RecentActivityCard items={activity} />
+        )}
       </div>
     </div>
   );

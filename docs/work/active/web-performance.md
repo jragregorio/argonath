@@ -334,11 +334,26 @@ auth cookies. Code + region probes are sufficient to explain the live/dev gap.
 Supabase `ap-southeast-1`. Needs a Vercel redeploy. After deploy, `/api/agent`
 `X-Vercel-Id` should show `sin1::sin1::…` (not `sin1::iad1::…`).
 
+### Phase 4 progress — progressive Overview (2026-08-06)
+
+Implemented web-only LCP improvements on `/dashboard`:
+
+- **`prefetchDashboardOverview()`** in `trpc-server.ts` — SSR-prefetches
+  `dashboard.overview` so the client hydrates with overview data instead of
+  painting text-free `OverviewSkeleton` while waiting on a round trip.
+- **`dashboard/page.tsx`** — server page with `Suspense` + `HydrationBoundary`
+  around `OverviewClient` (activity is not prefetched here).
+- **`dashboard/layout.tsx`** — shell prefetch wrapped in `Suspense` so the
+  document can stream; fallback still renders `DashboardShell` + children.
+- **`overview-client.tsx`** — main content no longer gated on activity; recent
+  activity section uses `ActivityFeedSkeleton` while `dashboard.activity` loads.
+
+No LCP measurements recorded yet — verify on live after deploy.
+
 ### Do not change yet
 
 Fonts, marketing animations, TTL lengthening, edge runtime for Prisma, or
-bundle-only tweaks. Remaining LCP candidates after region deploy: SSR/prefetch
-`dashboard.overview`, stream layout past non-LCP shell prefetch.
+bundle-only tweaks.
 
 ## Sources
 
