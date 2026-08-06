@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@warden/ui";
 
 const MIN_SCALE = 1;
-const MAX_SCALE = 4;
+const MAX_SCALE = 5;
 const STEP = 0.5;
 const DOUBLE_TAP_MS = 300;
 const DOUBLE_TAP_SCALE = 2.5;
@@ -27,9 +27,16 @@ type ZoomableImageProps = {
   src: string;
   alt: string;
   className?: string;
+  /** Fill available height (e.g. fullscreen lightbox) instead of capping at 80vh. */
+  fillViewport?: boolean;
 };
 
-export function ZoomableImage({ src, alt, className }: ZoomableImageProps) {
+export function ZoomableImage({
+  src,
+  alt,
+  className,
+  fillViewport = false,
+}: ZoomableImageProps) {
   const [scale, setScale] = useState(MIN_SCALE);
   const [offset, setOffset] = useState<Point>({ x: 0, y: 0 });
   const pointersRef = useRef(new Map<number, Point>());
@@ -169,7 +176,13 @@ export function ZoomableImage({ src, alt, className }: ZoomableImageProps) {
   };
 
   return (
-    <div className={cn("relative", className)}>
+    <div
+      className={cn(
+        "relative",
+        fillViewport && "flex min-h-0 flex-1 flex-col",
+        className
+      )}
+    >
       <div className="absolute top-3 right-3 z-10 flex gap-2">
         <Button
           type="button"
@@ -202,8 +215,13 @@ export function ZoomableImage({ src, alt, className }: ZoomableImageProps) {
       </div>
       <div
         className={cn(
-          "overflow-hidden rounded-lg bg-black touch-none select-none",
-          scale > MIN_SCALE ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"
+          "overflow-hidden bg-black touch-none select-none",
+          fillViewport
+            ? "flex h-full min-h-0 w-full flex-1 items-center justify-center"
+            : "rounded-lg",
+          scale > MIN_SCALE
+            ? "cursor-grab active:cursor-grabbing"
+            : "cursor-zoom-in"
         )}
         onWheel={onWheel}
         onPointerDown={onPointerDown}
@@ -217,14 +235,19 @@ export function ZoomableImage({ src, alt, className }: ZoomableImageProps) {
           src={src}
           alt={alt}
           draggable={false}
-          className="w-full max-h-[80vh] object-contain pointer-events-none"
+          className={cn(
+            "pointer-events-none object-contain",
+            fillViewport
+              ? "max-h-full max-w-full"
+              : "w-full max-h-[80vh]"
+          )}
           style={{
             transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
             transformOrigin: "center center",
           }}
         />
       </div>
-      {scale > MIN_SCALE && (
+      {scale > MIN_SCALE && !fillViewport && (
         <p className="mt-2 text-center text-xs text-white/60">
           {Math.round(scale * 100)}% · drag to pan · double-tap to reset
         </p>

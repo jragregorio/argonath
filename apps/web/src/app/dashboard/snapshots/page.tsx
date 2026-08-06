@@ -424,54 +424,60 @@ export default function SnapshotsPage() {
 
       {lightbox && lightbox.url && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          style={{
-            paddingTop: "max(1rem, env(safe-area-inset-top, 0px))",
-            paddingBottom: "max(1rem, env(safe-area-inset-bottom, 0px))",
-          }}
+          className="fixed inset-0 z-50 flex flex-col bg-black"
           role="dialog"
           aria-modal="true"
           aria-label="Snapshot preview"
           onClick={() => setLightboxId(null)}
         >
           <div
-            className="relative max-w-5xl w-full max-h-[90vh] flex flex-col gap-3"
+            className="flex shrink-0 items-center justify-between gap-3 px-3 py-2 text-white"
+            style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top, 0px))" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-3 text-white">
-              <div className="min-w-0">
-                <p className="font-medium truncate">
-                  {lightbox.child.displayName} ·{" "}
-                  {lightbox.type === "screen" ? "Screen" : "Webcam"}
-                </p>
-                <p className="text-sm text-white/70">
-                  {getDeviceDisplayName(lightbox.device)} ·{" "}
-                  {new Date(lightbox.capturedAt).toLocaleString()}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => confirmDelete(lightbox.id)}
-                  disabled={isDeleting}
-                >
-                  <Trash2 className="w-4 h-4 mr-1.5" />
-                  Delete
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-white hover:text-white hover:bg-white/10 min-h-11 min-w-11"
-                  onClick={() => setLightboxId(null)}
-                >
-                  <X className="w-5 h-5" />
-                </Button>
-              </div>
+            <div className="min-w-0">
+              <p className="font-medium truncate text-sm sm:text-base">
+                {lightbox.child.displayName} ·{" "}
+                {lightbox.type === "screen" ? "Screen" : "Webcam"}
+              </p>
+              <p className="text-xs text-white/70 sm:text-sm">
+                {getDeviceDisplayName(lightbox.device)} ·{" "}
+                {new Date(lightbox.capturedAt).toLocaleString()}
+              </p>
             </div>
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                onClick={() => confirmDelete(lightbox.id)}
+                disabled={isDeleting}
+              >
+                <Trash2 className="w-4 h-4 mr-1.5" />
+                Delete
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-white hover:text-white hover:bg-white/10 min-h-11 min-w-11"
+                onClick={() => setLightboxId(null)}
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+          </div>
+          <div
+            className="relative flex min-h-0 flex-1 flex-col px-0"
+            style={{
+              paddingBottom: "max(0.5rem, env(safe-area-inset-bottom, 0px))",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <ZoomableImage
               src={lightbox.url}
               alt={`${lightbox.type} capture`}
+              className="flex h-full min-h-0 flex-1"
+              fillViewport
             />
           </div>
         </div>

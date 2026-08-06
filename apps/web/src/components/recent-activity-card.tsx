@@ -46,10 +46,15 @@ export function RecentActivityCard({
   emptyDescription = "Lockdowns, captures, nudges, and policy changes will show here",
 }: RecentActivityCardProps) {
   const [showAll, setShowAll] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const activityItems = items ?? [];
   const visible = showAll
     ? activityItems
     : activityItems.slice(0, initialVisible);
+
+  const toggleExpanded = (id: string) => {
+    setExpandedId((current) => (current === id ? null : id));
+  };
 
   if (!items || items.length === 0) {
     return (
@@ -88,16 +93,27 @@ export function RecentActivityCard({
             (item.actor ? null : "Agent");
           const when = formatRelativeTime(item.createdAt);
           const whenTitle = formatAbsoluteTime(item.createdAt);
+          const expanded = expandedId === item.id;
 
           return (
             <li
               key={item.id}
+              role="button"
+              tabIndex={0}
+              aria-expanded={expanded}
               className={cn(
-                "px-4 py-3 sm:px-5 sm:py-3.5",
+                "cursor-pointer px-4 py-3 sm:px-5 sm:py-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 compact
                   ? "space-y-1"
                   : "flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-3"
               )}
+              onClick={() => toggleExpanded(item.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  toggleExpanded(item.id);
+                }
+              }}
             >
               <div className="min-w-0 space-y-0.5">
                 <p className="text-sm font-medium">
@@ -124,6 +140,11 @@ export function RecentActivityCard({
                 >
                   {when}
                 </time>
+                {expanded && (
+                  <p className="text-xs text-muted-foreground/80">
+                    {whenTitle}
+                  </p>
+                )}
               </div>
               {!compact && (
                 <time
