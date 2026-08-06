@@ -7,7 +7,6 @@ import {
   AlertCircle,
   Unlock,
   Users,
-  History,
   ArrowRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -53,12 +52,10 @@ export default function DemoOverviewPage() {
 
   return (
     <div className="space-y-6 md:space-y-8">
-      <div className="hidden md:block">
-        <PageHeader
-          title="Dashboard"
-          description="Screen time, device status, and lockdowns at a glance"
-        />
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Screen time, device status, and lockdowns at a glance"
+      />
 
       {pendingRequests > 0 && (
         <Card className="border-yellow-500/50 bg-yellow-500/5">
@@ -85,7 +82,7 @@ export default function DemoOverviewPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-3 gap-2.5 md:hidden">
+      <div className="grid grid-cols-2 gap-2.5 md:hidden">
         <Link href="/demo/children" className="block">
           <Card className="h-full p-3.5">
             <p className="truncate text-xs text-muted-foreground">Children</p>
@@ -103,17 +100,9 @@ export default function DemoOverviewPage() {
             </span>
           </p>
         </Card>
-        <Link href="/demo/activity" className="block">
-          <Card className="h-full p-3.5">
-            <p className="truncate text-xs text-muted-foreground">Activity</p>
-            <p className="mt-0.5 text-xl font-semibold tabular-nums">
-              {pendingRequests}
-            </p>
-          </Card>
-        </Link>
       </div>
 
-      <div className="hidden gap-4 md:grid md:grid-cols-3">
+      <div className="hidden gap-4 md:grid md:grid-cols-2">
         <Link href="/demo/children" className="group block">
           <Card className="h-full transition-colors group-hover:border-primary/40">
             <CardHeader className="relative mb-0">
@@ -139,17 +128,6 @@ export default function DemoOverviewPage() {
             </CardTitle>
           </CardHeader>
         </Card>
-        <Link href="/demo/activity" className="group block">
-          <Card className="h-full transition-colors group-hover:border-primary/40">
-            <CardHeader className="relative mb-0">
-              <div className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <History className="h-5 w-5 text-primary" />
-              </div>
-              <CardDescription>Pending requests</CardDescription>
-              <CardTitle className="text-3xl">{pendingRequests}</CardTitle>
-            </CardHeader>
-          </Card>
-        </Link>
       </div>
 
       <div>
@@ -196,6 +174,17 @@ export default function DemoOverviewPage() {
                       ? `${evaluation.remainingMinutes} min left now (allowed hours ending) · ${evaluation.dailyRemainingMinutes} min of daily budget left`
                       : `${evaluation.remainingMinutes} min left now`;
 
+            const navigateToManage = () => {
+              router.push(manageHref);
+            };
+
+            const handleHeaderKeyDown = (e: React.KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                navigateToManage();
+              }
+            };
+
             return (
               <Card
                 key={child.id}
@@ -204,13 +193,8 @@ export default function DemoOverviewPage() {
                 <CardHeader
                   role="link"
                   tabIndex={0}
-                  onClick={() => router.push(manageHref)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      router.push(manageHref);
-                    }
-                  }}
+                  onClick={navigateToManage}
+                  onKeyDown={handleHeaderKeyDown}
                   className="cursor-pointer rounded-t-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -271,94 +255,117 @@ export default function DemoOverviewPage() {
                     const nudgeState = nudgeByDevice[device.id];
                     const nudgeBusy = Boolean(nudgeState?.nudgeId);
 
+                    const deviceBadges = (
+                      <div className="flex shrink-0 flex-col items-end gap-1.5 md:flex-row md:items-center md:gap-2">
+                        <Badge
+                          variant={device.isOnline ? "success" : "secondary"}
+                        >
+                          {device.isOnline ? "Online" : "Offline"}
+                        </Badge>
+                        {device.isLocked && !effectiveAdminLock && (
+                          <Badge variant="secondary">Locked</Badge>
+                        )}
+                        {effectiveAdminLock && (
+                          <Badge variant="destructive">Locked down</Badge>
+                        )}
+                        {pendingLock !== undefined && (
+                          <Badge variant="secondary">
+                            {pendingLock
+                              ? "Sending lock..."
+                              : "Waiting for unlock..."}
+                          </Badge>
+                        )}
+                      </div>
+                    );
+
+                    const navigateToManageDevice = () => {
+                      router.push(manageHref);
+                    };
+
+                    const handleDeviceRowKeyDown = (
+                      e: React.KeyboardEvent
+                    ) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        navigateToManageDevice();
+                      }
+                    };
+
                     return (
                       <div
                         key={device.id}
-                        className="space-y-2.5 rounded-lg border border-border/60 px-3 py-2.5 max-md:space-y-3 max-md:px-4 max-md:py-3"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="flex min-w-0 items-center gap-2">
+                        <div
+                          className="flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border border-border/60 px-3 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+                          role="link"
+                          tabIndex={0}
+                          onClick={navigateToManageDevice}
+                          onKeyDown={handleDeviceRowKeyDown}
+                        >
                           <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
                           <span className="min-w-0 flex-1 truncate text-sm font-medium">
                             {getDeviceDisplayName(device)}
                           </span>
-                          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                            <Badge
-                              variant={
-                                device.isOnline ? "success" : "secondary"
-                              }
-                            >
-                              {device.isOnline ? "Online" : "Offline"}
-                            </Badge>
-                            {device.isLocked && !effectiveAdminLock && (
-                              <Badge variant="secondary">Locked</Badge>
-                            )}
-                            {effectiveAdminLock && (
-                              <Badge variant="destructive">Locked down</Badge>
-                            )}
-                            {pendingLock !== undefined && (
-                              <Badge variant="secondary">
-                                {pendingLock
-                                  ? "Sending lock..."
-                                  : "Waiting for unlock..."}
-                              </Badge>
-                            )}
-                          </div>
+                          {deviceBadges}
                         </div>
 
-                        <div className="flex flex-col gap-2 max-md:gap-3">
-                          {nudgeState?.label && (
-                            <span className="text-sm text-muted-foreground md:text-xs">
-                              {nudgeState.label}
+                        <div className="hidden space-y-2.5 rounded-lg border border-border/60 px-3 py-2.5 md:block">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                              {getDeviceDisplayName(device)}
                             </span>
-                          )}
-                          <div className="flex flex-col gap-2 max-md:gap-3 sm:flex-row sm:items-stretch">
-                            <NudgeControls
-                              className="w-full sm:w-52 sm:shrink-0"
-                              disabled={
-                                !device.isPaired ||
-                                !device.isOnline ||
-                                nudgeBusy
-                              }
-                              isSending={nudgeState?.label === "Sending…"}
-                              onSend={(message) =>
-                                sendNudge(device.id, message)
-                              }
-                            />
-                            {effectiveAdminLock ? (
-                              <Button
-                                variant="outline"
-                                className="w-full min-w-0 sm:flex-1"
-                                onClick={() =>
-                                  setAdminLock(device.id, false)
-                                }
-                                disabled={pendingLock !== undefined}
-                              >
-                                <Unlock className="mr-1.5 h-4 w-4" />
-                                Release
-                              </Button>
-                            ) : (
-                              <SwipeToLock
-                                className="w-full min-w-0 sm:flex-1"
-                                onConfirm={() =>
-                                  setAdminLock(device.id, true)
-                                }
-                                disabled={!device.isPaired}
-                                pending={pendingLock === true}
-                              />
+                            {deviceBadges}
+                          </div>
+
+                          <div className="space-y-2">
+                            {nudgeState?.label && (
+                              <span className="text-xs text-muted-foreground">
+                                {nudgeState.label}
+                              </span>
                             )}
+                            <div className="flex flex-row items-stretch gap-2">
+                              <NudgeControls
+                                className="w-52 shrink-0"
+                                disabled={
+                                  !device.isPaired ||
+                                  !device.isOnline ||
+                                  nudgeBusy
+                                }
+                                isSending={nudgeState?.label === "Sending…"}
+                                onSend={(message) =>
+                                  sendNudge(device.id, message)
+                                }
+                              />
+                              {effectiveAdminLock ? (
+                                <Button
+                                  variant="outline"
+                                  className="min-w-0 flex-1"
+                                  onClick={() =>
+                                    setAdminLock(device.id, false)
+                                  }
+                                  disabled={pendingLock !== undefined}
+                                >
+                                  <Unlock className="mr-1.5 h-4 w-4" />
+                                  Release
+                                </Button>
+                              ) : (
+                                <SwipeToLock
+                                  className="min-w-0 flex-1"
+                                  onConfirm={() =>
+                                    setAdminLock(device.id, true)
+                                  }
+                                  disabled={!device.isPaired}
+                                  pending={pendingLock === true}
+                                />
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
                     );
                   })}
-
-                  <Link
-                    href={manageHref}
-                    className="inline-flex items-center text-sm text-primary hover:underline"
-                  >
-                    Manage {child.displayName}
-                    <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                  </Link>
                 </CardContent>
               </Card>
             );

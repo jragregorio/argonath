@@ -15,6 +15,10 @@ import { Camera, CheckSquare, Loader2, Square, Trash2, Video, X } from "lucide-r
 import { ZoomableImage } from "@/components/zoomable-image";
 import { POLL_LIVE_MS, POLL_SAFETY_MS } from "@/lib/query-defaults";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  notifyBlockingOverlayClose,
+  notifyBlockingOverlayOpen,
+} from "@/lib/overlay-events";
 
 type SnapshotStatusFilter = "all" | "ready" | "pending" | "failed";
 
@@ -154,6 +158,15 @@ export default function SnapshotsPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [lightboxId]);
 
+  const lightbox = snapshots?.find((snapshot) => snapshot.id === lightboxId);
+  const lightboxOpen = Boolean(lightbox?.url);
+
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    notifyBlockingOverlayOpen();
+    return () => notifyBlockingOverlayClose();
+  }, [lightboxOpen]);
+
   useEffect(() => {
     setSelectedIds(new Set());
   }, [childFilter, statusFilter]);
@@ -166,8 +179,6 @@ export default function SnapshotsPage() {
       return next.size === prev.size ? prev : next;
     });
   }, [snapshots]);
-
-  const lightbox = snapshots?.find((snapshot) => snapshot.id === lightboxId);
 
   const visibleIds = useMemo(
     () => snapshots?.map((snapshot) => snapshot.id) ?? [],
@@ -424,7 +435,7 @@ export default function SnapshotsPage() {
 
       {lightbox && lightbox.url && (
         <div
-          className="fixed inset-0 z-50 flex flex-col bg-black"
+          className="fixed inset-0 z-[60] flex flex-col bg-black"
           role="dialog"
           aria-modal="true"
           aria-label="Snapshot preview"

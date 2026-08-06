@@ -9,13 +9,14 @@ import {
   Settings,
   MoreHorizontal,
   X,
-  ExternalLink,
+  LogOut,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { APP_VERSION } from "@warden/shared";
 import { InteractiveMenu, type InteractiveMenuItem } from "@/components/ui/modern-mobile-menu";
 import { useDemo } from "@/lib/demo/demo-provider";
+import { notifyBlockingOverlayClose, notifyBlockingOverlayOpen } from "@/lib/overlay-events";
 
 const demoNavItems = [
   { href: "/demo", label: "Overview", icon: LayoutDashboard },
@@ -94,7 +95,8 @@ function NavFooter({ onNavigate }: { onNavigate?: () => void }) {
       <div className="rounded-lg border border-border bg-secondary px-3 py-3 text-sm">
         <div className="font-medium">Demo family</div>
         <div className="mt-0.5 text-xs text-muted-foreground">
-          Sample data only — try approve, nudge, or lock
+          Sample data — approve extensions, or try nudge/lock on Overview
+          (desktop) or child detail (mobile)
         </div>
       </div>
       <Link
@@ -107,9 +109,9 @@ function NavFooter({ onNavigate }: { onNavigate?: () => void }) {
       <Link
         href="/"
         onClick={onNavigate}
-        className={`flex min-h-11 items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground ${focusRing}`}
+        className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-secondary px-3 py-3 text-sm font-medium text-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive ${focusRing}`}
       >
-        <ExternalLink className="h-4 w-4" />
+        <LogOut className="h-4 w-4" />
         Exit demo
       </Link>
     </div>
@@ -201,11 +203,15 @@ function MobileMoreSheet({
 }) {
   useEffect(() => {
     if (!open) return;
+    notifyBlockingOverlayOpen();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      notifyBlockingOverlayClose();
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -214,12 +220,12 @@ function MobileMoreSheet({
     <>
       <button
         type="button"
-        className="fixed inset-0 z-50 bg-black/50 md:hidden"
+        className="fixed inset-0 z-[60] bg-black/50 md:hidden"
         aria-label="Close more menu"
         onClick={onClose}
       />
       <div
-        className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border border-border bg-background p-4 shadow-xl md:hidden"
+        className="fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl border border-border bg-background p-4 shadow-xl md:hidden"
         style={{
           paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))",
         }}

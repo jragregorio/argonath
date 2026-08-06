@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { Toast } from "@/components/ui/toast";
+import { BLOCKING_OVERLAY_EVENT, isBlockingOverlayOpen } from "@/lib/overlay-events";
 
 export type ToastTone = "default" | "success" | "error";
 
@@ -42,6 +43,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const showToast = useCallback(
     (message: string, tone: ToastTone = "default") => {
+      if (isBlockingOverlayOpen()) return;
       if (timerRef.current) {
         window.clearTimeout(timerRef.current);
       }
@@ -62,6 +64,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const onOverlay = () => dismissToast();
+    window.addEventListener(BLOCKING_OVERLAY_EVENT, onOverlay);
+    return () => window.removeEventListener(BLOCKING_OVERLAY_EVENT, onOverlay);
+  }, [dismissToast]);
 
   const value = useMemo(() => ({ showToast }), [showToast]);
 

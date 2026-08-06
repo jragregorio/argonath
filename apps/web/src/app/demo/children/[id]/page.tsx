@@ -1,13 +1,8 @@
 "use client";
 
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import {
-  Monitor,
-  Unlock,
-  ArrowRight,
-} from "lucide-react";
+import { Monitor, Unlock } from "lucide-react";
 import { InlineBackLink } from "@/components/sticky-back-chip";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -22,6 +17,7 @@ import { PageHeader } from "@/components/page-header";
 import { NudgeControls } from "@/components/nudge-controls";
 import { SwipeToLock } from "@/components/swipe-to-lock";
 import { RecentActivityCard } from "@/components/recent-activity-card";
+import { AllowedWindowsSummary } from "@/components/allowed-windows-summary";
 import {
   getDeviceDisplayName,
   getPolicyStatusLabel,
@@ -60,16 +56,74 @@ export default function DemoChildDetailPage() {
     (item) => item.childName === child.displayName
   );
 
-  return (
-    <div className="space-y-8">
-      <InlineBackLink href="/demo/children" chipLabel="Children">
-        Back to children
-      </InlineBackLink>
+  const evaluationStatusText = (() => {
+    if (
+      evaluation.limitingFactor === "none" ||
+      evaluation.remainingMinutes >= 999
+    ) {
+      return "Limits paused";
+    }
+    if (evaluation.status === "outside_window") {
+      const next = evaluation.nextWindowStart;
+      const daily = evaluation.dailyRemainingMinutes;
+      if (next && daily > 0) {
+        return `Available again: ${formatClockInText(next)} — ${daily} min of today's budget left`;
+      }
+      return formatClockInText(
+        evaluation.message ?? getPolicyStatusLabel(evaluation.status)
+      );
+    }
+    if (evaluation.status === "blocked") {
+      return formatClockInText(
+        evaluation.message ?? getPolicyStatusLabel(evaluation.status)
+      );
+    }
+    if (evaluation.limitingFactor === "window") {
+      return `${evaluation.remainingMinutes} min left now (allowed hours ending) · ${evaluation.dailyRemainingMinutes} min of daily budget left`;
+    }
+    return `${evaluation.remainingMinutes} min left now`;
+  })();
 
-      <PageHeader
-        title={child.displayName}
-        description="Device controls and today's usage (demo)"
-      />
+  return (
+    <div className="space-y-6">
+      <div>
+        <InlineBackLink href="/demo/children" className="mb-3" />
+
+        <PageHeader
+          title={child.displayName}
+          description="Device controls and screen time policy"
+        />
+
+        {evaluation && (
+          <div className="relative mt-3 overflow-hidden rounded-xl border border-border bg-card md:mt-2 md:border-0 md:bg-transparent">
+            <div className="relative z-10 p-4 md:p-0">
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant={statusBadgeVariant(evaluation.status)}>
+                  {getPolicyStatusLabel(evaluation.status)}
+                </Badge>
+                <span className="text-sm text-foreground/90 md:text-muted-foreground">
+                  {evaluation.usedMinutes} / {effectiveLimit} min used today
+                  {evaluation.bonusMinutes > 0 &&
+                    ` (+${evaluation.bonusMinutes} bonus)`}
+                </span>
+              </div>
+              <div className="mt-3 max-w-md space-y-2">
+                <div className="hidden h-2 w-full overflow-hidden rounded-full bg-muted md:block">
+                  <div
+                    className={`h-full rounded-full transition-[width] ${progressBarClass(
+                      evaluation.status
+                    )}`}
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+                <p className="text-sm text-muted-foreground md:text-xs">
+                  {evaluationStatusText}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
         <Card className="order-1 flex w-full flex-col">
@@ -90,16 +144,24 @@ export default function DemoChildDetailPage() {
               return (
                 <div
                   key={device.id}
-                  className="space-y-4 rounded-lg border border-border p-4 max-md:p-5 sm:p-5"
+                  className="flex min-h-[12rem] flex-1 flex-col justify-between gap-4 rounded-lg border border-border p-4 max-md:p-5 sm:p-5"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
                       <Monitor className="h-5 w-5 shrink-0 text-muted-foreground" />
-                      <p className="truncate text-lg font-semibold tracking-tight">
-                        {getDeviceDisplayName(device)}
-                      </p>
+                      <div className="min-w-0">
+                        <p className="truncate text-lg font-semibold tracking-tight">
+                          {getDeviceDisplayName(device)}
+                        </p>
+                        <div className="text-sm text-muted-foreground md:text-xs">
+                          <p>
+                            {child.displayName} Agent v
+                            {device.agentVersion ?? "?"}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex shrink-0 flex-col items-end gap-1.5 md:flex-row md:items-center md:gap-2">
                       <Badge
                         variant={device.isOnline ? "success" : "secondary"}
                       >
@@ -117,9 +179,10 @@ export default function DemoChildDetailPage() {
                       )}
                     </div>
                   </div>
+
                   <div className="flex flex-col gap-2 max-md:gap-3">
                     {nudgeState?.label && (
-                      <span className="text-sm md:text-xs text-muted-foreground">
+                      <span className="text-sm text-muted-foreground md:text-xs">
                         {nudgeState.label}
                       </span>
                     )}
@@ -136,16 +199,16 @@ export default function DemoChildDetailPage() {
                         {effectiveAdminLock ? (
                           <Button
                             variant="outline"
-                            className="w-full min-w-0 sm:flex-1"
+                            className="min-w-0 flex-1"
                             onClick={() => setAdminLock(device.id, false)}
                             disabled={pendingLock !== undefined}
                           >
-                            <Unlock className="mr-1.5 h-4 w-4" />
+                            <Unlock className="mr-2 h-4 w-4" />
                             Release
                           </Button>
                         ) : (
                           <SwipeToLock
-                            className="w-full min-w-0 sm:flex-1"
+                            className="min-w-0 flex-1"
                             onConfirm={() => setAdminLock(device.id, true)}
                             disabled={!device.isPaired}
                             pending={pendingLock === true}
@@ -162,13 +225,11 @@ export default function DemoChildDetailPage() {
 
         <Card className="order-2 flex w-full flex-col">
           <CardHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <CardTitle>Today&apos;s screen time</CardTitle>
-                <CardDescription className="mt-1">
-                  {evaluation.usedMinutes} / {effectiveLimit} min used
-                  {evaluation.bonusMinutes > 0 &&
-                    ` (+${evaluation.bonusMinutes} bonus)`}
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <CardTitle>Screen time policy</CardTitle>
+                <CardDescription>
+                  Set daily limits and allowed time windows
                 </CardDescription>
               </div>
               <Badge variant={statusBadgeVariant(evaluation.status)}>
@@ -176,44 +237,61 @@ export default function DemoChildDetailPage() {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className={`h-full rounded-full ${progressBarClass(
-                  evaluation.status
-                )}`}
-                style={{ width: `${percent}%` }}
+          <CardContent className="space-y-4">
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+              <p>
+                <span className="font-medium text-foreground">
+                  {child.dailyLimitMinutes} min/day
+                </span>
+                {child.policyActive ? "" : " · policy off"}
+              </p>
+              <AllowedWindowsSummary
+                windows={child.allowedWindows}
+                className="mt-0.5"
               />
             </div>
-            <p className="text-sm text-muted-foreground">
-              {evaluation.remainingMinutes} min left now
-              {evaluation.status === "outside_window" &&
-                evaluation.nextWindowStart &&
-                ` · Available again ${formatClockInText(evaluation.nextWindowStart)}`}
-            </p>
+
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">
+                  Today&apos;s usage
+                </span>
+                <span className="font-medium tabular-nums">
+                  {evaluation.usedMinutes} / {effectiveLimit} min
+                  {evaluation.bonusMinutes > 0 && (
+                    <span className="font-normal text-muted-foreground">
+                      {" "}
+                      (+{evaluation.bonusMinutes})
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={`h-full rounded-full transition-[width] ${progressBarClass(
+                    evaluation.status
+                  )}`}
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {evaluationStatusText}
+              </p>
+            </div>
+
             <p className="text-xs text-muted-foreground">
-              Daily limit {child.dailyLimitMinutes} min · editing policies
-              requires a real account
+              Editing limits and schedules requires a real account.
             </p>
           </CardContent>
         </Card>
       </div>
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Recent activity</h2>
-          <Link
-            href="/demo/activity"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            View all
-            <ArrowRight className="ml-1 inline h-3.5 w-3.5" />
-          </Link>
-        </div>
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Recent activity</h2>
         <RecentActivityCard
           items={childActivity}
           hideChildName
-          emptyDescription="Activity for this child will appear here"
+          emptyDescription="Nudges, lockdowns, captures, and policy changes for this child will show here"
         />
       </section>
     </div>

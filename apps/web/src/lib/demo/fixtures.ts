@@ -1,4 +1,4 @@
-import type { PolicyEvaluation } from "@warden/shared";
+import type { AllowedWindow, PolicyEvaluation } from "@warden/shared";
 import type { RecentActivityItem } from "@/components/recent-activity-card";
 import type {
   DemoChild,
@@ -15,9 +15,16 @@ export const DEMO_IDS = {
   extensionRequest: "demo-ext-req-1",
 } as const;
 
-const now = new Date();
-const hoursAgo = (hours: number) =>
-  new Date(now.getTime() - hours * 60 * 60 * 1000);
+/**
+ * Stable default "now" so SSR and the client's first paint share identical
+ * fixture timestamps (avoids hydration mismatches on `<time dateTime>`).
+ * DemoProvider refreshes from `Date.now()` after mount for fresh relative labels.
+ */
+export const DEMO_FIXTURE_ANCHOR_MS = Date.parse("2026-08-06T16:00:00.000Z");
+
+function hoursAgo(nowMs: number, hours: number) {
+  return new Date(nowMs - hours * 60 * 60 * 1000);
+}
 
 function alexEvaluation(): PolicyEvaluation {
   return {
@@ -32,6 +39,12 @@ function alexEvaluation(): PolicyEvaluation {
     bonusMinutes: 0,
   };
 }
+
+const alexAllowedWindows: AllowedWindow[] = [1, 2, 3, 4, 5].map((day) => ({
+  day,
+  start: "15:00",
+  end: "20:00",
+}));
 
 function samEvaluation(): PolicyEvaluation {
   return {
@@ -52,6 +65,8 @@ export const demoChildren: DemoChild[] = [
     id: DEMO_IDS.alex,
     displayName: "Alex",
     dailyLimitMinutes: 120,
+    allowedWindows: alexAllowedWindows,
+    policyActive: true,
     evaluation: alexEvaluation(),
     devices: [
       {
@@ -70,6 +85,8 @@ export const demoChildren: DemoChild[] = [
     id: DEMO_IDS.sam,
     displayName: "Sam",
     dailyLimitMinutes: 90,
+    allowedWindows: [],
+    policyActive: true,
     evaluation: samEvaluation(),
     devices: [
       {
@@ -86,65 +103,69 @@ export const demoChildren: DemoChild[] = [
   },
 ];
 
-export const demoPendingExtensions: DemoExtensionRequest[] = [
-  {
-    id: DEMO_IDS.extensionRequest,
-    requestedMinutes: 15,
-    createdAt: hoursAgo(0.25),
-    child: { id: DEMO_IDS.alex, displayName: "Alex" },
-    device: {
-      id: DEMO_IDS.alexDevice,
-      machineName: "ALEX-DESKTOP",
-      displayName: "Alex's PC",
+function buildPendingExtensions(nowMs: number): DemoExtensionRequest[] {
+  return [
+    {
+      id: DEMO_IDS.extensionRequest,
+      requestedMinutes: 15,
+      createdAt: hoursAgo(nowMs, 0.25),
+      child: { id: DEMO_IDS.alex, displayName: "Alex" },
+      device: {
+        id: DEMO_IDS.alexDevice,
+        machineName: "ALEX-DESKTOP",
+        displayName: "Alex's PC",
+      },
     },
-  },
-];
+  ];
+}
 
-export const demoActivitySeed: RecentActivityItem[] = [
-  {
-    id: "demo-act-1",
-    action: "extension_requested",
-    createdAt: hoursAgo(0.25),
-    childName: "Alex",
-    deviceName: "Alex's PC",
-    metadata: { minutes: 15 },
-  },
-  {
-    id: "demo-act-2",
-    action: "device_online",
-    createdAt: hoursAgo(1.5),
-    childName: "Alex",
-    deviceName: "Alex's PC",
-  },
-  {
-    id: "demo-act-3",
-    action: "nudge_sent",
-    createdAt: hoursAgo(3),
-    childName: "Sam",
-    deviceName: "SAM-LAPTOP",
-    metadata: { message: "Dinner time" },
-  },
-  {
-    id: "demo-act-4",
-    action: "policy_updated",
-    createdAt: hoursAgo(26),
-    childName: "Sam",
-    metadata: { dailyLimitMinutes: 90 },
-  },
-  {
-    id: "demo-act-5",
-    action: "child_created",
-    createdAt: hoursAgo(72),
-    childName: "Alex",
-  },
-  {
-    id: "demo-act-6",
-    action: "device_online",
-    createdAt: hoursAgo(0.5),
-    childName: "Sam",
-    deviceName: "SAM-LAPTOP",
-  },
-];
+function buildActivitySeed(nowMs: number): RecentActivityItem[] {
+  return [
+    {
+      id: "demo-act-1",
+      action: "extension_requested",
+      createdAt: hoursAgo(nowMs, 0.25),
+      childName: "Alex",
+      deviceName: "Alex's PC",
+      metadata: { minutes: 15 },
+    },
+    {
+      id: "demo-act-2",
+      action: "device_online",
+      createdAt: hoursAgo(nowMs, 1.5),
+      childName: "Alex",
+      deviceName: "Alex's PC",
+    },
+    {
+      id: "demo-act-3",
+      action: "nudge_sent",
+      createdAt: hoursAgo(nowMs, 3),
+      childName: "Sam",
+      deviceName: "SAM-LAPTOP",
+      metadata: { message: "Dinner time" },
+    },
+    {
+      id: "demo-act-4",
+      action: "policy_updated",
+      createdAt: hoursAgo(nowMs, 26),
+      childName: "Sam",
+      metadata: { dailyLimitMinutes: 90 },
+    },
+    {
+      id: "demo-act-5",
+      action: "child_created",
+      createdAt: hoursAgo(nowMs, 72),
+      childName: "Alex",
+    },
+    {
+      id: "demo-act-6",
+      action: "device_online",
+      createdAt: hoursAgo(nowMs, 0.5),
+      childName: "Sam",
+      deviceName: "SAM-LAPTOP",
+    },
+  ];
+}
 
 function buildOverview(children: DemoChild[], pendingCount: number): DemoOverview {
   return {
@@ -153,12 +174,14 @@ function buildOverview(children: DemoChild[], pendingCount: number): DemoOvervie
   };
 }
 
-export function createInitialDemoState(): DemoState {
-  const pendingCount = demoPendingExtensions.length;
+export function createInitialDemoState(
+  nowMs: number = DEMO_FIXTURE_ANCHOR_MS
+): DemoState {
+  const pendingExtensions = buildPendingExtensions(nowMs);
   return {
-    overview: buildOverview(structuredClone(demoChildren), pendingCount),
-    pendingExtensions: structuredClone(demoPendingExtensions),
-    activity: structuredClone(demoActivitySeed),
+    overview: buildOverview(structuredClone(demoChildren), pendingExtensions.length),
+    pendingExtensions,
+    activity: buildActivitySeed(nowMs),
     nudgeByDevice: {},
     pendingLocks: {},
     signupPromptOpen: false,
@@ -166,4 +189,17 @@ export function createInitialDemoState(): DemoState {
   };
 }
 
+/** @deprecated Prefer dismiss-count keys; still honored as "done for session". */
 export const SIGNUP_PROMPT_DISMISSED_KEY = "warden-demo-signup-dismissed";
+
+export const SIGNUP_PROMPT_DISMISS_COUNT_KEY =
+  "warden-demo-signup-dismiss-count";
+export const SIGNUP_PROMPT_ACTION_COUNT_KEY =
+  "warden-demo-signup-action-count";
+export const SIGNUP_PROMPT_FIRST_DISMISS_AT_KEY =
+  "warden-demo-signup-first-dismiss-at";
+
+/** Second prompt: after this many interactive actions (whichever comes first with delay). */
+export const SIGNUP_PROMPT_SECOND_MIN_ACTIONS = 5;
+/** Second prompt: ms after first dismiss (2.5 min). */
+export const SIGNUP_PROMPT_SECOND_DELAY_MS = 150_000;

@@ -9,6 +9,7 @@ import {
 import { X } from "lucide-react";
 import { cn } from "@warden/ui";
 import { Button } from "@/components/ui/button";
+import { notifyBlockingOverlayClose, notifyBlockingOverlayOpen } from "@/lib/overlay-events";
 
 type ModalProps = {
   open: boolean;
@@ -47,6 +48,8 @@ export function Modal({
 
     const mq = window.matchMedia("(min-width: 768px)");
     if (!mq.matches) return;
+
+    notifyBlockingOverlayOpen();
 
     previouslyFocused.current = document.activeElement as HTMLElement | null;
     const prevOverflow = document.body.style.overflow;
@@ -89,6 +92,7 @@ export function Modal({
     });
 
     return () => {
+      notifyBlockingOverlayClose();
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("keydown", onKeyDown);
       previouslyFocused.current?.focus?.();

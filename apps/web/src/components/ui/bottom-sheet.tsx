@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { cn } from "@warden/ui";
 import { Button } from "@/components/ui/button";
+import { notifyBlockingOverlayClose, notifyBlockingOverlayOpen } from "@/lib/overlay-events";
 
 type BottomSheetProps = {
   open: boolean;
@@ -41,6 +42,8 @@ export function BottomSheet({
     const mq = window.matchMedia("(max-width: 767px)");
     if (!mq.matches) return;
 
+    notifyBlockingOverlayOpen();
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
@@ -48,6 +51,7 @@ export function BottomSheet({
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKeyDown);
     return () => {
+      notifyBlockingOverlayClose();
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };

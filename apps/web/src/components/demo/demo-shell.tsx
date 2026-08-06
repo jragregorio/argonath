@@ -1,6 +1,7 @@
 "use client";
 
 import { DemoBanner } from "@/components/demo/demo-banner";
+import { DemoExitTip } from "@/components/demo/demo-exit-tip";
 import { DemoFeedback } from "@/components/demo/demo-feedback";
 import { DemoNav } from "@/components/demo/demo-nav";
 import { DemoSignupPrompt } from "@/components/demo/signup-prompt";
@@ -23,6 +24,7 @@ export function DemoShell({ children }: { children: React.ReactNode }) {
           <div className="relative mx-auto w-full max-w-6xl">{children}</div>
         </main>
       </div>
+      <DemoExitTip />
       <DemoFeedback />
       <DemoSignupPrompt />
     </>

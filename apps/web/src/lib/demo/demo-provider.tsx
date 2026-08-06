@@ -15,9 +15,31 @@ import type { RecentActivityItem } from "@/components/recent-activity-card";
 import {
   createInitialDemoState,
   DEMO_IDS,
+  SIGNUP_PROMPT_ACTION_COUNT_KEY,
+  SIGNUP_PROMPT_DISMISS_COUNT_KEY,
   SIGNUP_PROMPT_DISMISSED_KEY,
+  SIGNUP_PROMPT_FIRST_DISMISS_AT_KEY,
+  SIGNUP_PROMPT_SECOND_DELAY_MS,
+  SIGNUP_PROMPT_SECOND_MIN_ACTIONS,
 } from "./fixtures";
 import type { DemoFeedback, DemoState } from "./types";
+import { BLOCKING_OVERLAY_EVENT, isBlockingOverlayOpen } from "@/lib/overlay-events";
+
+function readSessionInt(key: string): number {
+  if (typeof window === "undefined") return 0;
+  const raw = sessionStorage.getItem(key);
+  if (raw == null || raw === "") return 0;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** How many times the signup prompt has been dismissed this tab session (0–2). */
+function getSignupDismissCount(): number {
+  if (typeof window === "undefined") return 0;
+  // Legacy one-and-done flag from earlier demo builds
+  if (sessionStorage.getItem(SIGNUP_PROMPT_DISMISSED_KEY) === "1") return 2;
+  return Math.min(2, Math.max(0, readSessionInt(SIGNUP_PROMPT_DISMISS_COUNT_KEY)));
+}
 
 type DemoContextValue = {
   overview: DemoState["overview"];
@@ -59,11 +81,21 @@ function findChildDevice(
 }
 
 export function DemoProvider({ children }: { children: ReactNode }) {
+  // Stable anchor on SSR + first client paint; refresh to Date.now() after mount
+  // so relative timestamps stay fresh without hydration mismatches.
   const [state, setState] = useState<DemoState>(() => createInitialDemoState());
   const nudgeTimersRef = useRef<Map<string, number>>(new Map());
   const feedbackTimerRef = useRef<number | null>(null);
+  const secondPromptTimerRef = useRef<number | null>(null);
+  /** Bumps when dismiss count changes so the late-second timer can reschedule. */
+  const [signupPromptEpoch, setSignupPromptEpoch] = useState(0);
+
+  useEffect(() => {
+    setState(createInitialDemoState(Date.now()));
+  }, []);
 
   const showFeedback = useCallback((message: string, tone: DemoFeedback["tone"] = "default") => {
+    if (isBlockingOverlayOpen()) return;
     if (feedbackTimerRef.current) {
       window.clearTimeout(feedbackTimerRef.current);
     }
@@ -81,17 +113,111 @@ export function DemoProvider({ children }: { children: ReactNode }) {
 
   const maybeOpenSignupPrompt = useCallback(() => {
     if (typeof window === "undefined") return;
-    if (sessionStorage.getItem(SIGNUP_PROMPT_DISMISSED_KEY) === "1") return;
-    setState((prev) => ({ ...prev, signupPromptOpen: true }));
+    const dismissCount = getSignupDismissCount();
+    if (dismissCount >= 2) return;
+
+    const openPrompt = () => {
+      if (feedbackTimerRef.current) {
+        window.clearTimeout(feedbackTimerRef.current);
+        feedbackTimerRef.current = null;
+      }
+      setState((prev) =>
+        prev.signupPromptOpen
+          ? prev
+          : { ...prev, signupPromptOpen: true, feedback: null }
+      );
+    };
+
+    if (dismissCount === 0) {
+      // First prompt: after the first interactive action
+      openPrompt();
+      return;
+    }
+
+    // Second prompt (late): 5+ actions OR 2.5 min since first dismiss — whichever first
+    const actionCount = readSessionInt(SIGNUP_PROMPT_ACTION_COUNT_KEY);
+    const firstDismissAt = readSessionInt(SIGNUP_PROMPT_FIRST_DISMISS_AT_KEY);
+    const elapsed =
+      firstDismissAt > 0 ? Date.now() - firstDismissAt : 0;
+    if (
+      actionCount >= SIGNUP_PROMPT_SECOND_MIN_ACTIONS ||
+      elapsed >= SIGNUP_PROMPT_SECOND_DELAY_MS
+    ) {
+      openPrompt();
+    }
   }, []);
 
   const recordInteractiveAction = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const next = readSessionInt(SIGNUP_PROMPT_ACTION_COUNT_KEY) + 1;
+    sessionStorage.setItem(SIGNUP_PROMPT_ACTION_COUNT_KEY, String(next));
     maybeOpenSignupPrompt();
   }, [maybeOpenSignupPrompt]);
 
   const dismissSignupPrompt = useCallback(() => {
-    sessionStorage.setItem(SIGNUP_PROMPT_DISMISSED_KEY, "1");
+    if (typeof window === "undefined") return;
+    const prevCount = getSignupDismissCount();
+    const nextCount = Math.min(2, prevCount + 1);
+    sessionStorage.setItem(SIGNUP_PROMPT_DISMISS_COUNT_KEY, String(nextCount));
+    if (nextCount === 1) {
+      sessionStorage.setItem(
+        SIGNUP_PROMPT_FIRST_DISMISS_AT_KEY,
+        String(Date.now())
+      );
+    }
+    if (nextCount >= 2) {
+      sessionStorage.setItem(SIGNUP_PROMPT_DISMISSED_KEY, "1");
+    }
     setState((prev) => ({ ...prev, signupPromptOpen: false }));
+    setSignupPromptEpoch((n) => n + 1);
+  }, []);
+
+  // Schedule second prompt on the time path (even if the user stops interacting)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (secondPromptTimerRef.current) {
+      window.clearTimeout(secondPromptTimerRef.current);
+      secondPromptTimerRef.current = null;
+    }
+
+    const dismissCount = getSignupDismissCount();
+    if (dismissCount !== 1) return;
+
+    const firstDismissAt = readSessionInt(SIGNUP_PROMPT_FIRST_DISMISS_AT_KEY);
+    if (firstDismissAt <= 0) return;
+
+    const remaining =
+      SIGNUP_PROMPT_SECOND_DELAY_MS - (Date.now() - firstDismissAt);
+    if (remaining <= 0) {
+      maybeOpenSignupPrompt();
+      return;
+    }
+
+    secondPromptTimerRef.current = window.setTimeout(() => {
+      secondPromptTimerRef.current = null;
+      maybeOpenSignupPrompt();
+    }, remaining);
+
+    return () => {
+      if (secondPromptTimerRef.current) {
+        window.clearTimeout(secondPromptTimerRef.current);
+        secondPromptTimerRef.current = null;
+      }
+    };
+  }, [maybeOpenSignupPrompt, signupPromptEpoch]);
+
+  useEffect(() => {
+    const onOverlay = () => {
+      if (feedbackTimerRef.current) {
+        window.clearTimeout(feedbackTimerRef.current);
+        feedbackTimerRef.current = null;
+      }
+      setState((prev) =>
+        prev.feedback ? { ...prev, feedback: null } : prev
+      );
+    };
+    window.addEventListener(BLOCKING_OVERLAY_EVENT, onOverlay);
+    return () => window.removeEventListener(BLOCKING_OVERLAY_EVENT, onOverlay);
   }, []);
 
   const dismissFeedback = useCallback(() => {

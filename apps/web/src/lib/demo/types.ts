@@ -1,4 +1,4 @@
-import type { PolicyEvaluation } from "@warden/shared";
+import type { AllowedWindow, PolicyEvaluation } from "@warden/shared";
 import type { RecentActivityItem } from "@/components/recent-activity-card";
 
 export type DemoDevice = {
@@ -18,6 +18,8 @@ export type DemoChild = {
   evaluation: PolicyEvaluation;
   devices: DemoDevice[];
   dailyLimitMinutes: number;
+  allowedWindows: AllowedWindow[];
+  policyActive: boolean;
 };
 
 export type DemoExtensionRequest = {

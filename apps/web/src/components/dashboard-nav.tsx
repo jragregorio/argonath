@@ -21,6 +21,7 @@ import { useDashboardRefresh } from "@/lib/dashboard-refresh";
 import { useNavBadges } from "@/lib/family-realtime";
 import { APP_VERSION } from "@warden/shared";
 import { InteractiveMenu, type InteractiveMenuItem } from "@/components/ui/modern-mobile-menu";
+import { notifyBlockingOverlayClose, notifyBlockingOverlayOpen } from "@/lib/overlay-events";
 
 const devAuthBypassEnabled =
   process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
@@ -387,11 +388,15 @@ function MobileMoreSheet({
 }) {
   useEffect(() => {
     if (!open) return;
+    notifyBlockingOverlayOpen();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      notifyBlockingOverlayClose();
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -400,12 +405,12 @@ function MobileMoreSheet({
     <>
       <button
         type="button"
-        className="md:hidden fixed inset-0 z-50 bg-black/50"
+        className="md:hidden fixed inset-0 z-[60] bg-black/50"
         aria-label="Close more menu"
         onClick={onClose}
       />
       <div
-        className="md:hidden fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border border-border bg-background p-4 shadow-xl"
+        className="md:hidden fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl border border-border bg-background p-4 shadow-xl"
         style={{
           paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))",
         }}

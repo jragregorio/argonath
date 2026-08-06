@@ -15,13 +15,12 @@ import { RecentActivityCard } from "@/components/recent-activity-card";
 import { getDeviceDisplayName } from "@warden/shared";
 import { Check, X, Clock } from "lucide-react";
 import { useDemo } from "@/lib/demo/demo-provider";
+import {
+  formatAbsoluteTime,
+  formatRelativeTime,
+} from "@/lib/format-relative-time";
 
 const ACTIVITY_LIMIT = 100;
-
-function formatWhen(value: Date | string | null | undefined) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString();
-}
 
 export default function DemoActivityPage() {
   const {
@@ -73,7 +72,12 @@ export default function DemoActivityPage() {
                     <CardDescription>
                       Requesting +{request.requestedMinutes} minutes on{" "}
                       {getDeviceDisplayName(request.device)} ·{" "}
-                      {formatWhen(request.createdAt)}
+                      <time
+                        dateTime={new Date(request.createdAt).toISOString()}
+                        title={formatAbsoluteTime(request.createdAt)}
+                      >
+                        {formatRelativeTime(request.createdAt)}
+                      </time>
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3 sm:flex-row">
