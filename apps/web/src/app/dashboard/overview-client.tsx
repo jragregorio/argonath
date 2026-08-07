@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { useFamilyRealtimeEvent } from "@/lib/family-realtime";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
@@ -10,14 +8,8 @@ import {
   ActivityFeedSkeleton,
   OverviewSkeleton,
 } from "@/components/dashboard-skeletons";
-import {
-  Monitor,
-  AlertCircle,
-  Unlock,
-  Users,
-  ArrowRight,
-  ChevronRight,
-} from "lucide-react";
+import { Monitor, Unlock, Users, ChevronRight } from "lucide-react";
+import { PendingExtensionBanner } from "@/components/pending-extension-banner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -30,12 +22,8 @@ import {
   type PolicyStatus,
 } from "@warden/shared";
 import { formatClockInText } from "@/lib/time-format";
-import {
-  optimisticAdminLock,
-  rollbackAdminLock,
-} from "@/lib/device-cache";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
-import { useToast } from "@/lib/toast";
+import { useDeviceActions } from "@/lib/use-device-actions";
 
 function remainingPercent(remaining: number, limit: number) {
   if (limit <= 0) return 0;
@@ -56,8 +44,6 @@ function statusBadgeVariant(status: PolicyStatus) {
 
 export default function DashboardOverviewPage() {
   const router = useRouter();
-  const utils = trpc.useUtils();
-  const { showToast } = useToast();
   const { data: overview, isLoading } = trpc.dashboard.overview.useQuery(
     undefined,
     {
@@ -70,187 +56,26 @@ export default function DashboardOverviewPage() {
       { limit: 20, includeDevicePresence: false },
       { refetchInterval: POLL_HEARTBEAT_MS }
     );
-  const [pendingLocks, setPendingLocks] = useState<
-    Record<string, boolean | undefined>
-  >({});
-  const [nudgeByDevice, setNudgeByDevice] = useState<
-    Record<string, { nudgeId: string; label: string }>
-  >({});
-
-  const setAdminLock = trpc.device.setAdminLock.useMutation({
-    onMutate: async ({ deviceId, locked }) => {
-      setPendingLocks((prev) => ({ ...prev, [deviceId]: locked }));
-      return optimisticAdminLock(utils, deviceId, locked);
-    },
-    onSuccess: (_data, { deviceId, locked }) => {
-      const device = overview?.children
-        .flatMap((child) => child.devices)
-        .find((d) => d.id === deviceId);
-      const deviceName = device ? getDeviceDisplayName(device) : "Device";
-      showToast(
-        locked ? `${deviceName} locked down.` : `${deviceName} lock released.`,
-        locked ? "default" : "success"
-      );
-    },
-    onError: (err, vars, context) => {
-      rollbackAdminLock(utils, context);
-      setPendingLocks((prev) => {
-        const next = { ...prev };
-        delete next[vars.deviceId];
-        return next;
-      });
-      showToast(err.message || "Could not update device lock", "error");
-    },
-    onSettled: () => {
-      void utils.dashboard.overview.invalidate();
-      void utils.dashboard.activity.invalidate();
-      void utils.device.list.invalidate();
-      void utils.children.list.invalidate();
-    },
-  });
-
-  const sendNudge = trpc.device.sendNudge.useMutation({
-    onMutate: ({ deviceId }) => {
-      setNudgeByDevice((prev) => ({
-        ...prev,
-        [deviceId]: { nudgeId: prev[deviceId]?.nudgeId ?? "", label: "Sending…" },
-      }));
-    },
-    onSuccess: (data, { deviceId }) => {
-      const childName =
-        overview?.children.find((child) =>
-          child.devices.some((d) => d.id === deviceId)
-        )?.displayName ?? "Child";
-      setNudgeByDevice((prev) => ({
-        ...prev,
-        [deviceId]: { nudgeId: data.id, label: "Waiting…" },
-      }));
-      showToast(`Nudge sent to ${childName}.`, "success");
-      void utils.dashboard.activity.invalidate();
-    },
-    onError: (err, { deviceId }) => {
-      setNudgeByDevice((prev) => ({
-        ...prev,
-        [deviceId]: { nudgeId: "", label: err.message },
-      }));
-      showToast(err.message || "Could not send nudge", "error");
-    },
-  });
-
   const devices = overview?.children.flatMap((child) => child.devices) ?? [];
 
-  const activeNudgeKey = useMemo(
-    () =>
-      Object.entries(nudgeByDevice)
-        .filter(([, v]) => v.nudgeId)
-        .map(([deviceId, v]) => `${deviceId}:${v.nudgeId}`)
-        .sort()
-        .join("|"),
-    [nudgeByDevice]
-  );
-
-  const clearNudgeSoon = (deviceId: string, nudgeId: string) => {
-    window.setTimeout(() => {
-      setNudgeByDevice((prev) => {
-        const cur = prev[deviceId];
-        if (!cur || cur.nudgeId !== nudgeId) return prev;
-        const next = { ...prev };
-        delete next[deviceId];
-        return next;
-      });
-    }, 5000);
-  };
-
-  const applyNudgeStatus = (
-    deviceId: string,
-    nudgeId: string,
-    status: string
-  ) => {
-    let label = "Waiting…";
-    if (status === "delivered") label = "Delivered";
-    else if (status === "seen") label = "Seen";
-    else if (status === "expired") label = "Expired";
-    else if (status === "pending") label = "Waiting…";
-
-    setNudgeByDevice((prev) => {
-      const cur = prev[deviceId];
-      if (!cur || cur.nudgeId !== nudgeId || cur.label === label) {
-        return prev;
-      }
-      return { ...prev, [deviceId]: { ...cur, label } };
-    });
-
-    if (status === "seen" || status === "expired") {
-      clearNudgeSoon(deviceId, nudgeId);
-    }
-  };
-
-  useFamilyRealtimeEvent((event) => {
-    if (event.type !== "nudge:seen") return;
-    const payload = event.payload as { nudgeId?: string } | undefined;
-    const nudgeId = payload?.nudgeId;
-    if (!nudgeId) return;
-    applyNudgeStatus(event.deviceId, nudgeId, "seen");
+  const {
+    pendingLocks,
+    nudgeByDevice,
+    setAdminLock,
+    sendNudge,
+    getEffectiveAdminLock,
+  } = useDeviceActions({
+    devices,
+    scope: "overview",
+    getDeviceLabel: (deviceId) => {
+      const device = devices.find((d) => d.id === deviceId);
+      return device ? getDeviceDisplayName(device) : "Device";
+    },
+    getChildLabel: (deviceId) =>
+      overview?.children.find((child) =>
+        child.devices.some((d) => d.id === deviceId)
+      )?.displayName ?? "Child",
   });
-
-  // Fallback poll when Realtime is slow/missing; keyed by nudge ids only
-  useEffect(() => {
-    if (!activeNudgeKey) return;
-
-    const active = activeNudgeKey.split("|").map((pair) => {
-      const [deviceId, nudgeId] = pair.split(":");
-      return { deviceId, nudgeId };
-    });
-
-    let cancelled = false;
-    const poll = async () => {
-      await Promise.all(
-        active.map(async ({ deviceId, nudgeId }) => {
-          try {
-            const nudge = await utils.device.getNudge.fetch({ nudgeId });
-            if (cancelled) return;
-            applyNudgeStatus(deviceId, nudgeId, nudge.status);
-          } catch {
-            // Keep last label.
-          }
-        })
-      );
-    };
-
-    void poll();
-    const id = window.setInterval(() => void poll(), 2000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- activeNudgeKey is the stable membership key
-  }, [activeNudgeKey, utils.device.getNudge]);
-
-  useEffect(() => {
-    if (!overview?.children.length) return;
-    setPendingLocks((prev) => {
-      let changed = false;
-      const next = { ...prev };
-
-      for (const child of overview.children) {
-        for (const device of child.devices) {
-          const pending = prev[device.id];
-          if (pending === undefined) continue;
-
-          const confirmed = pending
-            ? device.adminLock && device.isLocked
-            : !device.adminLock && !device.isLocked;
-
-          if (confirmed) {
-            delete next[device.id];
-            changed = true;
-          }
-        }
-      }
-
-      return changed ? next : prev;
-    });
-  }, [overview]);
 
   if (isLoading && !overview) {
     return <OverviewSkeleton />;
@@ -267,30 +92,7 @@ export default function DashboardOverviewPage() {
         description="Screen time, device status, and lockdowns at a glance"
       />
 
-      {pendingRequests > 0 && (
-        <Card className="border-yellow-500/50 bg-yellow-500/5">
-          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium">
-                  {pendingRequests} extension request
-                  {pendingRequests === 1 ? "" : "s"} waiting
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Review and approve or deny extra screen time
-                </p>
-              </div>
-            </div>
-            <Link href="/dashboard/activity" className="w-full sm:w-auto">
-              <Button className="w-full sm:w-auto" variant="outline">
-                Review requests
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      )}
+      <PendingExtensionBanner count={pendingRequests} />
 
       {/* Mobile compact stats strip */}
       <div
@@ -504,10 +306,7 @@ export default function DashboardOverviewPage() {
                         </p>
                         {child.devices.map((device) => {
                         const pendingLock = pendingLocks[device.id];
-                        const effectiveAdminLock =
-                          pendingLock !== undefined
-                            ? pendingLock
-                            : device.adminLock;
+                        const effectiveAdminLock = getEffectiveAdminLock(device);
 
                         const deviceBadges = (
                           <div className="flex shrink-0 flex-col items-end gap-1.5 md:flex-row md:items-center md:gap-2">

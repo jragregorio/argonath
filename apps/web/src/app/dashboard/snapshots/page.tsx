@@ -159,7 +159,16 @@ export default function SnapshotsPage() {
   }, [lightboxId]);
 
   const lightbox = snapshots?.find((snapshot) => snapshot.id === lightboxId);
-  const lightboxOpen = Boolean(lightbox?.url);
+  const { data: signedUrlData, isLoading: signedUrlLoading } =
+    trpc.snapshot.getSignedUrl.useQuery(
+      { snapshotId: lightboxId! },
+      {
+        enabled: Boolean(lightboxId && lightbox?.status === "ready"),
+        staleTime: 3000 * 1000,
+      }
+    );
+  const lightboxUrl = signedUrlData?.url ?? null;
+  const lightboxOpen = Boolean(lightboxId && lightbox);
 
   useEffect(() => {
     if (!lightboxOpen) return;
@@ -344,18 +353,21 @@ export default function SnapshotsPage() {
                     type="button"
                     className="aspect-video bg-secondary relative w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     onClick={() => {
-                      if (snapshot.status === "ready" && snapshot.url) {
+                      if (snapshot.status === "ready") {
                         setLightboxId(snapshot.id);
                       }
                     }}
-                    disabled={snapshot.status !== "ready" || !snapshot.url}
+                    disabled={snapshot.status !== "ready"}
                   >
-                    {snapshot.url ? (
-                      <img
-                        src={snapshot.url}
-                        alt={`${snapshot.type} capture`}
-                        className="w-full h-full object-cover"
-                      />
+                    {snapshot.status === "ready" ? (
+                      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
+                        {snapshot.type === "screen" ? (
+                          <Camera className="w-8 h-8" />
+                        ) : (
+                          <Video className="w-8 h-8" />
+                        )}
+                        <span className="text-xs">Tap to view</span>
+                      </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
                         {snapshot.status === "pending" ? (
@@ -396,7 +408,7 @@ export default function SnapshotsPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="px-5 pb-4 pt-0 flex gap-2">
-                  {snapshot.status === "ready" && snapshot.url && (
+                  {snapshot.status === "ready" && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -433,7 +445,7 @@ export default function SnapshotsPage() {
         </Card>
       )}
 
-      {lightbox && lightbox.url && (
+      {lightbox && (
         <div
           className="fixed inset-0 z-[60] flex flex-col bg-black"
           role="dialog"
@@ -484,12 +496,22 @@ export default function SnapshotsPage() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <ZoomableImage
-              src={lightbox.url}
-              alt={`${lightbox.type} capture`}
-              className="flex h-full min-h-0 flex-1"
-              fillViewport
-            />
+            {signedUrlLoading ? (
+              <div className="flex flex-1 items-center justify-center">
+                <Loader2 className="w-10 h-10 animate-spin text-white/70" />
+              </div>
+            ) : lightboxUrl ? (
+              <ZoomableImage
+                src={lightboxUrl}
+                alt={`${lightbox.type} capture`}
+                className="flex h-full min-h-0 flex-1"
+                fillViewport
+              />
+            ) : (
+              <div className="flex flex-1 items-center justify-center text-white/70 text-sm">
+                Preview unavailable
+              </div>
+            )}
           </div>
         </div>
       )}

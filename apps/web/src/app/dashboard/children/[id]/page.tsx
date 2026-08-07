@@ -37,10 +37,7 @@ import {
 } from "lucide-react";
 import { InlineBackLink } from "@/components/sticky-back-chip";
 import { isSupabaseConfigured } from "@/lib/dev-config";
-import {
-  optimisticAdminLock,
-  rollbackAdminLock,
-} from "@/lib/device-cache";
+import { useDeviceActions } from "@/lib/use-device-actions";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { NudgeControls } from "@/components/nudge-controls";
 import { RecentActivityCard } from "@/components/recent-activity-card";
@@ -291,148 +288,27 @@ export default function ChildDetailPage() {
       void utils.device.list.invalidate();
     },
   });
-  const setAdminLock = trpc.device.setAdminLock.useMutation({
-    onMutate: async ({ deviceId, locked }) => {
-      setPendingLocks((prev) => ({ ...prev, [deviceId]: locked }));
-      return optimisticAdminLock(utils, deviceId, locked, childId);
-    },
-    onSuccess: (_data, { deviceId, locked }) => {
+
+  const {
+    pendingLocks,
+    nudgeByDevice,
+    setAdminLock,
+    sendNudge,
+    getEffectiveAdminLock,
+  } = useDeviceActions({
+    devices: child?.devices ?? [],
+    childId,
+    scope: "child",
+    getDeviceLabel: (deviceId) => {
       const device = child?.devices.find((d) => d.id === deviceId);
-      const deviceName = device ? getDeviceDisplayName(device) : "Device";
-      showToast(
-        locked ? `${deviceName} locked down.` : `${deviceName} lock released.`,
-        locked ? "default" : "success"
-      );
+      return device ? getDeviceDisplayName(device) : "Device";
     },
-    onError: (err, vars, context) => {
-      rollbackAdminLock(utils, context);
-      setPendingLocks((prev) => {
-        const next = { ...prev };
-        delete next[vars.deviceId];
-        return next;
-      });
-      showToast(err.message || "Could not update device lock", "error");
-    },
-    onSettled: () => {
-      void utils.children.get.invalidate({ childId });
-      void utils.device.list.invalidate();
-      void utils.dashboard.overview.invalidate();
-    },
+    getChildLabel: () => child?.displayName ?? "Child",
   });
-  const [pendingLocks, setPendingLocks] = useState<
-    Record<string, boolean | undefined>
-  >({});
-  const [nudgeByDevice, setNudgeByDevice] = useState<
-    Record<string, { nudgeId: string; label: string }>
-  >({});
   const [captureFeedback, setCaptureFeedback] = useState<
     Record<string, CaptureFeedback>
   >({});
   const capturePollersRef = useRef<Record<string, number>>({});
-
-  const sendNudge = trpc.device.sendNudge.useMutation({
-    onMutate: ({ deviceId }) => {
-      setNudgeByDevice((prev) => ({
-        ...prev,
-        [deviceId]: { nudgeId: prev[deviceId]?.nudgeId ?? "", label: "Sending…" },
-      }));
-    },
-    onSuccess: (data, { deviceId }) => {
-      const childName = child?.displayName ?? "Child";
-      setNudgeByDevice((prev) => ({
-        ...prev,
-        [deviceId]: { nudgeId: data.id, label: "Waiting…" },
-      }));
-      showToast(`Nudge sent to ${childName}.`, "success");
-      void utils.dashboard.activity.invalidate();
-    },
-    onError: (err, { deviceId }) => {
-      setNudgeByDevice((prev) => ({
-        ...prev,
-        [deviceId]: { nudgeId: "", label: err.message },
-      }));
-      showToast(err.message || "Could not send nudge", "error");
-    },
-  });
-
-  const activeNudgeKey = useMemo(
-    () =>
-      Object.entries(nudgeByDevice)
-        .filter(([, v]) => v.nudgeId)
-        .map(([deviceId, v]) => `${deviceId}:${v.nudgeId}`)
-        .sort()
-        .join("|"),
-    [nudgeByDevice]
-  );
-
-  const clearNudgeSoon = (deviceId: string, nudgeId: string) => {
-    window.setTimeout(() => {
-      setNudgeByDevice((prev) => {
-        const cur = prev[deviceId];
-        if (!cur || cur.nudgeId !== nudgeId) return prev;
-        const next = { ...prev };
-        delete next[deviceId];
-        return next;
-      });
-    }, 5000);
-  };
-
-  const applyNudgeStatus = (
-    deviceId: string,
-    nudgeId: string,
-    status: string
-  ) => {
-    let label = "Waiting…";
-    if (status === "delivered") label = "Delivered";
-    else if (status === "seen") label = "Seen";
-    else if (status === "expired") label = "Expired";
-    else if (status === "pending") label = "Waiting…";
-
-    setNudgeByDevice((prev) => {
-      const cur = prev[deviceId];
-      if (!cur || cur.nudgeId !== nudgeId || cur.label === label) {
-        return prev;
-      }
-      return { ...prev, [deviceId]: { ...cur, label } };
-    });
-
-    if (status === "seen" || status === "expired") {
-      clearNudgeSoon(deviceId, nudgeId);
-    }
-  };
-
-  // Fallback poll when Realtime is slow/missing; keyed by nudge ids only
-  useEffect(() => {
-    if (!activeNudgeKey) return;
-
-    const active = activeNudgeKey.split("|").map((pair) => {
-      const [deviceId, nudgeId] = pair.split(":");
-      return { deviceId, nudgeId };
-    });
-
-    let cancelled = false;
-    const poll = async () => {
-      await Promise.all(
-        active.map(async ({ deviceId, nudgeId }) => {
-          try {
-            const nudge = await utils.device.getNudge.fetch({ nudgeId });
-            if (cancelled) return;
-            applyNudgeStatus(deviceId, nudgeId, nudge.status);
-          } catch {
-            // Keep last label.
-          }
-        })
-      );
-    };
-
-    void poll();
-    const id = window.setInterval(() => void poll(), 2000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- activeNudgeKey is the stable membership key
-  }, [activeNudgeKey, utils.device.getNudge]);
 
   const clearCaptureFeedbackSoon = (deviceId: string, delayMs = 3000) => {
     window.setTimeout(() => {
@@ -657,40 +533,8 @@ export default function ChildDetailPage() {
     return new Date(pairingCode.expiresAt).getTime() - Date.now();
   }, [pairingCode, pairingTick]);
 
-  useEffect(() => {
-    if (!child?.devices.length) return;
-    setPendingLocks((prev) => {
-      let changed = false;
-      const next = { ...prev };
-
-      for (const device of child.devices) {
-        const pending = prev[device.id];
-        if (pending === undefined) continue;
-
-        const confirmed = pending
-          ? device.adminLock && device.isLocked
-          : !device.adminLock && !device.isLocked;
-
-        if (confirmed) {
-          delete next[device.id];
-          changed = true;
-        }
-      }
-
-      return changed ? next : prev;
-    });
-  }, [child?.devices]);
-
   const deviceIds = child?.devices.map((d) => d.id) ?? [];
   useFamilyRealtimeEvent((event) => {
-    if (event.type === "nudge:seen") {
-      const payload = event.payload as { nudgeId?: string } | undefined;
-      if (payload?.nudgeId) {
-        applyNudgeStatus(event.deviceId, payload.nudgeId, "seen");
-      }
-      return;
-    }
-
     if (!deviceIds.includes(event.deviceId)) return;
 
     if (event.type === "snapshot:ready") {
@@ -1290,8 +1134,7 @@ export default function ChildDetailPage() {
             <div className="flex flex-col gap-4">
             {child.devices.map((device) => {
               const pendingLock = pendingLocks[device.id];
-              const effectiveAdminLock =
-                pendingLock !== undefined ? pendingLock : device.adminLock;
+              const effectiveAdminLock = getEffectiveAdminLock(device);
               const feedback = captureFeedback[device.id];
               const captureBusy = feedback?.tone === "pending";
 

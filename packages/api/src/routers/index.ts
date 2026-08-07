@@ -1576,54 +1576,58 @@ export const snapshotRouter = router({
         take: 50,
       });
 
-      if (!isSupabaseConfigured()) {
-        return snapshots.map((snapshot) => ({ ...snapshot, url: null }));
+      return snapshots.map((snapshot) => ({ ...snapshot, url: null }));
+    }),
+
+  getSignedUrl: protectedProcedure
+    .input(z.object({ snapshotId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const snapshot = await prisma.snapshot.findFirst({
+        where: {
+          id: input.snapshotId,
+          child: { familyId: family.id },
+        },
+      });
+
+      if (!snapshot) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      if (snapshot.status !== "ready") {
+        return { url: null };
+      }
+
+      if (!isSupabaseConfigured() || !snapshot.storageKey) {
+        return { url: null };
       }
 
       const supabase = getSupabaseAdmin();
-      const withUrls = await Promise.all(
-        snapshots.map(async (snapshot) => {
-          if (snapshot.status !== "ready") {
-            return { ...snapshot, url: null };
+      const url = await getCachedSignedSnapshotUrl(
+        snapshot.storageKey,
+        async () => {
+          const { data, error } = await supabase.storage
+            .from("snapshots")
+            .createSignedUrl(snapshot.storageKey, 3600);
+
+          if (data?.signedUrl) {
+            return data.signedUrl;
           }
 
-          let markedFailed = false;
-          const url = await getCachedSignedSnapshotUrl(
-            snapshot.storageKey,
-            async () => {
-              const { data, error } = await supabase.storage
-                .from("snapshots")
-                .createSignedUrl(snapshot.storageKey, 3600);
-
-              if (data?.signedUrl) {
-                return data.signedUrl;
-              }
-
-              // Orphan ready row: DB says ready but the object is gone from Storage.
-              // Mark failed so we stop re-signing every poll (stops 400 spam).
-              if (isMissingStorageObjectError(error)) {
-                markSignedSnapshotUrlMissing(snapshot.storageKey);
-                markedFailed = true;
-                await prisma.snapshot
-                  .update({
-                    where: { id: snapshot.id },
-                    data: { status: "failed" },
-                  })
-                  .catch(() => {});
-              }
-              return null;
-            }
-          );
-
-          return {
-            ...snapshot,
-            ...(markedFailed ? { status: "failed" as const } : {}),
-            url,
-          };
-        })
+          if (isMissingStorageObjectError(error)) {
+            markSignedSnapshotUrlMissing(snapshot.storageKey);
+            await prisma.snapshot
+              .update({
+                where: { id: snapshot.id },
+                data: { status: "failed" },
+              })
+              .catch(() => {});
+          }
+          return null;
+        }
       );
 
-      return withUrls;
+      return { url };
     }),
 
   markAllViewed: parentProcedure.mutation(async ({ ctx }) => {

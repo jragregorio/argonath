@@ -266,9 +266,10 @@ does not exist in a production build.
    already exist. Tradeoff: Supabase Storage/Realtime (snapshots, nudges) still
    requires the hosted project, so a local DB means snapshot capture cannot be
    exercised end to end, and local data starts empty.
-2. `snapshot.list` signs up to 50 URLs per call; consider lazy per-item signing.
-3. Middleware redirects through `/api/auth/refresh` on access-token expiry,
-   doubling one navigation every 15 min. Could refresh in place instead.
+2. ~~`snapshot.list` signs up to 50 URLs per call~~ — **done**: `snapshot.list` returns
+   `url: null`; `snapshot.getSignedUrl` signs on demand (View/lightbox).
+3. ~~Middleware redirects through `/api/auth/refresh`~~ — **done**: page navigations
+   POST refresh in middleware and forward `Set-Cookie` (GET kept for sign-in flow).
 4. Agent polls `pendingCaptures` at 1 Hz; each poll now costs ~780 ms locally.
    Consider backing off when idle.
 

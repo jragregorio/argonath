@@ -32,6 +32,38 @@ function safeRedirectPath(next: string | null, defaultPath = "/dashboard"): stri
   return next;
 }
 
+function forwardSetCookieHeaders(from: Response, to: NextResponse) {
+  if (typeof from.headers.getSetCookie === "function") {
+    for (const cookie of from.headers.getSetCookie()) {
+      to.headers.append("set-cookie", cookie);
+    }
+    return;
+  }
+
+  const raw = from.headers.get("set-cookie");
+  if (raw) {
+    to.headers.append("set-cookie", raw);
+  }
+}
+
+async function tryInPlaceRefresh(req: NextRequest): Promise<NextResponse | null> {
+  const refreshUrl = new URL("/api/auth/refresh", req.url);
+  const refreshResponse = await fetch(refreshUrl, {
+    method: "POST",
+    headers: {
+      cookie: req.headers.get("cookie") ?? "",
+    },
+  });
+
+  if (!refreshResponse.ok) {
+    return null;
+  }
+
+  const response = NextResponse.next();
+  forwardSetCookieHeaders(refreshResponse, response);
+  return response;
+}
+
 async function redirectIfAuthenticated(
   req: NextRequest,
   defaultNext: string
@@ -75,7 +107,7 @@ async function hasValidAccess(req: NextRequest): Promise<boolean> {
 }
 
 export async function middleware(req: NextRequest) {
-  const { pathname, search } = req.nextUrl;
+  const { pathname } = req.nextUrl;
 
   if (pathname === "/sign-in" || pathname === "/sign-up") {
     if (!devAuthBypassEnabled) {
@@ -103,16 +135,17 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // For page navigations, refresh before rendering so the dashboard does not sit
+  // For page navigations, refresh in place so the dashboard does not sit
   // in client-side skeletons waiting for a 401 -> refresh -> retry cycle.
   if (req.cookies.get(REFRESH_COOKIE)?.value) {
     if (!pathname.startsWith("/api/")) {
-      const refreshUrl = new URL("/api/auth/refresh", req.url);
-      refreshUrl.searchParams.set("next", `${pathname}${search}`);
-      return NextResponse.redirect(refreshUrl);
+      const refreshed = await tryInPlaceRefresh(req);
+      if (refreshed) {
+        return refreshed;
+      }
+    } else {
+      return NextResponse.next();
     }
-
-    return NextResponse.next();
   }
 
   if (pathname.startsWith("/api/")) {

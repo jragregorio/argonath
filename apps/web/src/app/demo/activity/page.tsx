@@ -1,24 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { RecentActivityCard } from "@/components/recent-activity-card";
-import { getDeviceDisplayName } from "@warden/shared";
-import { Check, X, Clock } from "lucide-react";
+import { PendingExtensionRequestCard } from "@/components/pending-extension-request-card";
+import { Clock } from "lucide-react";
 import { useDemo } from "@/lib/demo/demo-provider";
-import {
-  formatAbsoluteTime,
-  formatRelativeTime,
-} from "@/lib/format-relative-time";
 
 const ACTIVITY_LIMIT = 100;
 
@@ -58,48 +46,13 @@ export default function DemoActivityPage() {
             {pendingExtensions.map((request) => {
               const busy = resolvingId === request.id;
               return (
-                <Card key={request.id}>
-                  <CardHeader>
-                    <div className="flex items-center justify-between gap-3">
-                      <CardTitle className="flex min-w-0 items-center gap-2">
-                        <Clock className="h-5 w-5 shrink-0" />
-                        <span className="truncate">
-                          {request.child.displayName}
-                        </span>
-                      </CardTitle>
-                      <Badge variant="warning">Pending</Badge>
-                    </div>
-                    <CardDescription>
-                      Requesting +{request.requestedMinutes} minutes on{" "}
-                      {getDeviceDisplayName(request.device)} ·{" "}
-                      <time
-                        dateTime={new Date(request.createdAt).toISOString()}
-                        title={formatAbsoluteTime(request.createdAt)}
-                      >
-                        {formatRelativeTime(request.createdAt)}
-                      </time>
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-3 sm:flex-row">
-                    <Button
-                      className="w-full sm:w-auto"
-                      onClick={() => handleApprove(request.id)}
-                      disabled={busy}
-                    >
-                      <Check className="mr-2 h-4 w-4" />
-                      Approve
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      className="w-full sm:w-auto"
-                      onClick={() => handleDeny(request.id)}
-                      disabled={busy}
-                    >
-                      <X className="mr-2 h-4 w-4" />
-                      Deny
-                    </Button>
-                  </CardContent>
-                </Card>
+                <PendingExtensionRequestCard
+                  key={request.id}
+                  request={request}
+                  busy={busy}
+                  onApprove={() => handleApprove(request.id)}
+                  onDeny={() => handleDeny(request.id)}
+                />
               );
             })}
           </div>

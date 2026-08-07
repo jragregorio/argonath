@@ -2,14 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  Monitor,
-  AlertCircle,
-  Unlock,
-  Users,
-  ArrowRight,
-  ChevronRight,
-} from "lucide-react";
+import { Monitor, Unlock, Users, ChevronRight } from "lucide-react";
+import { PendingExtensionBanner } from "@/components/pending-extension-banner";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -58,30 +52,10 @@ export default function DemoOverviewPage() {
         description="Screen time, device status, and lockdowns at a glance"
       />
 
-      {pendingRequests > 0 && (
-        <Card className="border-yellow-500/50 bg-yellow-500/5">
-          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-400" />
-              <div>
-                <p className="font-medium">
-                  {pendingRequests} extension request
-                  {pendingRequests === 1 ? "" : "s"} waiting
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Review and approve or deny extra screen time
-                </p>
-              </div>
-            </div>
-            <Link href="/demo/activity" className="w-full sm:w-auto">
-              <Button className="w-full sm:w-auto" variant="outline">
-                Review requests
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      )}
+      <PendingExtensionBanner
+        count={pendingRequests}
+        href="/demo/activity"
+      />
 
       <div className="grid grid-cols-2 gap-2.5 md:hidden">
         <Link href="/demo/children" className="block">
