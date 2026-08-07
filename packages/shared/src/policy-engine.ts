@@ -551,6 +551,37 @@ export function getPolicyStatusLabel(status: PolicyStatus): string {
   }
 }
 
+/** True when unlocked only by after-hours bonus (outside schedule, grant remaining). */
+export function isAfterHoursBonusActive(
+  evaluation: Pick<
+    PolicyEvaluation,
+    "status" | "inWindow" | "bonusMinutes" | "remainingMinutes"
+  >
+): boolean {
+  return (
+    evaluation.status === "allowed" &&
+    evaluation.inWindow === false &&
+    evaluation.bonusMinutes > 0 &&
+    evaluation.remainingMinutes > 0
+  );
+}
+
+/**
+ * Parent-facing status pill label. After-hours bonus sessions show
+ * "Bonus time" instead of generic "Within limits".
+ */
+export function getEvaluationStatusLabel(
+  evaluation: Pick<
+    PolicyEvaluation,
+    "status" | "inWindow" | "bonusMinutes" | "remainingMinutes"
+  >
+): string {
+  if (isAfterHoursBonusActive(evaluation)) {
+    return "Bonus time";
+  }
+  return getPolicyStatusLabel(evaluation.status);
+}
+
 export function generatePairingCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }

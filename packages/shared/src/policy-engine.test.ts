@@ -2,10 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   computeIdealOutsideGrantBaseline,
   evaluatePolicy,
+  getEvaluationStatusLabel,
   getMinutesSinceTodayWindowEnded,
   getOutsideExtensionRemainingMinutes,
   getPolicyReach,
   getWindowCapacityMinutes,
+  isAfterHoursBonusActive,
   isGrantCreatedAfterTodayWindowEnd,
   LATE_OUTSIDE_BASELINE_MINUTES,
   mergeWindows,
@@ -676,6 +678,49 @@ describe("resolveOutsideGrantBaselineToPersist", () => {
       })
     ).toBe(102);
     expect(268 - baseline).toBe(18);
+  });
+});
+
+describe("getEvaluationStatusLabel", () => {
+  it("shows Bonus time for after-hours allowed bonus sessions", () => {
+    expect(
+      getEvaluationStatusLabel({
+        status: "allowed",
+        inWindow: false,
+        bonusMinutes: 60,
+        remainingMinutes: 35,
+      })
+    ).toBe("Bonus time");
+    expect(
+      isAfterHoursBonusActive({
+        status: "allowed",
+        inWindow: false,
+        bonusMinutes: 60,
+        remainingMinutes: 35,
+      })
+    ).toBe(true);
+  });
+
+  it("keeps Within limits inside the window even with banked bonus", () => {
+    expect(
+      getEvaluationStatusLabel({
+        status: "allowed",
+        inWindow: true,
+        bonusMinutes: 60,
+        remainingMinutes: 40,
+      })
+    ).toBe("Within limits");
+  });
+
+  it("keeps Outside allowed hours when bonus is exhausted", () => {
+    expect(
+      getEvaluationStatusLabel({
+        status: "outside_window",
+        inWindow: false,
+        bonusMinutes: 60,
+        remainingMinutes: 0,
+      })
+    ).toBe("Outside allowed hours");
   });
 });
 

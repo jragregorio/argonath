@@ -18,12 +18,16 @@ import { SwipeToLock } from "@/components/swipe-to-lock";
 import { RecentActivityCard } from "@/components/recent-activity-card";
 import {
   getDeviceDisplayName,
-  getPolicyStatusLabel,
+  getEvaluationStatusLabel,
   type PolicyStatus,
 } from "@warden/shared";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 import { useDeviceActions } from "@/lib/use-device-actions";
-import { getPolicyRemainingDisplay, getBindingRemainingPercent } from "@/lib/policy-remaining-display";
+import {
+  evaluationStatusBadgeVariant,
+  getPolicyRemainingDisplay,
+  getBindingRemainingPercent,
+} from "@/lib/policy-remaining-display";
 import {
   PolicyRemainingFooter,
   PolicyWindowRemainingPrimary,
@@ -34,12 +38,6 @@ function progressBarClass(status: PolicyStatus) {
   if (status === "blocked") return "bg-destructive";
   if (status === "outside_window") return "bg-yellow-500";
   return "bg-primary";
-}
-
-function statusBadgeVariant(status: PolicyStatus) {
-  if (status === "allowed") return "success" as const;
-  if (status === "blocked") return "destructive" as const;
-  return "warning" as const;
 }
 
 export default function DashboardOverviewPage() {
@@ -230,8 +228,8 @@ export default function DashboardOverviewPage() {
                               } online`}
                         </CardDescription>
                       </div>
-                      <Badge variant={statusBadgeVariant(evaluation.status)}>
-                        {getPolicyStatusLabel(evaluation.status)}
+                      <Badge variant={evaluationStatusBadgeVariant(evaluation)}>
+                        {getEvaluationStatusLabel(evaluation)}
                       </Badge>
                     </div>
 

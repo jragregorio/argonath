@@ -9,15 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import {
-  getPolicyStatusLabel,
-} from "@warden/shared";
+import { getEvaluationStatusLabel } from "@warden/shared";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { InlineBackLink } from "@/components/sticky-back-chip";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { progressBarClass } from "./child-detail-helpers";
 import {
+  evaluationStatusBadgeVariant,
   getBindingRemainingFraction,
   getPolicyRemainingDisplay,
 } from "@/lib/policy-remaining-display";
@@ -260,11 +259,9 @@ export function ChildUsageHeader({
             <div className="relative z-10 p-4 md:p-0">
               <div className="flex flex-wrap items-center gap-3">
                 <Badge
-                  variant={
-                    evaluation.status === "allowed" ? "success" : "warning"
-                  }
+                  variant={evaluationStatusBadgeVariant(evaluation)}
                 >
-                  {getPolicyStatusLabel(evaluation.status)}
+                  {getEvaluationStatusLabel(evaluation)}
                 </Badge>
                 <span
                   className={cn(

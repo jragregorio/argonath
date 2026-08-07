@@ -20,14 +20,12 @@ import { RecentActivityCard } from "@/components/recent-activity-card";
 import { AllowedWindowsSummary } from "@/components/allowed-windows-summary";
 import {
   getDeviceDisplayName,
-  getPolicyStatusLabel,
+  getEvaluationStatusLabel,
 } from "@warden/shared";
 import { useDemo } from "@/lib/demo/demo-provider";
+import { progressBarClass } from "@/lib/demo/overview-helpers";
 import {
-  progressBarClass,
-  statusBadgeVariant,
-} from "@/lib/demo/overview-helpers";
-import {
+  evaluationStatusBadgeVariant,
   getBindingRemainingPercent,
   getPolicyRemainingDisplay,
 } from "@/lib/policy-remaining-display";
@@ -76,8 +74,8 @@ export default function DemoChildDetailPage() {
           <div className="relative mt-3 overflow-hidden rounded-xl border border-border bg-card md:mt-2 md:border-0 md:bg-transparent">
             <div className="relative z-10 p-4 md:p-0">
               <div className="flex flex-wrap items-center gap-3">
-                <Badge variant={statusBadgeVariant(evaluation.status)}>
-                  {getPolicyStatusLabel(evaluation.status)}
+                <Badge variant={evaluationStatusBadgeVariant(evaluation)}>
+                  {getEvaluationStatusLabel(evaluation)}
                 </Badge>
                 <span
                   className={cn(
@@ -216,8 +214,8 @@ export default function DemoChildDetailPage() {
                   Set daily limits and allowed time windows
                 </CardDescription>
               </div>
-              <Badge variant={statusBadgeVariant(evaluation.status)}>
-                {getPolicyStatusLabel(evaluation.status)}
+              <Badge variant={evaluationStatusBadgeVariant(evaluation)}>
+                {getEvaluationStatusLabel(evaluation)}
               </Badge>
             </div>
           </CardHeader>

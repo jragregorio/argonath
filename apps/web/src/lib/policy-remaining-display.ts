@@ -1,6 +1,7 @@
 import {
   getOutsideExtensionRemainingMinutes,
   getPolicyStatusLabel,
+  isAfterHoursBonusActive,
   type PolicyEvaluation,
 } from "@warden/shared";
 import { formatClockInText } from "@/lib/time-format";
@@ -50,12 +51,19 @@ export function isWindowBindingAllowed(
 export function isAfterHoursBonusAllowed(
   evaluation: PolicyRemainingDisplayInput
 ): boolean {
-  return (
-    evaluation.status === "allowed" &&
-    evaluation.inWindow === false &&
-    evaluation.bonusMinutes > 0 &&
-    evaluation.remainingMinutes > 0
-  );
+  return isAfterHoursBonusActive(evaluation);
+}
+
+/** Badge variant for overview / child header status pills. */
+export function evaluationStatusBadgeVariant(
+  evaluation: PolicyRemainingDisplayInput
+): "success" | "warning" | "destructive" | "default" | "plume" {
+  if (isAfterHoursBonusActive(evaluation)) {
+    return "plume";
+  }
+  if (evaluation.status === "allowed") return "success";
+  if (evaluation.status === "blocked") return "destructive";
+  return "warning";
 }
 
 /**
