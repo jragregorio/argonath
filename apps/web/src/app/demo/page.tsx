@@ -8,6 +8,7 @@ import {
   Unlock,
   Users,
   ArrowRight,
+  ChevronRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -246,6 +247,15 @@ export default function DemoOverviewPage() {
                   className="space-y-3 max-md:space-y-4"
                   onClick={(e) => e.stopPropagation()}
                 >
+                  {child.devices.length > 0 && (
+                    <p className="flex items-center gap-1 text-xs font-medium text-primary/80 md:hidden">
+                      Tap a device to nudge or lock
+                      <ChevronRight
+                        className="h-3.5 w-3.5 shrink-0"
+                        aria-hidden
+                      />
+                    </p>
+                  )}
                   {child.devices.map((device) => {
                     const pendingLock = pendingLocks[device.id];
                     const effectiveAdminLock =
@@ -308,6 +318,10 @@ export default function DemoOverviewPage() {
                             {getDeviceDisplayName(device)}
                           </span>
                           {deviceBadges}
+                          <ChevronRight
+                            className="h-4 w-4 shrink-0 text-muted-foreground"
+                            aria-hidden
+                          />
                         </div>
 
                         <div className="hidden space-y-2.5 rounded-lg border border-border/60 px-3 py-2.5 md:block">

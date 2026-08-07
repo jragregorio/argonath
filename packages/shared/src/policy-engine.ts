@@ -318,7 +318,7 @@ export function shouldLock(evaluation: PolicyEvaluation): boolean {
 export function getPolicyStatusLabel(status: PolicyStatus): string {
   switch (status) {
     case "allowed":
-      return "Active";
+      return "Within limits";
     case "blocked":
       return "Limit reached";
     case "outside_window":

@@ -1185,6 +1185,7 @@ export default function ChildDetailPage() {
         ) : (
           <PageHeader
             title={child.displayName}
+            description="Devices, screen time limits, and captures for this child"
             action={
               <>
                 <Button

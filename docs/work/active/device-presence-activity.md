@@ -14,6 +14,7 @@
 | Actor | System/agent style (null actor → UI shows “Agent” already) or omit actorUserId |
 | Labels | Activity UI: “Device came online” / “Device went offline” (or “came online” / “went offline”) |
 | Metadata | Optional ISO timestamp; child/device names via normal activity join |
+| Feed visibility | Activity tab + child detail include presence; Overview Recent activity excludes via `includeDevicePresence: false` on `dashboard.activity` |
 | Also include | Mobile activity row stack fix in `recent-activity-card.tsx` if still uncommitted |
 | Deploy | No bump/push by executor — orchestrator waits for owner |
 
@@ -46,3 +47,15 @@ npm run check:boundaries                          # exit 0
 ```
 
 **Next:** owner manual smoke (reconnect + stale device cron) then deploy; no commit/push/bump by executor.
+
+### Phase 2 — Overview feed exclusion (Item 6)
+
+**Changes:**
+- `packages/api/src/routers/index.ts` — optional `includeDevicePresence` input (default `true`); filters `device_online` / `device_offline` when false
+- `apps/web/src/app/dashboard/overview-client.tsx` — `includeDevicePresence: false` on Overview Recent activity (`limit: 20`)
+- Activity tab (`limit: 100`) and child detail (`limit: 30`) unchanged — presence rows still included
+
+**Validation:**
+```bash
+npm run typecheck -w @warden/api -w @warden/web  # exit 0
+```

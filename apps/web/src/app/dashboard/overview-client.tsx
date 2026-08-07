@@ -16,6 +16,7 @@ import {
   Unlock,
   Users,
   ArrowRight,
+  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -66,7 +67,7 @@ export default function DashboardOverviewPage() {
   );
   const { data: activity, isLoading: activityLoading } =
     trpc.dashboard.activity.useQuery(
-      { limit: 20 },
+      { limit: 20, includeDevicePresence: false },
       { refetchInterval: POLL_HEARTBEAT_MS }
     );
   const [pendingLocks, setPendingLocks] = useState<
@@ -292,7 +293,9 @@ export default function DashboardOverviewPage() {
       )}
 
       {/* Mobile compact stats strip */}
-      <div className="md:hidden grid grid-cols-2 gap-2.5">
+      <div
+        className={`md:hidden grid gap-2.5 ${pendingRequests > 0 ? "grid-cols-3" : "grid-cols-2"}`}
+      >
         <Link href="/dashboard/children" className="block">
           <Card className="h-full p-3.5">
             <p className="text-xs text-muted-foreground truncate">Children</p>
@@ -310,6 +313,16 @@ export default function DashboardOverviewPage() {
             </span>
           </p>
         </Card>
+        {pendingRequests > 0 && (
+          <Link href="/dashboard/activity" className="block">
+            <Card className="h-full p-3.5">
+              <p className="text-xs text-muted-foreground truncate">Pending</p>
+              <p className="text-xl font-semibold tabular-nums mt-0.5">
+                {pendingRequests}
+              </p>
+            </Card>
+          </Link>
+        )}
       </div>
 
       {/* Desktop summary cards */}
@@ -481,7 +494,15 @@ export default function DashboardOverviewPage() {
                         usage and lockdown.
                       </p>
                     ) : (
-                      child.devices.map((device) => {
+                      <>
+                        <p className="flex items-center gap-1 text-xs font-medium text-primary/80 md:hidden">
+                          Tap a device to nudge or lock
+                          <ChevronRight
+                            className="h-3.5 w-3.5 shrink-0"
+                            aria-hidden
+                          />
+                        </p>
+                        {child.devices.map((device) => {
                         const pendingLock = pendingLocks[device.id];
                         const effectiveAdminLock =
                           pendingLock !== undefined
@@ -541,6 +562,10 @@ export default function DashboardOverviewPage() {
                                 {getDeviceDisplayName(device)}
                               </span>
                               {deviceBadges}
+                              <ChevronRight
+                                className="h-4 w-4 shrink-0 text-muted-foreground"
+                                aria-hidden
+                              />
                             </div>
 
                             {/* Desktop: full device controls */}
@@ -628,7 +653,8 @@ export default function DashboardOverviewPage() {
                             </div>
                           </div>
                         );
-                      })
+                      })}
+                      </>
                     )}
 
                   </CardContent>

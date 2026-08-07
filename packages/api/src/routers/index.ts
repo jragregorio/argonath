@@ -1357,6 +1357,8 @@ export const dashboardRouter = router({
         .object({
           limit: z.number().int().min(1).max(100).default(30),
           childId: z.string().optional(),
+          /** When false, omit device_online / device_offline rows (Overview short feed). */
+          includeDevicePresence: z.boolean().default(true),
         })
         .optional()
     )
@@ -1364,8 +1366,16 @@ export const dashboardRouter = router({
       const family = await getFamilyForUser(ctx);
       const limit = input?.limit ?? 30;
       const filterChildId = input?.childId;
+      const includeDevicePresence = input?.includeDevicePresence ?? true;
 
       let where: Prisma.AuditLogWhereInput = { familyId: family.id };
+
+      if (!includeDevicePresence) {
+        where = {
+          ...where,
+          action: { notIn: ["device_online", "device_offline"] },
+        };
+      }
 
       if (filterChildId) {
         const child = await prisma.child.findFirst({

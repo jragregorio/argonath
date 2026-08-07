@@ -11,7 +11,6 @@ import { PageHeader } from "@/components/page-header";
 import { ChildrenListSkeleton } from "@/components/dashboard-skeletons";
 import { getDeviceDisplayName } from "@warden/shared";
 import { Pencil, Plus, Trash2, User } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "@warden/ui";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
@@ -219,14 +218,7 @@ export default function ChildrenPage() {
                     </Badge>
                   ))}
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Link
-                    href={manageHref}
-                    className="text-primary hover:underline text-sm"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Manage profile →
-                  </Link>
+                <div className="flex flex-wrap items-center justify-end gap-2">
                   <Button
                     variant="ghost"
                     size="sm"
