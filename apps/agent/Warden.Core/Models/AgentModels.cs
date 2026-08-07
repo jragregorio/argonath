@@ -60,6 +60,11 @@ public class PolicyData
     /// <summary>Active minutes for this device only today.</summary>
     public int ThisDeviceMinutes { get; set; }
     public int BonusMinutes { get; set; }
+    /// <summary>
+    /// Server usage baseline for after-hours extension countdown (minutes).
+    /// Null when not yet pierced / not applicable.
+    /// </summary>
+    public int? OutsideGrantBaselineUsedMinutes { get; set; }
     public string? ParentPin { get; set; }
     /// <summary>Parent-triggered lockdown from the dashboard.</summary>
     public bool AdminLock { get; set; }

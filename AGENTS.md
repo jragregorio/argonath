@@ -32,15 +32,11 @@ Parental screen-time control: a parent web dashboard and a Windows enforcement a
 
 Do **not** bump one when releasing the others. Agent versions must increase monotonically forever (ADR-0004). Runtime agent version comes from the assembly via `AgentVersionInfo.Current` — no hardcoded agent version literals.
 
-### Base-10 carry (strict)
+### Semantic Versioning (SemVer 2.0.0)
 
-Each `MAJOR.MINOR.PATCH` component uses digits **0–9 only**. On every bump of a line:
+All three lines use [Semantic Versioning 2.0.0](https://semver.org/): `MAJOR.MINOR.PATCH` with optional prerelease / build metadata. Numeric components have **no single-digit cap** — `0.8.9` → `0.8.10` is valid.
 
-1. Increment `PATCH` by 1.
-2. If `PATCH` would become `10`, set `PATCH` to `0` and increment `MINOR` by 1.
-3. If `MINOR` would become `10`, set `MINOR` to `0` and increment `MAJOR` by 1.
-
-Examples: `0.5.9` → `0.6.0`; `0.9.9` → `1.0.0`. Never publish `*.*.10` or higher. Applies independently to web and agent.
+On a routine release of a line, increment `PATCH` by 1. Increment `MINOR` or `MAJOR` only when intentionally signaling a larger change (and reset the lower components per SemVer). Applies independently per line.
 
 ## Dependency rules (enforced)
 

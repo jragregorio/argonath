@@ -9,10 +9,10 @@
 
 | Line | Owner file | Notes |
 |------|------------|--------|
-| Agent / MSI | `apps/agent/Directory.Build.props` → `$(Version)` | Independent; monotonic forever; base-10 carry |
-| Web / npm | `apps/web/package.json`, `packages/shared` + `APP_VERSION` | Independent; same base-10 carry |
+| Agent / MSI | `apps/agent/Directory.Build.props` → `$(Version)` | Independent; monotonic forever; SemVer 2.0.0 |
+| Web / npm | `apps/web/package.json`, `packages/shared` + `APP_VERSION` | Independent; SemVer 2.0.0 |
 
-Runtime: `AgentVersionInfo.Current` from assembly. No hardcoded agent version literals in models. After `X.Y.9` → `X.(Y+1).0` (never `*.*.10+`).
+Runtime: `AgentVersionInfo.Current` from assembly. No hardcoded agent version literals in models. `0.8.9` → `0.8.10` is valid.
 
 ## Product ceiling
 

@@ -6,8 +6,8 @@
   First-time / major-upgrade (full UI):
     WelcomeDlg -> LicenseAgreementDlg -> ChildUserDlg -> VerifyReadyDlg
 
-  Skipped when CHILDUSER was set on the msiexec command line, or when UILevel
-  indicates a quiet/basic install (dialogs never shown).
+  Skipped when CHILDUSER or WARDEN_STARTUP_ALL=1 was set on the msiexec command line,
+  or when UILevel indicates a quiet/basic install (dialogs never shown).
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
@@ -41,48 +41,52 @@
 
       <!-- Force ComboBox table into the MSI so the populate CA can InsertTemporary. -->
       <ComboBox Property="CHILDUSER">
-        <ListItem Value="__SELECT_CHILD_ACCOUNT__" Text="(select child account)" />
+        <ListItem Value="__SELECT_CHILD_ACCOUNT__" Text="(select an account)" />
       </ComboBox>
 
-      <Dialog Id="ChildUserDlg" Width="370" Height="270" Title="Warden Setup - Child account">
-        <!-- Stock WixUI banner binary (493x58) — do not bind to the product icon. -->
+      <Dialog Id="ChildUserDlg" Width="370" Height="290" Title="Warden Setup - Startup account">
+        <!-- WixUI_Bmp_Banner is overridden via WixUIBannerBmp (branded charcoal + shield). -->
         <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
         <Control Id="Title" Type="Text" X="15" Y="6" Width="340" Height="15" Transparent="yes" NoPrefix="yes"
-                 Text="{\WixUI_Font_Title}Which Windows account does your child use?" />
+                 Text="{\WixUI_Font_Title}Who should Warden start for?" />
         <Control Id="Description" Type="Text" X="25" Y="23" Width="330" Height="20" Transparent="yes" NoPrefix="yes"
-                 Text="Warden must start automatically when your child signs in - not when you (the parent) sign in." />
+                 Text="Warden should auto-start when your child signs in - not when you (the parent) sign in." />
         <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
 
         <Control Id="AccountLabel" Type="Text" X="20" Y="60" Width="330" Height="30" NoPrefix="yes"
-                 Text="Select the child's Windows sign-in account. If it is missing from the list (domain account), type COMPUTER\ChildAccount or DOMAIN\ChildAccount." />
+                 Text="Choose the child's Windows sign-in account. Missing from the list (domain)? Type COMPUTER\Account or DOMAIN\Account." />
 
         <!-- ComboList=no => editable combo. Sorted=no so non-admins stay first. -->
         <Control Id="AccountCombo" Type="ComboBox" Sorted="no" ComboList="no"
                  Property="CHILDUSER" X="20" Y="100" Width="330" Height="18" />
 
-        <Control Id="Hint" Type="Text" X="20" Y="130" Width="330" Height="50" NoPrefix="yes"
-                 Text="Tip: the account that installs Warden is usually the parent's admin account. Choosing that account means Warden will never start for the child." />
+        <Control Id="Hint" Type="Text" X="20" Y="130" Width="330" Height="40" NoPrefix="yes"
+                 Text="Tip: the account that installs Warden is usually the parent's admin account. Prefer the child's standard (non-admin) account." />
 
-        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
-        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)">
+        <Control Id="AllStandardCheck" Type="CheckBox" X="20" Y="180" Width="330" Height="18"
+                 Property="WARDEN_STARTUP_ALL" CheckBoxValue="1"
+                 Text="Advanced: start for all standard (non-admin) accounts on this PC" />
+
+        <Control Id="BottomLine" Type="Line" X="0" Y="254" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="263" Width="56" Height="17" Text="!(loc.WixUIBack)">
           <Publish Event="NewDialog" Value="LicenseAgreementDlg" />
         </Control>
-        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)">
+        <Control Id="Next" Type="PushButton" X="236" Y="263" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)">
           <!-- Reset admin-confirm latch each attempt so a prior Yes does not stick across edits. -->
           <Publish Property="CHILDUSER_ADMIN_OK" Value="0" Order="1" />
           <Publish Event="DoAction" Value="ValidateChildUser" Order="2" />
           <Publish Event="SpawnDialog" Value="ChildUserInvalidDlg" Order="3" Condition="CHILDUSER_VALID &lt;&gt; &quot;1&quot;" />
           <Publish Event="SpawnDialog" Value="ChildUserAdminConfirmDlg" Order="4"
-                   Condition="CHILDUSER_VALID = &quot;1&quot; AND CHILDUSER_IS_ADMIN = &quot;1&quot; AND CHILDUSER_ADMIN_OK &lt;&gt; &quot;1&quot;" />
+                   Condition="CHILDUSER_VALID = &quot;1&quot; AND CHILDUSER_IS_ADMIN = &quot;1&quot; AND CHILDUSER_ADMIN_OK &lt;&gt; &quot;1&quot; AND WARDEN_STARTUP_ALL &lt;&gt; &quot;1&quot;" />
           <Publish Event="NewDialog" Value="VerifyReadyDlg" Order="5"
-                   Condition="CHILDUSER_VALID = &quot;1&quot; AND (CHILDUSER_IS_ADMIN &lt;&gt; &quot;1&quot; OR CHILDUSER_ADMIN_OK = &quot;1&quot;)" />
+                   Condition="CHILDUSER_VALID = &quot;1&quot; AND (WARDEN_STARTUP_ALL = &quot;1&quot; OR CHILDUSER_IS_ADMIN &lt;&gt; &quot;1&quot; OR CHILDUSER_ADMIN_OK = &quot;1&quot;)" />
         </Control>
-        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+        <Control Id="Cancel" Type="PushButton" X="304" Y="263" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
           <Publish Event="SpawnDialog" Value="CancelDlg" />
         </Control>
       </Dialog>
 
-      <Dialog Id="ChildUserInvalidDlg" Width="260" Height="85" Title="Child account required">
+      <Dialog Id="ChildUserInvalidDlg" Width="260" Height="85" Title="Account required">
         <Control Id="Text" Type="Text" X="15" Y="12" Width="230" Height="40" NoPrefix="yes"
                  Text="[CHILDUSER_VALID_MSG]" />
         <Control Id="OK" Type="PushButton" X="102" Y="55" Width="56" Height="17" Default="yes" Cancel="yes" Text="OK">
@@ -90,9 +94,9 @@
         </Control>
       </Dialog>
 
-      <Dialog Id="ChildUserAdminConfirmDlg" Width="320" Height="140" Title="This looks like a parent account">
+      <Dialog Id="ChildUserAdminConfirmDlg" Width="320" Height="140" Title="Administrator account selected">
         <Control Id="Text" Type="Text" X="15" Y="12" Width="290" Height="70" NoPrefix="yes"
-                 Text="[CHILDUSER] is a local Administrator. That is usually the parent's account. If you continue, Warden will start when that admin signs in - not when your child signs in. Use the child's standard (non-admin) Windows account whenever possible." />
+                 Text="[CHILDUSER] is a local Administrator. That is usually the parent's account. If you continue, Warden will start when that admin signs in - not when your supervised user signs in. Choose a standard (non-admin) Windows account whenever possible." />
         <Control Id="Back" Type="PushButton" X="100" Y="100" Width="100" Height="17" Cancel="yes" Text="Go back">
           <Publish Event="EndDialog" Value="Return" />
         </Control>
@@ -108,16 +112,16 @@
       <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Condition="Installed AND PATCH" />
 
       <Publish Dialog="LicenseAgreementDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" />
-      <!-- Normal path: ask for child account (unless msiexec already supplied CHILDUSER). -->
+      <!-- Normal path: ask for startup account (unless msiexec already supplied CHILDUSER or WARDEN_STARTUP_ALL=1). -->
       <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="ChildUserDlg"
-               Condition="LicenseAccepted = &quot;1&quot; AND NOT CHILDUSER_SET_FROM_CMDLINE" />
+               Condition="LicenseAccepted = &quot;1&quot; AND NOT CHILDUSER_SET_FROM_CMDLINE AND NOT WARDEN_STARTUP_ALL_SET_FROM_CMDLINE" />
       <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg"
-               Condition="LicenseAccepted = &quot;1&quot; AND CHILDUSER_SET_FROM_CMDLINE" />
+               Condition="LicenseAccepted = &quot;1&quot; AND (CHILDUSER_SET_FROM_CMDLINE OR WARDEN_STARTUP_ALL_SET_FROM_CMDLINE)" />
 
       <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ChildUserDlg" Order="1"
-               Condition="NOT Installed AND NOT CHILDUSER_SET_FROM_CMDLINE" />
+               Condition="NOT Installed AND NOT CHILDUSER_SET_FROM_CMDLINE AND NOT WARDEN_STARTUP_ALL_SET_FROM_CMDLINE" />
       <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg" Order="2"
-               Condition="NOT Installed AND CHILDUSER_SET_FROM_CMDLINE" />
+               Condition="NOT Installed AND (CHILDUSER_SET_FROM_CMDLINE OR WARDEN_STARTUP_ALL_SET_FROM_CMDLINE)" />
       <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="3"
                Condition="Installed AND NOT PATCH" />
       <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="4"
@@ -162,7 +166,7 @@
     <InstallUISequence>
       <!-- After reg pre-fill so a wrong persisted ChildUser is visible/correctable. -->
       <Custom Action="PopulateChildUserCombo" After="SetChildUserFromReg"
-              Condition="NOT Installed AND NOT CHILDUSER_SET_FROM_CMDLINE AND UILevel &gt; 3" />
+              Condition="NOT Installed AND NOT CHILDUSER_SET_FROM_CMDLINE AND NOT WARDEN_STARTUP_ALL_SET_FROM_CMDLINE AND UILevel &gt; 3" />
     </InstallUISequence>
   </Fragment>
 

@@ -1,4 +1,5 @@
 import {
+  getOutsideExtensionRemainingMinutes,
   getPolicyStatusLabel,
   type PolicyEvaluation,
 } from "@warden/shared";
@@ -22,7 +23,7 @@ export type PolicyRemainingDisplayInput = Pick<
 >;
 
 export type PolicyRemainingDisplay = {
-  layout: "window_binding" | "default";
+  layout: "window_binding" | "after_hours" | "default";
   statusText: string;
   primaryText: string | null;
   secondaryText: string | null;
@@ -46,9 +47,20 @@ export function isWindowBindingAllowed(
   );
 }
 
+export function isAfterHoursBonusAllowed(
+  evaluation: PolicyRemainingDisplayInput
+): boolean {
+  return (
+    evaluation.status === "allowed" &&
+    evaluation.inWindow === false &&
+    evaluation.bonusMinutes > 0 &&
+    evaluation.remainingMinutes > 0
+  );
+}
+
 /**
- * Minutes of bonus that still apply once allowed hours end.
- * Matches policy-engine outside-window bonus remaining.
+ * Minutes of bonus that still apply once allowed hours end (in-window preview).
+ * Matches unused after-hours grant size before pierce baseline exists.
  */
 export function getUsableAfterHoursBonusMinutes(
   evaluation: Pick<
@@ -56,18 +68,18 @@ export function getUsableAfterHoursBonusMinutes(
     "bonusMinutes" | "usedMinutes" | "dailyLimitMinutes"
   >
 ): number {
-  if (evaluation.bonusMinutes <= 0) return 0;
-  return Math.max(
-    0,
-    evaluation.bonusMinutes -
-      Math.max(0, evaluation.usedMinutes - evaluation.dailyLimitMinutes)
-  );
+  return getOutsideExtensionRemainingMinutes({
+    bonusMinutes: evaluation.bonusMinutes,
+    usedMinutesToday: evaluation.usedMinutes,
+    dailyLimitMinutes: evaluation.dailyLimitMinutes,
+    baselineUsedMinutes: null,
+  });
 }
 
 /**
  * Progress fill for the binding constraint (option D):
  * - window binding → access left / today's window capacity
- * - after-hours bonus → usable bonus / granted bonus
+ * - after-hours bonus → session remaining / granted bonus
  * - daily limit → daily remaining / effective limit
  */
 export function getBindingRemainingFraction(
@@ -87,14 +99,11 @@ export function getBindingRemainingFraction(
     return 0;
   }
 
-  if (
-    evaluation.status === "allowed" &&
-    evaluation.inWindow === false &&
-    evaluation.bonusMinutes > 0
-  ) {
-    const usable = getUsableAfterHoursBonusMinutes(evaluation);
-    if (usable <= 0) return 0;
-    return clamp01(usable / Math.max(evaluation.bonusMinutes, 1));
+  if (isAfterHoursBonusAllowed(evaluation)) {
+    return clamp01(
+      evaluation.remainingMinutes /
+        Math.max(evaluation.bonusMinutes, evaluation.remainingMinutes, 1)
+    );
   }
 
   if (evaluation.limitingFactor === "window") {
@@ -171,6 +180,20 @@ export function getPolicyRemainingDisplay(
         afterHoursBonus > 0
           ? `+${afterHoursBonus} min allowed after hours end`
           : null,
+      primaryClassName: getWindowBindingPrimaryClassName(
+        evaluation.remainingMinutes
+      ),
+      usedTodaySecondary: true,
+    };
+  }
+
+  if (isAfterHoursBonusAllowed(evaluation)) {
+    return {
+      layout: "after_hours",
+      statusText,
+      primaryText: `${evaluation.remainingMinutes} min left today`,
+      secondaryText: `After-hours bonus · ${evaluation.dailyRemainingMinutes} min of daily budget left`,
+      afterHoursText: null,
       primaryClassName: getWindowBindingPrimaryClassName(
         evaluation.remainingMinutes
       ),

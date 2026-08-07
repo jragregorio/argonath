@@ -123,6 +123,31 @@ node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.5.11-
 2. Redeploy if needed.
 3. Phase 3: SYSTEM updater service.
 
+## Phase 1.2 — EULA + startup UI + AllStandard (2026-08-06)
+
+### Shipped
+
+- Custom `assets/License.rtf` wired via `WixUILicenseRtf` (sections 1–11; no governing-law/contact).
+- ChildUserDlg copy softened (parental-control framing); advanced checkbox `WARDEN_STARTUP_ALL`.
+- `WARDEN_STARTUP_MODE` (`Single` | `AllStandard`) persisted to `HKLM\SOFTWARE\Warden`.
+- Deferred CA: Single → `Warden\WardenTray`; AllStandard → `Warden\WardenTray-<Sam>` per non-admin.
+- Tray `StartupHelper` detects per-user task names.
+- `Repair-WardenStartup.ps1 -AllStandard` for post-install refresh.
+
+### Validation (executor)
+
+| Command | Exit |
+|---------|------|
+| `dotnet build Warden.Installer.CA` (Release) | **0** |
+| `dotnet build Warden.Installer.wixproj -c Release` | **0** (ICE61 expected) |
+
+### Follow-up (orchestrator, same day)
+
+- Cleared persisted `__ALL_STANDARD__` from the account combo on upgrade (was being
+  machine-qualified / surfaced as a fake account).
+- Single-mode validate + deferred CA reject the AllStandard sentinel.
+- Normalized `UI.wxs` whitespace. Rebuild CA + MSI: both **exit 0**.
+
 ## Related work
 
 Autostart diagnosis, agent file logging, HKCU self-heal, and installer startup-script hardening

@@ -28,15 +28,21 @@ Optional future signing: `-p:SignMsi=true -p:CertificateThumbprint=...` (hook is
 
 ### Install on a child PC (elevated)
 
-**Interactive install (double-click the MSI):** the wizard asks which Windows account the child uses. Pick the child's standard (non-admin) account — not the parent admin that clicked through UAC. That choice is persisted to `HKLM\SOFTWARE\Warden\ChildUser` and reused on silent upgrades.
+**Interactive install (double-click the MSI):** the wizard shows the license agreement, then asks **who Warden should start for**. Pick the child's standard (non-admin) Windows sign-in account — not the parent admin that clicked through UAC. An **Advanced** checkbox can register autostart for **all** local standard (non-admin) accounts instead (administrators are never included). That choice is persisted to `HKLM\SOFTWARE\Warden` (`ChildUser`, `StartupMode`) and reused on silent upgrades.
 
-**Silent / scripted install** still accepts an explicit account (required for unattended upgrades):
+**Silent / scripted install** still accepts an explicit account (default single-account mode):
 
 ```powershell
 msiexec /i Warden-0.5.15-x64.msi CHILDUSER="CHILDPC\ChildAccount" /qn
 ```
 
-`CHILDUSER` is `COMPUTER\ChildAccount` (or `DOMAIN\ChildAccount`) — the Windows account that should get the logon scheduled task.
+**All standard users (advanced, silent):**
+
+```powershell
+msiexec /i Warden-0.5.15-x64.msi WARDEN_STARTUP_ALL=1 /qn
+```
+
+`CHILDUSER` is `COMPUTER\ChildAccount` (or `DOMAIN\ChildAccount`) — the Windows account that should get the logon scheduled task in single-account mode. In AllStandard mode, `ChildUser` is stored as `__ALL_STANDARD__` and each non-admin local user gets `Warden\WardenTray-<Sam>`. New local standard accounts created **after** install do not automatically receive a task — run MSI repair/reinstall or `Repair-WardenStartup.ps1 -AllStandard` (elevated).
 
 The installer:
 
@@ -60,6 +66,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\path\to\Guardian\scripts\
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Program Files\Warden\Repair-WardenStartup.ps1" -UserId "CHILDPC\ChildAccount"
+# Or re-register for all local standard (non-admin) accounts:
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Program Files\Warden\Repair-WardenStartup.ps1" -AllStandard
 ```
 
 3. App logs (v0.5.14+): `%LOCALAPPDATA%\Warden\logs\`. Installer/SYSTEM logs: `C:\ProgramData\Warden\logs\`.

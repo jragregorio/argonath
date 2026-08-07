@@ -159,7 +159,8 @@ public static class PolicyEngine
         int usedMinutesToday,
         int bonusMinutes,
         DateTime? now = null,
-        string? timeZoneIana = null)
+        string? timeZoneIana = null,
+        int? outsideGrantBaselineUsedMinutes = null)
     {
         now ??= ResolveNow(timeZoneIana);
         var effectiveLimit = policy.DailyLimitMinutes + bonusMinutes;
@@ -191,9 +192,11 @@ public static class PolicyEngine
 
         if (!inWindow)
         {
-            var bonusRemaining = Math.Max(
-                0,
-                bonusMinutes - Math.Max(0, usedMinutesToday - policy.DailyLimitMinutes));
+            var bonusRemaining = GetOutsideExtensionRemainingMinutes(
+                bonusMinutes,
+                usedMinutesToday,
+                policy.DailyLimitMinutes,
+                outsideGrantBaselineUsedMinutes);
             if (bonusRemaining > 0)
             {
                 return new PolicyEvaluation
@@ -268,6 +271,41 @@ public static class PolicyEngine
     public static bool ShouldLock(PolicyEvaluation evaluation)
     {
         return evaluation.Status is "blocked" or "outside_window";
+    }
+
+    /// <summary>
+    /// After-hours extension grant size (minutes) from baseline and bonus.
+    /// Mirrors shared <c>getOutsideExtensionRemainingMinutes</c> grant math.
+    /// </summary>
+    public static int GetOutsideExtensionGrantSize(
+        int bonusMinutes,
+        int baselineUsedMinutes,
+        int dailyLimitMinutes)
+    {
+        return Math.Max(
+            0,
+            bonusMinutes - Math.Max(0, baselineUsedMinutes - dailyLimitMinutes));
+    }
+
+    /// <summary>
+    /// Remaining after-hours extension minutes. When baseline is null, treats
+    /// current used as the pierce point (pre-persist).
+    /// </summary>
+    public static int GetOutsideExtensionRemainingMinutes(
+        int bonusMinutes,
+        int usedMinutesToday,
+        int dailyLimitMinutes,
+        int? baselineUsedMinutes)
+    {
+        if (bonusMinutes <= 0) return 0;
+
+        var baseline = baselineUsedMinutes ?? usedMinutesToday;
+        var grantSize = GetOutsideExtensionGrantSize(
+            bonusMinutes,
+            baseline,
+            dailyLimitMinutes);
+        var consumed = Math.Max(0, usedMinutesToday - baseline);
+        return Math.Max(0, grantSize - consumed);
     }
 
     private static string PickLimitingFactor(int dailyRemaining, int? windowRemaining, bool hasWindows)

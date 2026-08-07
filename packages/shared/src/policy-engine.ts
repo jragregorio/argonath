@@ -178,6 +178,212 @@ function getActiveBonusMinutes(
     .reduce((sum, o) => sum + o.extraMinutes, 0);
 }
 
+/**
+ * End minute (family TZ wall clock) of the latest merged window run that has
+ * already ended today. Null when not applicable: no windows, still in window,
+ * before first window today, or no ended run today.
+ */
+export function getLatestTodayWindowEndMinutes(
+  windows: AllowedWindow[],
+  now: Date,
+  timeZone: string = DEFAULT_TIME_ZONE
+): number | null {
+  if (windows.length === 0) return null;
+
+  const { dayOfWeek: currentDay, minutesSinceMidnight: currentMinutes } =
+    getZonedTimeParts(now, timeZone);
+
+  const todayMerged = mergeWindows(windows).filter((w) => w.day === currentDay);
+  if (todayMerged.length === 0) return null;
+
+  for (const window of todayMerged) {
+    const start = parseTime(window.start);
+    const end = parseTime(window.end);
+    if (currentMinutes >= start && currentMinutes < end) {
+      return null;
+    }
+  }
+
+  let latestEnd: number | null = null;
+  for (const window of todayMerged) {
+    const end = parseTime(window.end);
+    if (end <= currentMinutes) {
+      latestEnd = latestEnd === null ? end : Math.max(latestEnd, end);
+    }
+  }
+
+  return latestEnd;
+}
+
+/**
+ * When currently outside today's allowed windows, minutes elapsed since the
+ * latest merged window run ended today (family TZ wall clock). Null when not
+ * applicable: no windows, still in window, before first window today, or no
+ * ended run today.
+ */
+export function getMinutesSinceTodayWindowEnded(
+  windows: AllowedWindow[],
+  now: Date,
+  timeZone: string = DEFAULT_TIME_ZONE
+): number | null {
+  const latestEnd = getLatestTodayWindowEndMinutes(windows, now, timeZone);
+  if (latestEnd === null) return null;
+
+  const { minutesSinceMidnight: currentMinutes } = getZonedTimeParts(now, timeZone);
+  return currentMinutes - latestEnd;
+}
+
+/**
+ * True when `grantCreatedAt` is strictly after today's window end instant
+ * (family TZ), using `now` to determine today's calendar date and ended runs.
+ */
+export function isGrantCreatedAfterTodayWindowEnd(
+  windows: AllowedWindow[],
+  grantCreatedAt: Date,
+  now: Date,
+  timeZone: string = DEFAULT_TIME_ZONE
+): boolean {
+  const windowEndMinute = getLatestTodayWindowEndMinutes(windows, now, timeZone);
+  if (windowEndMinute === null) return false;
+
+  const todayParts = getZonedTimeParts(now, timeZone);
+  const createdParts = getZonedTimeParts(grantCreatedAt, timeZone);
+
+  const todayKey =
+    todayParts.year * 10000 + todayParts.month * 100 + todayParts.day;
+  const createdKey =
+    createdParts.year * 10000 + createdParts.month * 100 + createdParts.day;
+
+  if (createdKey < todayKey) return false;
+  if (createdKey > todayKey) return true;
+
+  return createdParts.minutesSinceMidnight > windowEndMinute;
+}
+
+/**
+ * Minutes after window end before treating the first server observation as "late"
+ * and backfilling from wall-clock (vs pierce-at-current-used).
+ */
+export const LATE_OUTSIDE_BASELINE_MINUTES = 2;
+
+/**
+ * Wall-clock backfill from today's window end and usage.
+ * **Late-repair / migration only** — not steady-state agent sync. Steady-state
+ * baselines come from pierce-at-first-observe or persisted server values via
+ * {@link resolveOutsideGrantBaselineToPersist}.
+ *
+ * Clamped so consumed after-hours time cannot exceed the bonus grant.
+ */
+export function computeIdealOutsideGrantBaseline(args: {
+  usedMinutes: number;
+  bonusMinutes: number;
+  dailyLimitMinutes: number;
+  minutesSinceWindowEnded: number | null;
+}): number {
+  const {
+    usedMinutes,
+    bonusMinutes,
+    dailyLimitMinutes,
+    minutesSinceWindowEnded,
+  } = args;
+  const backfill = minutesSinceWindowEnded ?? 0;
+  const grantAtPierce = getOutsideExtensionRemainingMinutes({
+    bonusMinutes,
+    usedMinutesToday: usedMinutes,
+    dailyLimitMinutes,
+    baselineUsedMinutes: null,
+  });
+  const minBaseline = Math.max(0, usedMinutes - grantAtPierce);
+  return Math.max(0, usedMinutes - backfill, minBaseline);
+}
+
+/**
+ * Baseline to persist on the server for after-hours extension countdown.
+ * Single source of truth for first-write and downward repair. Post-window stored
+ * baselines are immutable once set; null stored pierces at current used.
+ */
+export function resolveOutsideGrantBaselineToPersist(args: {
+  usedMinutes: number;
+  bonusMinutes: number;
+  dailyLimitMinutes: number;
+  minutesSinceWindowEnded: number | null;
+  storedBaseline: number | null;
+  /** Active grant was approved strictly after today's window ended (family TZ). */
+  grantCreatedAfterWindowEnd: boolean;
+}): number {
+  const {
+    usedMinutes,
+    bonusMinutes,
+    dailyLimitMinutes,
+    minutesSinceWindowEnded,
+    storedBaseline,
+    grantCreatedAfterWindowEnd,
+  } = args;
+
+  const ideal = computeIdealOutsideGrantBaseline({
+    usedMinutes,
+    bonusMinutes,
+    dailyLimitMinutes,
+    minutesSinceWindowEnded,
+  });
+
+  if (storedBaseline != null) {
+    if (grantCreatedAfterWindowEnd) {
+      return storedBaseline;
+    }
+    return Math.min(storedBaseline, ideal);
+  }
+
+  if (grantCreatedAfterWindowEnd) {
+    return usedMinutes;
+  }
+
+  if (
+    minutesSinceWindowEnded != null &&
+    minutesSinceWindowEnded >= LATE_OUTSIDE_BASELINE_MINUTES
+  ) {
+    return ideal;
+  }
+
+  return usedMinutes;
+}
+
+/** Earliest persisted after-hours baseline among non-expired overrides. */
+export function getOutsideGrantBaselineUsedMinutes(
+  overrides: ExtensionOverrideInput[],
+  now: Date = new Date()
+): number | null {
+  const baselines = overrides
+    .filter((o) => o.expiresAt > now)
+    .map((o) => o.outsideGrantBaselineUsedMinutes)
+    .filter((value): value is number => value != null && Number.isFinite(value));
+  if (baselines.length === 0) return null;
+  return Math.min(...baselines);
+}
+
+/**
+ * Remaining after-hours extension minutes.
+ * When baseline is null, treats current used as the pierce point (pre-persist).
+ */
+export function getOutsideExtensionRemainingMinutes(args: {
+  bonusMinutes: number;
+  usedMinutesToday: number;
+  dailyLimitMinutes: number;
+  baselineUsedMinutes: number | null;
+}): number {
+  const { bonusMinutes, usedMinutesToday, dailyLimitMinutes } = args;
+  if (bonusMinutes <= 0) return 0;
+
+  const baselineUsedMinutes =
+    args.baselineUsedMinutes ?? usedMinutesToday;
+  const grantSize = Math.max(
+    0,
+    bonusMinutes - Math.max(0, baselineUsedMinutes - dailyLimitMinutes)
+  );
+  const consumed = Math.max(0, usedMinutesToday - baselineUsedMinutes);
+  return Math.max(0, grantSize - consumed);
+}
+
 function pickLimitingFactor(
   dailyRemaining: number,
   windowRemaining: number | undefined,
@@ -236,10 +442,16 @@ export function evaluatePolicy(
   );
 
   if (!inWindow) {
-    const bonusRemaining = Math.max(
-      0,
-      bonusMinutes - Math.max(0, usedMinutesToday - policy.dailyLimitMinutes)
+    const baselineUsedMinutes = getOutsideGrantBaselineUsedMinutes(
+      overrides,
+      now
     );
+    const bonusRemaining = getOutsideExtensionRemainingMinutes({
+      bonusMinutes,
+      usedMinutesToday,
+      dailyLimitMinutes: policy.dailyLimitMinutes,
+      baselineUsedMinutes,
+    });
     if (bonusRemaining > 0) {
       return {
         status: "allowed",

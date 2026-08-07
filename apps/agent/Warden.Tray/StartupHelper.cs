@@ -43,6 +43,7 @@ internal static class StartupHelper
 
     /// <summary>Task name registered by the per-machine MSI (must match installer authoring).</summary>
     internal const string InstallerTaskName = @"Warden\WardenTray";
+    internal const string InstallerPerUserTaskPrefix = @"Warden\WardenTray-";
 
     public static StartupDiagnosis Diagnose(bool selfHeal = true)
     {
@@ -143,6 +144,61 @@ internal static class StartupHelper
     {
         triggerUser = null;
         principalUser = null;
+
+        var taskNames = new[]
+        {
+            InstallerTaskName,
+            InstallerPerUserTaskPrefix + SanitizeSamForTaskName(Environment.UserName),
+        };
+
+        foreach (var taskName in taskNames)
+        {
+            var state = QueryInstallerTaskState(taskName, out triggerUser, out principalUser);
+            if (state != InstallerTaskState.Missing)
+            {
+                return state;
+            }
+        }
+
+        return InstallerTaskState.Missing;
+    }
+
+    private static string SanitizeSamForTaskName(string sam)
+    {
+        if (string.IsNullOrWhiteSpace(sam))
+        {
+            return "_";
+        }
+
+        var sb = new StringBuilder(sam.Length);
+        foreach (var ch in sam)
+        {
+            if ((ch >= 'A' && ch <= 'Z')
+                || (ch >= 'a' && ch <= 'z')
+                || (ch >= '0' && ch <= '9')
+                || ch == '.'
+                || ch == '_'
+                || ch == '-')
+            {
+                sb.Append(ch);
+            }
+            else
+            {
+                sb.Append('_');
+            }
+        }
+
+        return sb.Length > 0 ? sb.ToString() : "_";
+    }
+
+    private static InstallerTaskState QueryInstallerTaskState(
+        string taskName,
+        out string? triggerUser,
+        out string? principalUser
+    )
+    {
+        triggerUser = null;
+        principalUser = null;
         try
         {
             using var process = new Process
@@ -150,7 +206,7 @@ internal static class StartupHelper
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = "schtasks.exe",
-                    Arguments = $"/Query /TN \"{InstallerTaskName}\" /XML",
+                    Arguments = $"/Query /TN \"{taskName}\" /XML",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,

@@ -33,6 +33,12 @@ login on the machine (parents often elevate from an admin account on the same PC
    `HKLM\SOFTWARE\Warden\ChildUser` so unattended SYSTEM upgrades (Phase 3)
    re-create the task for the original child — not `LogonUser`/`SYSTEM`.
    Precedence: msiexec cmdline > persisted HKLM > `[LogonUser]`.
+   **Amendment (2026-08-06):** default remains single-account `CHILDUSER`.
+   Optional **AllStandard** mode (`WARDEN_STARTUP_ALL=1`) registers
+   `Warden\WardenTray-<Sam>` for each local standard (non-admin) user and
+   never for Administrators; `StartupMode=AllStandard` and
+   `ChildUser=__ALL_STANDARD__` are persisted. New accounts after install need
+   repair/reinstall to gain a task.
 5. **Upgrades:** `MajorUpgrade` with `Schedule="afterInstallInitialize"` and
    `AllowSameVersionUpgrades="yes"` (self-contained publish churns hundreds of
    files between versions).

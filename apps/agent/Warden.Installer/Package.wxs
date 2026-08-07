@@ -78,6 +78,40 @@
     <Property Id="CHILDUSER_VALID_MSG" Secure="yes" />
     <Property Id="CHILDUSER_SET_FROM_CMDLINE" Secure="yes" />
 
+  <!--
+    WARDEN_STARTUP_ALL / WARDEN_STARTUP_MODE:
+      Default Single: one logon task for CHILDUSER (ADR-0003).
+      AllStandard (advanced): per non-admin local user task Warden\WardenTray-<Sam>.
+      Persisted under HKLM\SOFTWARE\Warden\StartupMode; ChildUser=__ALL_STANDARD__ sentinel.
+  -->
+    <Property Id="WARDEN_STARTUP_ALL" Secure="yes" />
+    <Property Id="WARDEN_STARTUP_MODE" Secure="yes" />
+    <Property Id="WARDEN_STARTUP_ALL_SET_FROM_CMDLINE" Secure="yes" />
+    <Property Id="WARDEN_STARTUP_MODE_REG" Secure="yes">
+      <RegistrySearch
+        Id="FindPersistedStartupMode"
+        Root="HKLM"
+        Key="SOFTWARE\Warden"
+        Name="StartupMode"
+        Type="raw"
+        Bitness="always64" />
+    </Property>
+
+    <SetProperty
+      Id="WARDEN_STARTUP_ALL"
+      Action="SetStartupAllFromReg"
+      Value="1"
+      After="AppSearch"
+      Sequence="first"
+      Condition="WARDEN_STARTUP_MODE_REG = &quot;AllStandard&quot;" />
+    <SetProperty
+      Id="WARDEN_STARTUP_ALL_SET_FROM_CMDLINE"
+      Action="SetStartupAllFromCmdline"
+      Value="1"
+      Before="AppSearch"
+      Sequence="first"
+      Condition="WARDEN_STARTUP_ALL = &quot;1&quot;" />
+
     <SetProperty
       Id="CHILDUSER"
       Action="SetChildUserFromReg"
@@ -92,6 +126,11 @@
       After="SetChildUserFromReg"
       Sequence="first"
       Condition="NOT CHILDUSER AND UILevel &lt;= 3" />
+
+    <!-- Branded WixUI bitmaps (replaces stock red-disc banner/dialog art). -->
+    <WixVariable Id="WixUIDialogBmp" Value="assets\ui\WixUIDialogBmp.bmp" />
+    <WixVariable Id="WixUIBannerBmp" Value="assets\ui\WixUIBannerBmp.bmp" />
+    <WixVariable Id="WixUILicenseRtf" Value="assets\License.rtf" />
 
     <UIRef Id="WixUI_Warden" />
 
@@ -159,6 +198,12 @@
           Type="string"
           Value="[CHILDUSER]"
           KeyPath="yes" />
+        <RegistryValue
+          Root="HKLM"
+          Key="SOFTWARE\Warden"
+          Name="StartupMode"
+          Type="string"
+          Value="[WARDEN_STARTUP_MODE]" />
       </Component>
 
       <!--
@@ -193,8 +238,30 @@
       RollbackWardenTask has Execute=rollback so it only runs if the transaction rolls back.
     -->
     <SetProperty
+      Id="WARDEN_STARTUP_MODE"
+      Action="SetStartupModeAllStandard"
+      Value="AllStandard"
+      Before="InstallFiles"
+      Sequence="execute"
+      Condition="NOT REMOVE AND WARDEN_STARTUP_ALL = &quot;1&quot;" />
+    <SetProperty
+      Id="WARDEN_STARTUP_MODE"
+      Action="SetStartupModeSingle"
+      Value="Single"
+      Before="InstallFiles"
+      Sequence="execute"
+      Condition="NOT REMOVE AND NOT WARDEN_STARTUP_ALL = &quot;1&quot;" />
+    <SetProperty
+      Id="CHILDUSER"
+      Action="SetChildUserAllStandardSentinel"
+      Value="__ALL_STANDARD__"
+      Before="InstallFiles"
+      Sequence="execute"
+      Condition="NOT REMOVE AND WARDEN_STARTUP_ALL = &quot;1&quot; AND NOT CHILDUSER" />
+
+    <SetProperty
       Id="CreateWardenTask"
-      Value="ExePath=[INSTALLFOLDER]Warden.Tray.exe;UserId=[CHILDUSER];TaskName=Warden\WardenTray"
+      Value="ExePath=[INSTALLFOLDER]Warden.Tray.exe;UserId=[CHILDUSER];TaskName=Warden\WardenTray;StartupMode=[WARDEN_STARTUP_MODE]"
       Before="CreateWardenTask"
       Sequence="execute"
       Condition="NOT REMOVE" />

@@ -43,7 +43,7 @@ Publish output: `Warden.Tray/bin/Release/net8.0-windows/win-x64/publish/`. Prefe
 
 Runtime reads `AgentVersionInfo.Current` from the assembly. Do not hardcode agent version strings. Agent versions must **only increase** (field agents + MSI downgrade protection).
 
-**Base-10 carry (strict):** each component is `0–9` only. After `X.Y.9` the next agent bump is `X.(Y+1).0` (never `X.Y.10`). Same carry applies if minor would reach `10` → major `+1`. See root `AGENTS.md` and ADR-0004.
+**SemVer 2.0.0:** `MAJOR.MINOR.PATCH` with no single-digit cap (`0.8.9` → `0.8.10` is valid). See root `AGENTS.md` and ADR-0004.
 
 ## Boundaries
 

@@ -1,9 +1,15 @@
 import { describe, it, expect } from "vitest";
 import {
+  computeIdealOutsideGrantBaseline,
   evaluatePolicy,
+  getMinutesSinceTodayWindowEnded,
+  getOutsideExtensionRemainingMinutes,
   getPolicyReach,
   getWindowCapacityMinutes,
+  isGrantCreatedAfterTodayWindowEnd,
+  LATE_OUTSIDE_BASELINE_MINUTES,
   mergeWindows,
+  resolveOutsideGrantBaselineToPersist,
   shouldLock,
 } from "./policy-engine";
 import { getCalendarDateInTimeZone, getZonedTimeParts } from "./timezone";
@@ -251,6 +257,26 @@ describe("policy engine", () => {
       expect(shouldLock(result)).toBe(false);
     });
 
+    it("counts down from after-hours baseline while still under daily limit", () => {
+      const withBaseline = [
+        {
+          extraMinutes: 120,
+          expiresAt: new Date("2026-01-08T00:00:00.000Z"),
+          outsideGrantBaselineUsedMinutes: 250,
+        },
+      ];
+      const policy: ScreenTimePolicyInput = {
+        dailyLimitMinutes: 900,
+        allowedWindows: [{ day: 3, start: "04:00", end: "19:00" }],
+        isActive: true,
+      };
+      const result = evaluatePolicy(policy, 273, withBaseline, wed8pm, "UTC");
+      expect(result.status).toBe("allowed");
+      expect(result.inWindow).toBe(false);
+      expect(result.remainingMinutes).toBe(97);
+      expect(shouldLock(result)).toBe(false);
+    });
+
     it("allows partially consumed bonus outside window", () => {
       const result = evaluatePolicy(
         wedWindowPolicy,
@@ -399,6 +425,257 @@ describe("getWindowCapacityMinutes / getPolicyReach", () => {
     });
     expect(reach.minWindowedCapacityMinutes).toBeNull();
     expect(reach.constrainedDays).toEqual([]);
+  });
+});
+
+describe("after-hours baseline backfill", () => {
+  const friWindow = [{ day: 5, start: "05:00", end: "19:00" }];
+  // Friday 2026-01-09 19:42 UTC — 42 min after 19:00 window end
+  const friAfterHours = new Date("2026-01-09T19:42:00.000Z");
+
+  it("getMinutesSinceTodayWindowEnded returns elapsed minutes after window end", () => {
+    expect(
+      getMinutesSinceTodayWindowEnded(friWindow, friAfterHours, "UTC")
+    ).toBe(42);
+  });
+
+  it("returns null while inside today's window", () => {
+    const friMidday = new Date("2026-01-09T12:00:00.000Z");
+    expect(
+      getMinutesSinceTodayWindowEnded(friWindow, friMidday, "UTC")
+    ).toBeNull();
+  });
+
+  it("returns null before first window of the day", () => {
+    const friEarly = new Date("2026-01-09T04:00:00.000Z");
+    expect(
+      getMinutesSinceTodayWindowEnded(friWindow, friEarly, "UTC")
+    ).toBeNull();
+  });
+
+  it("computeIdealOutsideGrantBaseline backfills from window end (used 268 → ~226)", () => {
+    const ideal = computeIdealOutsideGrantBaseline({
+      usedMinutes: 268,
+      bonusMinutes: 120,
+      dailyLimitMinutes: 900,
+      minutesSinceWindowEnded: 42,
+    });
+    expect(ideal).toBe(226);
+  });
+
+  it("ideal baseline yields agent-parity remaining via grant math", () => {
+    const ideal = computeIdealOutsideGrantBaseline({
+      usedMinutes: 268,
+      bonusMinutes: 120,
+      dailyLimitMinutes: 900,
+      minutesSinceWindowEnded: 42,
+    });
+    const remaining = getOutsideExtensionRemainingMinutes({
+      bonusMinutes: 120,
+      usedMinutesToday: 268,
+      dailyLimitMinutes: 900,
+      baselineUsedMinutes: ideal,
+    });
+    expect(remaining).toBe(78);
+  });
+
+  it("clamps ideal baseline so consumed after-hours cannot exceed grant", () => {
+    const ideal = computeIdealOutsideGrantBaseline({
+      usedMinutes: 268,
+      bonusMinutes: 120,
+      dailyLimitMinutes: 900,
+      minutesSinceWindowEnded: 200,
+    });
+    expect(ideal).toBe(148);
+    expect(
+      getOutsideExtensionRemainingMinutes({
+        bonusMinutes: 120,
+        usedMinutesToday: 268,
+        dailyLimitMinutes: 900,
+        baselineUsedMinutes: ideal,
+      })
+    ).toBe(0);
+  });
+});
+
+describe("resolveOutsideGrantBaselineToPersist", () => {
+  const bonus = 120;
+  const dailyLimit = 900;
+  const friWindow = [{ day: 5, start: "05:00", end: "19:00" }];
+  const friAfterHours = new Date("2026-01-09T19:42:00.000Z");
+  const friGrantAtWindowEnd = new Date("2026-01-09T19:00:00.000Z");
+  const friPostWindowGrant = new Date("2026-01-09T19:19:00.000Z");
+
+  it("pierce path: elapsed 0 or 1 uses current used as baseline", () => {
+    for (const elapsed of [0, 1]) {
+      expect(
+        resolveOutsideGrantBaselineToPersist({
+          usedMinutes: 250,
+          bonusMinutes: bonus,
+          dailyLimitMinutes: dailyLimit,
+          minutesSinceWindowEnded: elapsed,
+          storedBaseline: null,
+          grantCreatedAfterWindowEnd: false,
+        })
+      ).toBe(250);
+    }
+  });
+
+  it("late first observe for pre-window grant uses ideal backfill", () => {
+    const used = 268;
+    const elapsed = 42;
+    const ideal = computeIdealOutsideGrantBaseline({
+      usedMinutes: used,
+      bonusMinutes: bonus,
+      dailyLimitMinutes: dailyLimit,
+      minutesSinceWindowEnded: elapsed,
+    });
+    expect(ideal).toBe(226);
+    expect(
+      resolveOutsideGrantBaselineToPersist({
+        usedMinutes: used,
+        bonusMinutes: bonus,
+        dailyLimitMinutes: dailyLimit,
+        minutesSinceWindowEnded: elapsed,
+        storedBaseline: null,
+        grantCreatedAfterWindowEnd: false,
+      })
+    ).toBe(ideal);
+    expect(elapsed).toBeGreaterThanOrEqual(LATE_OUTSIDE_BASELINE_MINUTES);
+  });
+
+  it("post-window approval pierces at used even when late first observe", () => {
+    const used = 42;
+    const elapsed = 19;
+    const bonusMinutes = 15;
+    expect(
+      isGrantCreatedAfterTodayWindowEnd(
+        friWindow,
+        friPostWindowGrant,
+        friAfterHours,
+        "UTC"
+      )
+    ).toBe(true);
+    expect(
+      resolveOutsideGrantBaselineToPersist({
+        usedMinutes: used,
+        bonusMinutes,
+        dailyLimitMinutes: dailyLimit,
+        minutesSinceWindowEnded: elapsed,
+        storedBaseline: null,
+        grantCreatedAfterWindowEnd: true,
+      })
+    ).toBe(used);
+    expect(
+      getOutsideExtensionRemainingMinutes({
+        bonusMinutes,
+        usedMinutesToday: used,
+        dailyLimitMinutes: dailyLimit,
+        baselineUsedMinutes: used,
+      })
+    ).toBe(bonusMinutes);
+  });
+
+  it("isGrantCreatedAfterTodayWindowEnd false when grant existed at window end", () => {
+    expect(
+      isGrantCreatedAfterTodayWindowEnd(
+        friWindow,
+        friGrantAtWindowEnd,
+        friAfterHours,
+        "UTC"
+      )
+    ).toBe(false);
+  });
+
+  it("repairs stored baseline downward when stored > ideal (pre-window grant)", () => {
+    const used = 268;
+    const elapsed = 42;
+    const ideal = computeIdealOutsideGrantBaseline({
+      usedMinutes: used,
+      bonusMinutes: bonus,
+      dailyLimitMinutes: dailyLimit,
+      minutesSinceWindowEnded: elapsed,
+    });
+    const repaired = resolveOutsideGrantBaselineToPersist({
+      usedMinutes: used,
+      bonusMinutes: bonus,
+      dailyLimitMinutes: dailyLimit,
+      minutesSinceWindowEnded: elapsed,
+      storedBaseline: 300,
+      grantCreatedAfterWindowEnd: false,
+    });
+    expect(repaired).toBe(ideal);
+    expect(repaired).toBeLessThan(300);
+  });
+
+  it("keeps post-window stored baseline immutable when remaining is 0", () => {
+    const used = 47;
+    const elapsed = 26;
+    const bonusMinutes = 15;
+    const approveTimeBaseline = 41;
+    expect(
+      getOutsideExtensionRemainingMinutes({
+        bonusMinutes,
+        usedMinutesToday: used,
+        dailyLimitMinutes: dailyLimit,
+        baselineUsedMinutes: approveTimeBaseline,
+      })
+    ).toBe(9);
+    const persisted = resolveOutsideGrantBaselineToPersist({
+      usedMinutes: used,
+      bonusMinutes,
+      dailyLimitMinutes: dailyLimit,
+      minutesSinceWindowEnded: elapsed,
+      storedBaseline: approveTimeBaseline,
+      grantCreatedAfterWindowEnd: true,
+    });
+    expect(persisted).toBe(approveTimeBaseline);
+    expect(persisted).not.toBe(used);
+    expect(
+      getOutsideExtensionRemainingMinutes({
+        bonusMinutes,
+        usedMinutesToday: used,
+        dailyLimitMinutes: dailyLimit,
+        baselineUsedMinutes: persisted,
+      })
+    ).toBe(9);
+  });
+
+  it("stacking after-hours bonus reuses lower existing baseline", () => {
+    const existingBaseline = 41;
+    const used = 47;
+    const bonusMinutes = 30;
+    expect(
+      resolveOutsideGrantBaselineToPersist({
+        usedMinutes: used,
+        bonusMinutes,
+        dailyLimitMinutes: dailyLimit,
+        minutesSinceWindowEnded: 26,
+        storedBaseline: existingBaseline,
+        grantCreatedAfterWindowEnd: true,
+      })
+    ).toBe(existingBaseline);
+  });
+
+  it("consumed extension tracks used minus baseline under daily limit", () => {
+    const baseline = resolveOutsideGrantBaselineToPersist({
+      usedMinutes: 250,
+      bonusMinutes: bonus,
+      dailyLimitMinutes: dailyLimit,
+      minutesSinceWindowEnded: 0,
+      storedBaseline: null,
+      grantCreatedAfterWindowEnd: false,
+    });
+    expect(baseline).toBe(250);
+    expect(
+      getOutsideExtensionRemainingMinutes({
+        bonusMinutes: bonus,
+        usedMinutesToday: 268,
+        dailyLimitMinutes: dailyLimit,
+        baselineUsedMinutes: baseline,
+      })
+    ).toBe(102);
+    expect(268 - baseline).toBe(18);
   });
 });
 

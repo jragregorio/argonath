@@ -12,5 +12,5 @@ alwaysApply: true
 - Read `AGENTS.md`, `docs/ai/PROJECT_CONTEXT.md`, and any `docs/work/active/*` before multi-step work.
 - Never commit or print secrets from `.env` / `.env.local`.
 - Prefer existing scripts: `npm run verify`, `npm run check:boundaries`.
-- Versioning (ADR-0004): web and agent are **independent** lines — never bump one for the other.
-- Base-10 carry (strict): each `MAJOR.MINOR.PATCH` component is `0–9` only. After `X.Y.9` next is `X.(Y+1).0` (never `X.Y.10`). Same carry if minor would hit `10` → major `+1`.
+- Versioning (ADR-0004): web, agent, and mobile are **independent** lines — never bump one for the other.
+- SemVer 2.0.0 (`MAJOR.MINOR.PATCH`): no single-digit cap — `0.8.9` → `0.8.10` is valid. See https://semver.org/.

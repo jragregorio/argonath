@@ -74,6 +74,11 @@ export type ScreenTimePolicyInput = {
 export type ExtensionOverrideInput = {
   extraMinutes: number;
   expiresAt: Date;
+  /**
+   * Usage minutes when this after-hours grant started (first outside-window pierce).
+   * When omitted/null, evaluatePolicy treats baseline as current used (instant grant).
+   */
+  outsideGrantBaselineUsedMinutes?: number | null;
 };
 
 export type RealtimeEventType =
@@ -149,7 +154,7 @@ export const DEVICE_OFFLINE_PUSH_THRESHOLD_SECONDS = 120;
 export const IDLE_THRESHOLD_SECONDS = 300;
 
 /** Product / dashboard version (keep in sync with Warden.Tray `<Version>`). */
-export const APP_VERSION = "0.8.9";
+export const APP_VERSION = "0.8.10";
 
 /** Default text shown on the child PC when a parent sends a nudge without a custom message. */
 export const DEFAULT_NUDGE_MESSAGE = "Your parent wants your attention";

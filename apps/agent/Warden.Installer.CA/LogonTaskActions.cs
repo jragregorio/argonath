@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Security;
 using System.Security.Principal;
 using System.Text;
@@ -35,10 +36,29 @@ public class LogonTaskActions
                 );
             }
 
+            var startupMode = data.TryGetValue("StartupMode", out var sm) && !string.IsNullOrWhiteSpace(sm)
+                ? sm.Trim()
+                : CustomActions.StartupModeSingle;
+
+            if (string.Equals(startupMode, CustomActions.StartupModeAllStandard, StringComparison.OrdinalIgnoreCase))
+            {
+                LogonTaskRegistrar.RegisterAllStandardUsers(exePath.Trim(), msg => LogBoth(session, msg));
+                LogBoth(session, "CreateWardenLogonTask: AllStandard success");
+                return ActionResult.Success;
+            }
+
             if (!data.TryGetValue("UserId", out var userId) || string.IsNullOrWhiteSpace(userId))
             {
                 throw new InvalidOperationException(
-                    "CustomActionData missing UserId (CHILDUSER). Pass CHILDUSER=\"COMPUTER\\ChildAccount\" or select the child in the installer UI."
+                    "CustomActionData missing UserId (CHILDUSER). Pass CHILDUSER=\"COMPUTER\\ChildAccount\" or select the supervised account in the installer UI."
+                );
+            }
+
+            if (string.Equals(userId.Trim(), CustomActions.AllStandardSentinel, StringComparison.OrdinalIgnoreCase)
+                || userId.Trim().EndsWith("\\" + CustomActions.AllStandardSentinel, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "CHILDUSER is the AllStandard sentinel but StartupMode is Single. Re-run setup and choose an account, or pass WARDEN_STARTUP_ALL=1."
                 );
             }
 
@@ -46,8 +66,9 @@ public class LogonTaskActions
                 ? tn.Trim()
                 : DefaultTaskName;
 
+            LogonTaskRegistrar.UnregisterPerUserTasks(msg => LogBoth(session, msg));
             LogonTaskRegistrar.Register(exePath.Trim(), userId.Trim(), taskName, msg => LogBoth(session, msg));
-            LogBoth(session, "CreateWardenLogonTask: success");
+            LogBoth(session, "CreateWardenLogonTask: Single success");
 
             // Best-effort immediate start into the child's session (if signed in).
             // Must never fail the install — no session is a normal case.
@@ -88,12 +109,8 @@ public class LogonTaskActions
     {
         try
         {
-            var data = ParseCustomActionData(session);
-            var taskName = data.TryGetValue("TaskName", out var tn) && !string.IsNullOrWhiteSpace(tn)
-                ? tn.Trim()
-                : DefaultTaskName;
-            LogBoth(session, "DeleteWardenLogonTask: begin; TaskName=" + taskName);
-            LogonTaskRegistrar.Unregister(taskName, msg => LogBoth(session, msg));
+            LogBoth(session, "DeleteWardenLogonTask: begin");
+            LogonTaskRegistrar.UnregisterAllWardenTasks(msg => LogBoth(session, msg));
             LogBoth(session, "DeleteWardenLogonTask: done");
             return ActionResult.Success;
         }
@@ -229,6 +246,133 @@ public class LogonTaskActions
 /// </summary>
 public static class LogonTaskRegistrar
 {
+    public const string DefaultTaskName = @"Warden\WardenTray";
+    public const string TaskNamePrefix = @"Warden\WardenTray";
+
+    public static string SanitizeSamForTaskName(string sam)
+    {
+        if (string.IsNullOrWhiteSpace(sam))
+        {
+            return "_";
+        }
+
+        var sb = new StringBuilder(sam.Length);
+        foreach (var ch in sam)
+        {
+            if ((ch >= 'A' && ch <= 'Z')
+                || (ch >= 'a' && ch <= 'z')
+                || (ch >= '0' && ch <= '9')
+                || ch == '.'
+                || ch == '_'
+                || ch == '-')
+            {
+                sb.Append(ch);
+            }
+            else
+            {
+                sb.Append('_');
+            }
+        }
+
+        return sb.Length > 0 ? sb.ToString() : "_";
+    }
+
+    public static string BuildPerUserTaskName(string samAccountName) =>
+        TaskNamePrefix + "-" + SanitizeSamForTaskName(samAccountName);
+
+    public static List<string> QueryWardenTaskNames(Action<string> log)
+    {
+        var names = new List<string>();
+        var (exit, output) = RunSchtasks("/Query /FO CSV /NH");
+        log("schtasks /Query exit=" + exit);
+        if (exit != 0 || string.IsNullOrWhiteSpace(output))
+        {
+            return names;
+        }
+
+        foreach (var line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmed = line.Trim().Trim('"');
+            if (trimmed.IndexOf(@"\Warden\", StringComparison.OrdinalIgnoreCase) >= 0
+                || trimmed.StartsWith(@"Warden\", StringComparison.OrdinalIgnoreCase))
+            {
+                names.Add(trimmed);
+            }
+        }
+
+        log("QueryWardenTaskNames found " + names.Count + " task(s)");
+        return names;
+    }
+
+    public static void UnregisterAllWardenTasks(Action<string> log)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in QueryWardenTaskNames(log))
+        {
+            if (seen.Add(name))
+            {
+                Unregister(name, log);
+            }
+        }
+
+        if (seen.Add(DefaultTaskName))
+        {
+            Unregister(DefaultTaskName, log);
+        }
+    }
+
+    public static void UnregisterPerUserTasks(Action<string> log)
+    {
+        foreach (var name in QueryWardenTaskNames(log))
+        {
+            if (name.StartsWith(TaskNamePrefix + "-", StringComparison.OrdinalIgnoreCase))
+            {
+                Unregister(name, log);
+            }
+        }
+    }
+
+    public static void RegisterAllStandardUsers(string exePath, Action<string> log)
+    {
+        UnregisterAllWardenTasks(log);
+
+        var enumResult = AccountEnumeration.Enumerate(log);
+        var nonAdmins = enumResult.Candidates
+            .Where(c => !c.IsAdmin && !c.IsDisabled)
+            .ToList();
+
+        log("RegisterAllStandardUsers: nonAdminCount=" + nonAdmins.Count);
+        if (nonAdmins.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "No standard (non-admin) Windows accounts were found for AllStandard startup mode."
+            );
+        }
+
+        foreach (var candidate in nonAdmins)
+        {
+            var taskName = BuildPerUserTaskName(candidate.SamAccountName);
+            Register(exePath, candidate.Value, taskName, log);
+
+            try
+            {
+                var launch = TryLaunch(taskName, log);
+                log(
+                    "LaunchWardenLogonTask AllStandard "
+                        + candidate.Value
+                        + ": exit="
+                        + launch.ExitCode
+                        + "; outcome="
+                        + launch.Outcome
+                );
+            }
+            catch (Exception ex)
+            {
+                log("LaunchWardenLogonTask AllStandard " + candidate.Value + " WARN: " + ex.Message);
+            }
+        }
+    }
+
     public static void Register(string exePath, string userId, string taskName, Action<string> log)
     {
         if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))

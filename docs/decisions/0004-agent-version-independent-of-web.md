@@ -20,8 +20,11 @@ monotonic agent version for machines already in the field (e.g. 0.5.14+).
 Hardcoded literals in `AgentVersionInfo.Fallback` and `AgentModels` defaults also
 rotted whenever `Directory.Build.props` was bumped by hand.
 
-Patch numbers later drifted past `.9` (e.g. web `0.5.23`, agent `0.5.18`). The
-product rule is base-10 carry: components stay in `0–9`, then roll left.
+Patch numbers later drifted past `.9` (e.g. web `0.5.23`, agent `0.5.18`). A
+short-lived product rule (2026-08-02) required base-10 carry so each component
+stayed in `0–9`. That conflicted with [Semantic Versioning 2.0.0](https://semver.org/)
+and with npm / MSI tooling expectations, so it was reversed on 2026-08-06 in
+favor of full SemVer.
 
 ## Decision
 
@@ -29,28 +32,33 @@ product rule is base-10 carry: components stay in `0–9`, then roll left.
    `apps/agent/Directory.Build.props` (`$(Version)` → `AssemblyVersion` /
    `FileVersion` / MSI `ProductVersion`). Web and `packages/*` versions live in
    their own `package.json` files and must never be edited as part of an agent
-   release (and vice versa).
+   release (and vice versa). The Android shell (`apps/mobile/package.json`) is a
+   third independent line.
 2. **Monotonic forever.** Agent versions only increase. Do not reset, restart at
    a lower number for decoupling, or reuse a prior version — downgrades are
    blocked by the MSI and field agents already compare versions on heartbeat.
-3. **Base-10 carry (strict, both lines).** Each `MAJOR.MINOR.PATCH` component uses
-   digits **0–9 only**. On bump: increment patch; if patch would be `10`, set
-   patch to `0` and increment minor; if minor would be `10`, set minor to `0` and
-   increment major. Examples: `0.5.9` → `0.6.0`; `0.9.9` → `1.0.0`. Never publish
-   `*.*.10` or higher. Corrective jump from an over-threshold patch to the next
-   carried version (e.g. `0.5.23` → `0.6.0`) is allowed because it still increases.
+3. **Semantic Versioning 2.0.0 (all lines).** Versions follow
+   [SemVer 2.0.0](https://semver.org/): `MAJOR.MINOR.PATCH` with optional
+   prerelease / build metadata. Numeric components have **no single-digit cap**
+   (`0.8.9` → `0.8.10` is valid). Routine releases increment `PATCH`; bump
+   `MINOR` / `MAJOR` only when intentionally signaling a larger change (resetting
+   lower components per SemVer). The former base-10 carry rule is **superseded**.
 4. **No hand-maintained agent version literals.** Runtime code reads
    `AgentVersionInfo.Current` from the assembly. Request DTOs leave
    `AgentVersion` empty until the API client fills it from that property.
 
 ## Consequences
 
-- Agent release checklist: bump only `apps/agent/Directory.Build.props` (with
-  base-10 carry), build MSI, ship SHA-256 — leave `apps/web/package.json` alone.
-- Web release checklist: bump web/`packages/shared` (+ `APP_VERSION`) only with
-  the same carry rule — leave `Directory.Build.props` alone.
-- Contributors see the ownership split and carry rule in `AGENTS.md` and
+- Agent release checklist: bump only `apps/agent/Directory.Build.props` (SemVer),
+  build MSI, ship SHA-256 — leave `apps/web/package.json` alone.
+- Web release checklist: bump web/`packages/shared` (+ `APP_VERSION`) only
+  (SemVer) — leave `Directory.Build.props` alone.
+- Mobile shell checklist: bump `apps/mobile/package.json` only when the native
+  shell changes.
+- Contributors see the ownership split and SemVer rule in `AGENTS.md` and
   `apps/agent/AGENTS.md`.
+- Version compare (`compareAgentVersions`) and npm both treat `0.5.10` as newer
+  than `0.5.9`, matching SemVer precedence.
 
 ## Alternatives considered
 
@@ -58,5 +66,8 @@ product rule is base-10 carry: components stay in `0–9`, then roll left.
   accidental desync and forced unnecessary dual bumps.
 - Reset agent numbering (e.g. `1.0.0`) when decoupling — rejected: breaks
   monotonic compare for installed agents and MSI downgrade protection.
-- Unlimited patch (`0.5.10`, `0.5.23`, …) — rejected 2026-08-02 in favor of
-  base-10 carry so each component stays single-digit past the units place.
+- Base-10 carry (`0.5.9` → `0.6.0`, never `*.*.10+`) — adopted 2026-08-02,
+  **superseded 2026-08-06** in favor of full SemVer for tooling compatibility
+  and simpler mental model.
+- Letter micro-bumps (`0.8.0a` … `0.8.0g`) — rejected: not SemVer; npm treats
+  letter suffixes as prereleases that sort *before* the plain release.

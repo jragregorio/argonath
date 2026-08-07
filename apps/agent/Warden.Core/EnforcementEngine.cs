@@ -34,9 +34,12 @@ public class EnforcementEngine
     /// <summary>
     /// When an extension unlocks outside the allowed window, usage is counted from this
     /// baseline so leftover daily budget is not required before the timer moves.
+    /// Preferred sources: server getPolicy baseline, then disk, then in-process pierce.
     /// </summary>
     private double? _outsideExtensionBaselineSeconds;
     private int _outsideExtensionBonusMinutes;
+    private int? _persistedOutsideGrantBaselineUsedMinutes;
+    private readonly OutsideGrantStateStore _outsideGrantStateStore = new();
 
     public event Action<PolicyEvaluation>? PolicyChanged;
     public event Action? LockRequired;
@@ -85,7 +88,7 @@ public class EnforcementEngine
         // Outside allowed hours: GetWindowRemainingSeconds is null — do not fall back to
         // full daily leftover; only unused extension/bonus time may remain.
         if (windowRemainingSeconds is null)
-            return GetOutsideExtensionRemainingSeconds(eval.BonusMinutes);
+            return GetOutsideExtensionRemainingSeconds(eval);
 
         return Math.Min(dailyRemainingSeconds, windowRemainingSeconds.Value);
     }
@@ -116,22 +119,117 @@ public class EnforcementEngine
             !IsOutsideAllowedWindow()
             || _currentPolicy == null
             || _currentPolicy.BonusMinutes <= 0
-            || _outsideExtensionBaselineSeconds is null
         )
         {
             return false;
         }
 
-        limitMinutes = Math.Max(1, _outsideExtensionBonusMinutes);
-        var consumed = Math.Max(0, UsedSecondsToday - _outsideExtensionBaselineSeconds.Value);
-        usedMinutes = Math.Min(limitMinutes, (int)Math.Floor(consumed / 60.0));
+        var baseline = ResolveOutsideGrantBaselineUsedMinutes();
+        if (baseline is null)
+            return false;
+
+        var bonus = _currentPolicy.BonusMinutes;
+        var dailyLimit = _currentPolicy.Policy.DailyLimitMinutes;
+        limitMinutes = Math.Max(
+            1,
+            PolicyEngine.GetOutsideExtensionGrantSize(bonus, baseline.Value, dailyLimit));
+        var baselineSeconds = baseline.Value * 60.0;
+        var consumedSeconds = Math.Max(0, UsedSecondsToday - baselineSeconds);
+        usedMinutes = Math.Min(limitMinutes, (int)Math.Floor(consumedSeconds / 60.0));
         return true;
     }
 
     /// <summary>
-    /// Sync grant baseline with current bonus, then return remaining grant seconds.
+    /// Remaining after-hours grant seconds. Uses second precision against the
+    /// durable baseline (server/disk minutes × 60) so the tray does not freeze
+    /// on whole minutes — same approach as the pre-0.6.10 local pierce path.
     /// </summary>
-    private int GetOutsideExtensionRemainingSeconds(int bonusMinutes)
+    private int GetOutsideExtensionRemainingSeconds(PolicyEvaluation eval)
+    {
+        var baseline = ResolveOutsideGrantBaselineUsedMinutes();
+        if (baseline is int baselineUsed)
+        {
+            var grantSize = PolicyEngine.GetOutsideExtensionGrantSize(
+                eval.BonusMinutes,
+                baselineUsed,
+                eval.DailyLimitMinutes);
+            var grantSeconds = grantSize * 60.0;
+            var baselineSeconds = baselineUsed * 60.0;
+            var consumed = Math.Max(0, UsedSecondsToday - baselineSeconds);
+            return Math.Max(0, (int)Math.Floor(grantSeconds - consumed));
+        }
+
+        return GetLocalOutsideExtensionRemainingSeconds(eval.BonusMinutes);
+    }
+
+    /// <summary>
+    /// Server baseline from getPolicy, else same-day persisted baseline, else null.
+    /// </summary>
+    private int? ResolveOutsideGrantBaselineUsedMinutes()
+    {
+        if (_currentPolicy == null || _currentPolicy.BonusMinutes <= 0)
+            return null;
+
+        if (_currentPolicy.OutsideGrantBaselineUsedMinutes is int serverBaseline)
+        {
+            EnsurePersistedOutsideGrantLoaded();
+            var chosen = _persistedOutsideGrantBaselineUsedMinutes is int localBaseline
+                ? Math.Min(serverBaseline, localBaseline)
+                : serverBaseline;
+            PersistOutsideGrantBaseline(chosen, _currentPolicy.BonusMinutes);
+            return chosen;
+        }
+
+        EnsurePersistedOutsideGrantLoaded();
+        return _persistedOutsideGrantBaselineUsedMinutes;
+    }
+
+    private void EnsurePersistedOutsideGrantLoaded()
+    {
+        if (_persistedOutsideGrantBaselineUsedMinutes != null)
+            return;
+
+        var state = _outsideGrantStateStore.Load();
+        if (state == null || string.IsNullOrWhiteSpace(state.Date))
+            return;
+
+        var today = FamilyCalendarDateString();
+        if (!string.Equals(state.Date, today, StringComparison.Ordinal))
+        {
+            _outsideGrantStateStore.Clear();
+            return;
+        }
+
+        if (_currentPolicy != null && _currentPolicy.BonusMinutes <= 0)
+        {
+            _outsideGrantStateStore.Clear();
+            return;
+        }
+
+        _persistedOutsideGrantBaselineUsedMinutes = state.BaselineUsedMinutes;
+        _outsideExtensionBonusMinutes = state.BonusMinutes;
+    }
+
+    private void PersistOutsideGrantBaseline(int baselineUsedMinutes, int bonusMinutes)
+    {
+        _persistedOutsideGrantBaselineUsedMinutes = baselineUsedMinutes;
+        _outsideExtensionBonusMinutes = bonusMinutes;
+        _outsideGrantStateStore.Save(
+            new OutsideGrantState
+            {
+                Date = FamilyCalendarDateString(),
+                BaselineUsedMinutes = baselineUsedMinutes,
+                BonusMinutes = bonusMinutes
+            });
+    }
+
+    private string FamilyCalendarDateString()
+    {
+        var now = PolicyEngine.ResolveNow(_currentPolicy?.Timezone);
+        return now.ToString("yyyy-MM-dd");
+    }
+
+    private int GetLocalOutsideExtensionRemainingSeconds(int bonusMinutes)
     {
         SyncOutsideExtensionGrant(bonusMinutes);
         if (bonusMinutes <= 0 || _outsideExtensionBaselineSeconds is null) return 0;
@@ -145,8 +243,26 @@ public class EnforcementEngine
     {
         if (bonusMinutes <= 0)
         {
-            _outsideExtensionBaselineSeconds = null;
-            _outsideExtensionBonusMinutes = 0;
+            ClearOutsideExtensionGrant();
+            return;
+        }
+
+        EnsurePersistedOutsideGrantLoaded();
+        if (_persistedOutsideGrantBaselineUsedMinutes != null)
+        {
+            // Already have a durable pierce — do not reset on process restart.
+            if (bonusMinutes > _outsideExtensionBonusMinutes)
+            {
+                PersistOutsideGrantBaseline(
+                    _persistedOutsideGrantBaselineUsedMinutes.Value,
+                    bonusMinutes);
+            }
+            else
+            {
+                _outsideExtensionBonusMinutes = Math.Max(
+                    _outsideExtensionBonusMinutes,
+                    bonusMinutes);
+            }
             return;
         }
 
@@ -154,21 +270,25 @@ public class EnforcementEngine
         {
             _outsideExtensionBaselineSeconds = UsedSecondsToday;
             _outsideExtensionBonusMinutes = bonusMinutes;
+            PersistOutsideGrantBaseline(UsedMinutesForEnforcement(), bonusMinutes);
             return;
         }
 
         if (bonusMinutes > _outsideExtensionBonusMinutes)
         {
-            // Additional approved minutes — keep baseline so prior grant usage still counts.
             _outsideExtensionBonusMinutes = bonusMinutes;
+            if (_persistedOutsideGrantBaselineUsedMinutes is int b)
+            {
+                PersistOutsideGrantBaseline(b, bonusMinutes);
+            }
             return;
         }
 
         if (bonusMinutes < _outsideExtensionBonusMinutes)
         {
-            // Bonus cleared/reduced then re-granted — start a fresh grant from now.
             _outsideExtensionBaselineSeconds = UsedSecondsToday;
             _outsideExtensionBonusMinutes = bonusMinutes;
+            PersistOutsideGrantBaseline(UsedMinutesForEnforcement(), bonusMinutes);
         }
     }
 
@@ -176,6 +296,8 @@ public class EnforcementEngine
     {
         _outsideExtensionBaselineSeconds = null;
         _outsideExtensionBonusMinutes = 0;
+        _persistedOutsideGrantBaselineUsedMinutes = null;
+        _outsideGrantStateStore.Clear();
     }
 
     public EnforcementEngine(WardenApiClient api, ConfigStore configStore)
@@ -191,14 +313,14 @@ public class EnforcementEngine
         switch (evt.Type)
         {
             case "extension:approved":
-                _ = RefreshPolicyAsync(syncUsageFromServer: false);
+                _ = RefreshPolicyAsync(syncUsageFromServer: true);
                 break;
             case "extension:denied":
                 break;
             case "policy:updated":
             case "device:locked":
             case "device:unlocked":
-                _ = RefreshPolicyAsync(syncUsageFromServer: false);
+                _ = RefreshPolicyAsync(syncUsageFromServer: true);
                 break;
             case "capture:screen":
             case "capture:webcam":
@@ -345,7 +467,8 @@ public class EnforcementEngine
             _currentPolicy.Policy,
             UsedMinutesForEnforcement(),
             _currentPolicy.BonusMinutes,
-            timeZoneIana: _currentPolicy.Timezone
+            timeZoneIana: _currentPolicy.Timezone,
+            outsideGrantBaselineUsedMinutes: _currentPolicy.OutsideGrantBaselineUsedMinutes
         );
 
         if (_currentPolicy.AdminLock)
@@ -359,12 +482,53 @@ public class EnforcementEngine
         }
         else if (IsOutsideAllowedWindow())
         {
-            // PolicyEngine treats bonus as daily-pool top-up (consumed only after dailyLimit).
-            // Outside the window the approved extension is a session grant from unlock usage.
             var bonus = _currentPolicy.BonusMinutes;
-            if (bonus > 0)
+            var effectiveBaseline = ResolveOutsideGrantBaselineUsedMinutes();
+            if (bonus > 0 && effectiveBaseline is int serverOrPersistedBaseline)
             {
-                var grantSeconds = GetOutsideExtensionRemainingSeconds(bonus);
+                // Prefer durable baseline (server or disk). Apply second-precise
+                // remaining so the tray counts down continuously (not frozen :00).
+                PersistOutsideGrantBaseline(serverOrPersistedBaseline, bonus);
+                _outsideExtensionBaselineSeconds = null;
+                evaluation = PolicyEngine.Evaluate(
+                    _currentPolicy.Policy,
+                    UsedMinutesForEnforcement(),
+                    bonus,
+                    timeZoneIana: _currentPolicy.Timezone,
+                    outsideGrantBaselineUsedMinutes: serverOrPersistedBaseline
+                );
+
+                var grantSeconds = GetOutsideExtensionRemainingSeconds(evaluation);
+                if (grantSeconds <= 0)
+                {
+                    var lockedEval = PolicyEngine.Evaluate(
+                        _currentPolicy.Policy,
+                        UsedMinutesForEnforcement(),
+                        bonusMinutes: 0,
+                        timeZoneIana: _currentPolicy.Timezone
+                    );
+                    evaluation.Status = "outside_window";
+                    evaluation.RemainingMinutes = 0;
+                    evaluation.LimitingFactor = "window";
+                    evaluation.NextWindowStart = lockedEval.NextWindowStart;
+                    evaluation.Message = lockedEval.Message;
+                }
+                else
+                {
+                    evaluation.Status = "allowed";
+                    evaluation.RemainingMinutes = Math.Max(
+                        1,
+                        (int)Math.Ceiling(grantSeconds / 60.0)
+                    );
+                    evaluation.LimitingFactor = "daily_limit";
+                    evaluation.NextWindowStart = null;
+                    evaluation.Message = null;
+                }
+            }
+            else if (bonus > 0)
+            {
+                // No durable baseline yet — local pierce grant for lock timing until sync.
+                var grantSeconds = GetLocalOutsideExtensionRemainingSeconds(bonus);
                 if (grantSeconds <= 0)
                 {
                     var lockedEval = PolicyEngine.Evaluate(
@@ -398,7 +562,10 @@ public class EnforcementEngine
         }
         else
         {
-            ClearOutsideExtensionGrant();
+            // Inside allowed hours — keep durable after-hours baseline on disk so a
+            // later window exit does not look like a fresh full grant after restart.
+            // Only clear the volatile in-process seconds pierce.
+            _outsideExtensionBaselineSeconds = null;
         }
 
         CurrentEvaluation = evaluation;

@@ -10,6 +10,7 @@ import {
   generatePairingCode,
   getCalendarDateInTimeZone,
   getDeviceDisplayName,
+  getOutsideGrantBaselineUsedMinutes,
   isDeviceRecentlySeen,
   isValidTimeZone,
   PAIRING_CODE_EXPIRY_MINUTES,
@@ -25,6 +26,10 @@ import {
 } from "../lib/supabase";
 import { logAudit } from "../lib/audit";
 import { notifyFamilyParents } from "../lib/fcm";
+import {
+  createExtensionOverrideWithBaseline,
+  ensureOutsideGrantBaselines,
+} from "../lib/outside-grant-baseline";
 import {
   getCachedSignedSnapshotUrl,
   invalidateSignedSnapshotUrl,
@@ -645,7 +650,8 @@ export const policyRouter = router({
     .query(async ({ ctx, input }) => {
       const family = await getFamilyForUser(ctx);
       const timeZone = family.timezone || DEFAULT_TIME_ZONE;
-      const today = getCalendarDateInTimeZone(new Date(), timeZone);
+      const now = new Date();
+      const today = getCalendarDateInTimeZone(now, timeZone);
 
       const [child, usageLogs] = await Promise.all([
         getChildForFamily(input.childId, ctx.familyId),
@@ -656,35 +662,34 @@ export const policyRouter = router({
           },
         }),
       ]);
-      const policy = child.policies[0];
+      const policyRow = child.policies[0];
+      const policy = policyRow
+        ? {
+            dailyLimitMinutes: policyRow.dailyLimitMinutes,
+            allowedWindows: policyRow.allowedWindows as AllowedWindow[],
+            isActive: policyRow.isActive,
+          }
+        : {
+            dailyLimitMinutes: 120,
+            allowedWindows: [] as AllowedWindow[],
+            isActive: true,
+          };
 
       const usedMinutes = usageLogs.reduce((sum, log) => sum + log.activeMinutes, 0);
-      const overrides = child.extensionOverrides.map((o) => ({
-        extraMinutes: o.extraMinutes,
-        expiresAt: o.expiresAt,
-      }));
-
-      if (!policy) {
-        return evaluatePolicy(
-          { dailyLimitMinutes: 120, allowedWindows: [], isActive: true },
-          usedMinutes,
-          overrides,
-          new Date(),
-          timeZone
-        );
-      }
-
-      return evaluatePolicy(
-        {
-          dailyLimitMinutes: policy.dailyLimitMinutes,
-          allowedWindows: policy.allowedWindows as AllowedWindow[],
-          isActive: policy.isActive,
-        },
+      const overrides = await ensureOutsideGrantBaselines({
+        policy,
         usedMinutes,
-        overrides,
-        new Date(),
-        timeZone
-      );
+        overrides: child.extensionOverrides.map((o) => ({
+          id: o.id,
+          extraMinutes: o.extraMinutes,
+          expiresAt: o.expiresAt,
+          createdAt: o.createdAt,
+        })),
+        now,
+        timeZone,
+      });
+
+      return evaluatePolicy(policy, usedMinutes, overrides, now, timeZone);
     }),
 });
 
@@ -1138,17 +1143,19 @@ export const extensionRouter = router({
       });
 
       if (input.approved) {
+        const now = new Date();
         const endOfDay = new Date();
         endOfDay.setHours(23, 59, 59, 999);
+        const timeZone = family.timezone || DEFAULT_TIME_ZONE;
 
         await Promise.all([
-          prisma.extensionOverride.create({
-            data: {
-              childId: request.childId,
-              extraMinutes: request.requestedMinutes,
-              expiresAt: endOfDay,
-              sourceRequestId: request.id,
-            },
+          createExtensionOverrideWithBaseline({
+            childId: request.childId,
+            extraMinutes: request.requestedMinutes,
+            expiresAt: endOfDay,
+            sourceRequestId: request.id,
+            timeZone,
+            now,
           }),
           prisma.device.update({
             where: { id: request.deviceId },
@@ -1305,48 +1312,60 @@ export const dashboardRouter = router({
 
     return {
       pendingRequests,
-      children: children.map((child) => {
-        const policy = child.policies[0];
-        const usedMinutes = usedByChild.get(child.id) ?? 0;
-        const evaluation = evaluatePolicy(
-          policy
+      children: await Promise.all(
+        children.map(async (child) => {
+          const policyRow = child.policies[0];
+          const usedMinutes = usedByChild.get(child.id) ?? 0;
+          const policy = policyRow
             ? {
-                dailyLimitMinutes: policy.dailyLimitMinutes,
-                allowedWindows: policy.allowedWindows as AllowedWindow[],
-                isActive: policy.isActive,
+                dailyLimitMinutes: policyRow.dailyLimitMinutes,
+                allowedWindows: policyRow.allowedWindows as AllowedWindow[],
+                isActive: policyRow.isActive,
               }
             : {
                 dailyLimitMinutes: 120,
-                allowedWindows: [],
+                allowedWindows: [] as AllowedWindow[],
                 isActive: true,
-              },
-          usedMinutes,
-          child.extensionOverrides.map((o) => ({
-            extraMinutes: o.extraMinutes,
-            expiresAt: o.expiresAt,
-          })),
-          now,
-          timeZone
-        );
+              };
+          const overrides = await ensureOutsideGrantBaselines({
+            policy,
+            usedMinutes,
+            overrides: child.extensionOverrides.map((o) => ({
+              id: o.id,
+              extraMinutes: o.extraMinutes,
+              expiresAt: o.expiresAt,
+              createdAt: o.createdAt,
+            })),
+            now,
+            timeZone,
+          });
+          const evaluation = evaluatePolicy(
+            policy,
+            usedMinutes,
+            overrides,
+            now,
+            timeZone
+          );
 
-        const devices = toDeviceClientViews(child.devices);
+          const devices = toDeviceClientViews(child.devices);
 
-        return {
-          id: child.id,
-          displayName: child.displayName,
-          evaluation,
-          devices: devices.map((device) => ({
-            id: device.id,
-            displayName: device.displayName,
-            machineName: device.machineName,
-            isOnline: device.isOnline,
-            isLocked: device.isLocked,
-            adminLock: device.adminLock,
-            isPaired: device.isPaired,
-            agentVersion: device.agentVersion,
-          })),
-        };
-      }),
+          return {
+            id: child.id,
+            displayName: child.displayName,
+            evaluation,
+            devices: devices.map((device) => ({
+              id: device.id,
+              displayName: device.displayName,
+              machineName: device.machineName,
+              isOnline: device.isOnline,
+              isLocked: device.isLocked,
+              adminLock: device.adminLock,
+              isPaired: device.isPaired,
+              agentVersion: device.agentVersion,
+            })),
+          };
+        })
+      ),
     };
   }),
 
@@ -2054,7 +2073,7 @@ export const agentRouter = router({
       },
     });
 
-    const policy = child.policies[0];
+    const policyRow = child.policies[0];
 
     const thisDeviceLog = usageLogs.find((log) => log.deviceId === ctx.device.id);
     const usedMinutesToday = usageLogs.reduce(
@@ -2067,17 +2086,40 @@ export const agentRouter = router({
       0
     );
 
+    const policy = policyRow
+      ? {
+          dailyLimitMinutes: policyRow.dailyLimitMinutes,
+          allowedWindows: policyRow.allowedWindows as AllowedWindow[],
+          isActive: policyRow.isActive,
+        }
+      : {
+          dailyLimitMinutes: 120,
+          allowedWindows: [] as AllowedWindow[],
+          isActive: true,
+        };
+
+    const overrides = await ensureOutsideGrantBaselines({
+      policy,
+      usedMinutes: usedMinutesToday,
+      overrides: child.extensionOverrides.map((o) => ({
+        id: o.id,
+        extraMinutes: o.extraMinutes,
+        expiresAt: o.expiresAt,
+        createdAt: o.createdAt,
+      })),
+      now,
+      timeZone,
+    });
+
+    const outsideGrantBaselineUsedMinutes =
+      getOutsideGrantBaselineUsedMinutes(overrides, now);
+
     return {
-      policy: policy
-        ? {
-            dailyLimitMinutes: policy.dailyLimitMinutes,
-            allowedWindows: policy.allowedWindows as AllowedWindow[],
-            isActive: policy.isActive,
-          }
-        : { dailyLimitMinutes: 120, allowedWindows: [], isActive: true },
+      policy,
       usedMinutesToday,
       thisDeviceMinutes: thisDeviceLog?.activeMinutes ?? 0,
       bonusMinutes,
+      outsideGrantBaselineUsedMinutes,
       parentPin: child.family.parentPin ?? null,
       adminLock: ctx.device.adminLock,
       timezone: timeZone,
@@ -2132,16 +2174,23 @@ export const agentRouter = router({
   parentUnlock: agentProcedure
     .input(z.object({ extraMinutes: z.number().min(1).max(480) }))
     .mutation(async ({ ctx, input }) => {
+      const now = new Date();
       const endOfDay = new Date();
       endOfDay.setHours(23, 59, 59, 999);
 
+      const child = await prisma.child.findUnique({
+        where: { id: ctx.device.childId },
+        select: { family: { select: { timezone: true } } },
+      });
+      const timeZone = child?.family.timezone || DEFAULT_TIME_ZONE;
+
       await Promise.all([
-        prisma.extensionOverride.create({
-          data: {
-            childId: ctx.device.childId,
-            extraMinutes: input.extraMinutes,
-            expiresAt: endOfDay,
-          },
+        createExtensionOverrideWithBaseline({
+          childId: ctx.device.childId,
+          extraMinutes: input.extraMinutes,
+          expiresAt: endOfDay,
+          timeZone,
+          now,
         }),
         prisma.device.update({
           where: { id: ctx.device.id },

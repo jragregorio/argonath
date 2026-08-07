@@ -197,6 +197,8 @@ model ExtensionOverride {
   extraMinutes    Int
   expiresAt       DateTime
   sourceRequestId String?
+  /// Usage minutes at first outside-window pierce for this grant (countdown baseline).
+  outsideGrantBaselineUsedMinutes Int?
   createdAt       DateTime @default(now())
 
   child Child @relation(fields: [childId], references: [id], onDelete: Cascade)

@@ -12,13 +12,17 @@ type PolicyRemainingStatusProps = {
   mutedClassName?: string;
 };
 
-/** Primary remaining line when allowed hours are the binding limit. */
+/** Primary remaining line when schedule or after-hours bonus is the binding story. */
 export function PolicyWindowRemainingPrimary({
   evaluation,
   className,
 }: PolicyRemainingStatusProps) {
   const display = getPolicyRemainingDisplay(evaluation);
-  if (display.layout !== "window_binding" || !display.primaryText) {
+  if (
+    (display.layout !== "window_binding" &&
+      display.layout !== "after_hours") ||
+    !display.primaryText
+  ) {
     return null;
   }
 
@@ -35,7 +39,7 @@ export function PolicyWindowRemainingPrimary({
   );
 }
 
-/** Secondary window-binding line(s), or the default single status line. */
+/** Secondary window/after-hours line(s), or the default single status line. */
 export function PolicyRemainingFooter({
   evaluation,
   className,
@@ -43,7 +47,10 @@ export function PolicyRemainingFooter({
 }: PolicyRemainingStatusProps) {
   const display = getPolicyRemainingDisplay(evaluation);
 
-  if (display.layout === "window_binding") {
+  if (
+    display.layout === "window_binding" ||
+    display.layout === "after_hours"
+  ) {
     return (
       <div className={cn("space-y-0.5", className)}>
         <p className={mutedClassName}>{display.secondaryText}</p>

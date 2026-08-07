@@ -1,7 +1,8 @@
 # Mobile: custom default notification sound
 
-**Status:** in progress  
+**Status:** complete  
 **Started:** 2026-08-05  
+**Completed:** 2026-08-05  
 **Orchestrator:** Cursor Grok 4.5  
 **Executor:** Composer 2.5
 
@@ -97,7 +98,8 @@ Use repo-root `warden_notif.mp3` as the default Android push notification sound 
 - Mobile: `0.1.2` → `0.1.3` (custom notification sound)
 - Agent: unchanged
 
-**Next step**
+### Phase 4 — on-device verification (2026-08-05)
 
-- After Vercel deploy: uninstall/reinstall APK if needed, send FCM test, confirm `warden_notif` on channel `warden_alerts`.
-- Archive task after on-device sound verification.
+- After Vercel deploy of `0.7.8`, FCM used `warden_alerts` and played `warden_notif` (user confirmed).
+
+**Next step:** none — archived.
