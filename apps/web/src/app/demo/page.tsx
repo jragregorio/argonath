@@ -21,13 +21,18 @@ import {
   getDeviceDisplayName,
   getPolicyStatusLabel,
 } from "@warden/shared";
-import { formatClockInText } from "@/lib/time-format";
 import { useDemo } from "@/lib/demo/demo-provider";
 import {
   progressBarClass,
   remainingPercent,
   statusBadgeVariant,
 } from "@/lib/demo/overview-helpers";
+import { getPolicyRemainingDisplay } from "@/lib/policy-remaining-display";
+import {
+  PolicyRemainingFooter,
+  PolicyWindowRemainingPrimary,
+} from "@/components/policy-remaining-status";
+import { cn } from "@warden/ui";
 
 export default function DemoOverviewPage() {
   const router = useRouter();
@@ -127,27 +132,7 @@ export default function DemoOverviewPage() {
             );
             const onlineDevices = child.devices.filter((d) => d.isOnline).length;
             const manageHref = `/demo/children/${child.id}`;
-
-            const statusText =
-              evaluation.limitingFactor === "none" ||
-              evaluation.remainingMinutes >= 999
-                ? "Limits paused"
-                : evaluation.status === "outside_window"
-                  ? evaluation.nextWindowStart &&
-                    evaluation.dailyRemainingMinutes > 0
-                    ? `Available again: ${formatClockInText(evaluation.nextWindowStart)} — ${evaluation.dailyRemainingMinutes} min of today's budget left`
-                    : formatClockInText(
-                        evaluation.message ??
-                          getPolicyStatusLabel(evaluation.status)
-                      )
-                  : evaluation.status === "blocked"
-                    ? formatClockInText(
-                        evaluation.message ??
-                          getPolicyStatusLabel(evaluation.status)
-                      )
-                    : evaluation.limitingFactor === "window"
-                      ? `${evaluation.remainingMinutes} min left now (allowed hours ending) · ${evaluation.dailyRemainingMinutes} min of daily budget left`
-                      : `${evaluation.remainingMinutes} min left now`;
+            const remainingDisplay = getPolicyRemainingDisplay(evaluation);
 
             const navigateToManage = () => {
               router.push(manageHref);
@@ -189,11 +174,19 @@ export default function DemoOverviewPage() {
                   </div>
 
                   <div className="mt-4 space-y-2">
+                    <PolicyWindowRemainingPrimary evaluation={evaluation} />
                     <div className="flex items-baseline justify-between gap-2 text-sm">
                       <span className="text-muted-foreground">
                         Today&apos;s screen time
                       </span>
-                      <span className="font-medium tabular-nums">
+                      <span
+                        className={cn(
+                          "tabular-nums",
+                          remainingDisplay.usedTodaySecondary
+                            ? "text-muted-foreground"
+                            : "font-medium"
+                        )}
+                      >
                         {evaluation.usedMinutes} / {effectiveLimit} min
                         {evaluation.bonusMinutes > 0 && (
                           <span className="font-normal text-muted-foreground">
@@ -211,9 +204,7 @@ export default function DemoOverviewPage() {
                         style={{ width: `${percent}%` }}
                       />
                     </div>
-                    <p className="text-sm text-muted-foreground md:text-xs">
-                      {statusText}
-                    </p>
+                    <PolicyRemainingFooter evaluation={evaluation} />
                   </div>
                 </CardHeader>
 

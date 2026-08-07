@@ -22,13 +22,18 @@ import {
   getDeviceDisplayName,
   getPolicyStatusLabel,
 } from "@warden/shared";
-import { formatClockInText } from "@/lib/time-format";
 import { useDemo } from "@/lib/demo/demo-provider";
 import {
   progressBarClass,
   remainingPercent,
   statusBadgeVariant,
 } from "@/lib/demo/overview-helpers";
+import { getPolicyRemainingDisplay } from "@/lib/policy-remaining-display";
+import {
+  PolicyRemainingFooter,
+  PolicyWindowRemainingPrimary,
+} from "@/components/policy-remaining-status";
+import { cn } from "@warden/ui";
 
 export default function DemoChildDetailPage() {
   const params = useParams();
@@ -56,33 +61,7 @@ export default function DemoChildDetailPage() {
     (item) => item.childName === child.displayName
   );
 
-  const evaluationStatusText = (() => {
-    if (
-      evaluation.limitingFactor === "none" ||
-      evaluation.remainingMinutes >= 999
-    ) {
-      return "Limits paused";
-    }
-    if (evaluation.status === "outside_window") {
-      const next = evaluation.nextWindowStart;
-      const daily = evaluation.dailyRemainingMinutes;
-      if (next && daily > 0) {
-        return `Available again: ${formatClockInText(next)} — ${daily} min of today's budget left`;
-      }
-      return formatClockInText(
-        evaluation.message ?? getPolicyStatusLabel(evaluation.status)
-      );
-    }
-    if (evaluation.status === "blocked") {
-      return formatClockInText(
-        evaluation.message ?? getPolicyStatusLabel(evaluation.status)
-      );
-    }
-    if (evaluation.limitingFactor === "window") {
-      return `${evaluation.remainingMinutes} min left now (allowed hours ending) · ${evaluation.dailyRemainingMinutes} min of daily budget left`;
-    }
-    return `${evaluation.remainingMinutes} min left now`;
-  })();
+  const remainingDisplay = getPolicyRemainingDisplay(evaluation);
 
   return (
     <div className="space-y-6">
@@ -101,13 +80,21 @@ export default function DemoChildDetailPage() {
                 <Badge variant={statusBadgeVariant(evaluation.status)}>
                   {getPolicyStatusLabel(evaluation.status)}
                 </Badge>
-                <span className="text-sm text-foreground/90 md:text-muted-foreground">
+                <span
+                  className={cn(
+                    "text-sm",
+                    remainingDisplay.usedTodaySecondary
+                      ? "text-muted-foreground"
+                      : "text-foreground/90 md:text-muted-foreground"
+                  )}
+                >
                   {evaluation.usedMinutes} / {effectiveLimit} min used today
                   {evaluation.bonusMinutes > 0 &&
                     ` (+${evaluation.bonusMinutes} bonus)`}
                 </span>
               </div>
               <div className="mt-3 max-w-md space-y-2">
+                <PolicyWindowRemainingPrimary evaluation={evaluation} />
                 <div className="hidden h-2 w-full overflow-hidden rounded-full bg-muted md:block">
                   <div
                     className={`h-full rounded-full transition-[width] ${progressBarClass(
@@ -116,9 +103,7 @@ export default function DemoChildDetailPage() {
                     style={{ width: `${percent}%` }}
                   />
                 </div>
-                <p className="text-sm text-muted-foreground md:text-xs">
-                  {evaluationStatusText}
-                </p>
+                <PolicyRemainingFooter evaluation={evaluation} />
               </div>
             </div>
           </div>
@@ -252,11 +237,19 @@ export default function DemoChildDetailPage() {
             </div>
 
             <div className="space-y-2">
+              <PolicyWindowRemainingPrimary evaluation={evaluation} />
               <div className="flex items-baseline justify-between gap-2 text-sm">
                 <span className="text-muted-foreground">
                   Today&apos;s usage
                 </span>
-                <span className="font-medium tabular-nums">
+                <span
+                  className={cn(
+                    "tabular-nums",
+                    remainingDisplay.usedTodaySecondary
+                      ? "text-muted-foreground"
+                      : "font-medium"
+                  )}
+                >
                   {evaluation.usedMinutes} / {effectiveLimit} min
                   {evaluation.bonusMinutes > 0 && (
                     <span className="font-normal text-muted-foreground">
@@ -274,9 +267,10 @@ export default function DemoChildDetailPage() {
                   style={{ width: `${percent}%` }}
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                {evaluationStatusText}
-              </p>
+              <PolicyRemainingFooter
+                evaluation={evaluation}
+                mutedClassName="text-xs text-muted-foreground"
+              />
             </div>
 
             <p className="text-xs text-muted-foreground">

@@ -15,9 +15,14 @@ import {
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { InlineBackLink } from "@/components/sticky-back-chip";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
-import { formatClockInText } from "@/lib/time-format";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { progressBarClass } from "./child-detail-helpers";
+import { getPolicyRemainingDisplay } from "@/lib/policy-remaining-display";
+import {
+  PolicyRemainingFooter,
+  PolicyWindowRemainingPrimary,
+} from "@/components/policy-remaining-status";
+import { cn } from "@warden/ui";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type ChildForHeader = RouterOutputs["children"]["get"];
@@ -157,34 +162,9 @@ export function ChildUsageHeader({
         ? "bg-yellow-500/35"
         : "bg-primary/30";
 
-  const evaluationStatusText = (() => {
-    if (!evaluation) return null;
-    if (
-      evaluation.limitingFactor === "none" ||
-      evaluation.remainingMinutes >= 999
-    ) {
-      return "Limits paused";
-    }
-    if (evaluation.status === "outside_window") {
-      const next = evaluation.nextWindowStart;
-      const daily = evaluation.dailyRemainingMinutes;
-      if (next && daily > 0) {
-        return `Available again: ${formatClockInText(next)} — ${daily} min of today's budget left`;
-      }
-      return formatClockInText(
-        evaluation.message ?? getPolicyStatusLabel(evaluation.status)
-      );
-    }
-    if (evaluation.status === "blocked") {
-      return formatClockInText(
-        evaluation.message ?? getPolicyStatusLabel(evaluation.status)
-      );
-    }
-    if (evaluation.limitingFactor === "window") {
-      return `${evaluation.remainingMinutes} min left now (allowed hours ending) · ${evaluation.dailyRemainingMinutes} min of daily budget left`;
-    }
-    return `${evaluation.remainingMinutes} min left now`;
-  })();
+  const remainingDisplay = evaluation
+    ? getPolicyRemainingDisplay(evaluation)
+    : null;
 
   return (
     <>
@@ -286,7 +266,12 @@ export function ChildUsageHeader({
                   {getPolicyStatusLabel(evaluation.status)}
                 </Badge>
                 <span
-                  className="text-sm text-foreground/90 md:text-muted-foreground"
+                  className={cn(
+                    "text-sm",
+                    remainingDisplay?.usedTodaySecondary
+                      ? "text-muted-foreground"
+                      : "text-foreground/90 md:text-muted-foreground"
+                  )}
                   title="Refreshes every 30s from agent heartbeats (realtime updates sooner)"
                 >
                   {evaluation.usedMinutes} / {effectiveLimit} min used today
@@ -307,6 +292,7 @@ export function ChildUsageHeader({
                 )}
               </div>
               <div className="mt-3 max-w-md space-y-2">
+                <PolicyWindowRemainingPrimary evaluation={evaluation} />
                 <div className="hidden h-2 w-full overflow-hidden rounded-full bg-muted md:block">
                   <div
                     className={`h-full rounded-full transition-[width] ${progressBarClass(
@@ -315,9 +301,7 @@ export function ChildUsageHeader({
                     style={{ width: `${remainingFraction * 100}%` }}
                   />
                 </div>
-                <p className="text-sm md:text-xs text-muted-foreground">
-                  {evaluationStatusText}
-                </p>
+                <PolicyRemainingFooter evaluation={evaluation} />
               </div>
             </div>
           </div>

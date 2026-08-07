@@ -21,9 +21,14 @@ import {
   getPolicyStatusLabel,
   type PolicyStatus,
 } from "@warden/shared";
-import { formatClockInText } from "@/lib/time-format";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 import { useDeviceActions } from "@/lib/use-device-actions";
+import { getPolicyRemainingDisplay } from "@/lib/policy-remaining-display";
+import {
+  PolicyRemainingFooter,
+  PolicyWindowRemainingPrimary,
+} from "@/components/policy-remaining-status";
+import { cn } from "@warden/ui";
 
 function remainingPercent(remaining: number, limit: number) {
   if (limit <= 0) return 0;
@@ -193,26 +198,7 @@ export default function DashboardOverviewPage() {
               const onlineDevices = child.devices.filter((d) => d.isOnline)
                 .length;
 
-              const statusText =
-                evaluation.limitingFactor === "none" ||
-                evaluation.remainingMinutes >= 999
-                  ? "Limits paused"
-                  : evaluation.status === "outside_window"
-                    ? evaluation.nextWindowStart &&
-                      evaluation.dailyRemainingMinutes > 0
-                      ? `Available again: ${formatClockInText(evaluation.nextWindowStart)} — ${evaluation.dailyRemainingMinutes} min of today's budget left`
-                      : formatClockInText(
-                          evaluation.message ??
-                            getPolicyStatusLabel(evaluation.status)
-                        )
-                    : evaluation.status === "blocked"
-                      ? formatClockInText(
-                          evaluation.message ??
-                            getPolicyStatusLabel(evaluation.status)
-                        )
-                      : evaluation.limitingFactor === "window"
-                        ? `${evaluation.remainingMinutes} min left now (allowed hours ending) · ${evaluation.dailyRemainingMinutes} min of daily budget left`
-                        : `${evaluation.remainingMinutes} min left now`;
+              const remainingDisplay = getPolicyRemainingDisplay(evaluation);
 
               const manageHref = `/dashboard/children/${child.id}`;
 
@@ -258,11 +244,19 @@ export default function DashboardOverviewPage() {
                     </div>
 
                     <div className="mt-4 space-y-2">
+                      <PolicyWindowRemainingPrimary evaluation={evaluation} />
                       <div className="flex items-baseline justify-between gap-2 text-sm">
                         <span className="text-muted-foreground">
                           Today&apos;s screen time
                         </span>
-                        <span className="font-medium tabular-nums">
+                        <span
+                          className={cn(
+                            "tabular-nums",
+                            remainingDisplay.usedTodaySecondary
+                              ? "text-muted-foreground"
+                              : "font-medium"
+                          )}
+                        >
                           {evaluation.usedMinutes} / {effectiveLimit} min
                           {evaluation.bonusMinutes > 0 && (
                             <span className="text-muted-foreground font-normal">
@@ -280,9 +274,7 @@ export default function DashboardOverviewPage() {
                           style={{ width: `${percent}%` }}
                         />
                       </div>
-                      <p className="text-sm md:text-xs text-muted-foreground">
-                        {statusText}
-                      </p>
+                      <PolicyRemainingFooter evaluation={evaluation} />
                     </div>
                   </CardHeader>
 
