@@ -10,6 +10,10 @@ export type PolicyRemainingDisplayInput = Pick<
   | "limitingFactor"
   | "remainingMinutes"
   | "dailyRemainingMinutes"
+  | "windowRemainingMinutes"
+  | "windowCapacityMinutes"
+  | "reachableMinutesToday"
+  | "inWindow"
   | "nextWindowStart"
   | "message"
   | "usedMinutes"
@@ -29,6 +33,10 @@ export type PolicyRemainingDisplay = {
 };
 
 const WINDOW_URGENCY_REMAINING_MINUTES = 60;
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
 
 export function isWindowBindingAllowed(
   evaluation: PolicyRemainingDisplayInput
@@ -54,6 +62,61 @@ export function getUsableAfterHoursBonusMinutes(
     evaluation.bonusMinutes -
       Math.max(0, evaluation.usedMinutes - evaluation.dailyLimitMinutes)
   );
+}
+
+/**
+ * Progress fill for the binding constraint (option D):
+ * - window binding → access left / today's window capacity
+ * - after-hours bonus → usable bonus / granted bonus
+ * - daily limit → daily remaining / effective limit
+ */
+export function getBindingRemainingFraction(
+  evaluation: PolicyRemainingDisplayInput
+): number {
+  if (
+    evaluation.limitingFactor === "none" ||
+    evaluation.remainingMinutes >= 999
+  ) {
+    return 1;
+  }
+
+  if (
+    evaluation.status === "blocked" ||
+    evaluation.status === "outside_window"
+  ) {
+    return 0;
+  }
+
+  if (
+    evaluation.status === "allowed" &&
+    evaluation.inWindow === false &&
+    evaluation.bonusMinutes > 0
+  ) {
+    const usable = getUsableAfterHoursBonusMinutes(evaluation);
+    if (usable <= 0) return 0;
+    return clamp01(usable / Math.max(evaluation.bonusMinutes, 1));
+  }
+
+  if (evaluation.limitingFactor === "window") {
+    const remaining =
+      evaluation.windowRemainingMinutes ?? evaluation.remainingMinutes;
+    const capacity =
+      evaluation.windowCapacityMinutes && evaluation.windowCapacityMinutes > 0
+        ? evaluation.windowCapacityMinutes
+        : evaluation.reachableMinutesToday;
+    return clamp01(remaining / Math.max(capacity, remaining, 1));
+  }
+
+  const effectiveLimit =
+    evaluation.dailyLimitMinutes + evaluation.bonusMinutes;
+  if (effectiveLimit <= 0) return 0;
+  return clamp01(evaluation.dailyRemainingMinutes / effectiveLimit);
+}
+
+export function getBindingRemainingPercent(
+  evaluation: PolicyRemainingDisplayInput
+): number {
+  return Math.round(getBindingRemainingFraction(evaluation) * 100);
 }
 
 export function getWindowBindingPrimaryClassName(

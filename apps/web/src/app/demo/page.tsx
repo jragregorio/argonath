@@ -24,10 +24,12 @@ import {
 import { useDemo } from "@/lib/demo/demo-provider";
 import {
   progressBarClass,
-  remainingPercent,
   statusBadgeVariant,
 } from "@/lib/demo/overview-helpers";
-import { getPolicyRemainingDisplay } from "@/lib/policy-remaining-display";
+import {
+  getBindingRemainingPercent,
+  getPolicyRemainingDisplay,
+} from "@/lib/policy-remaining-display";
 import {
   PolicyRemainingFooter,
   PolicyWindowRemainingPrimary,
@@ -126,10 +128,7 @@ export default function DemoOverviewPage() {
             const { evaluation } = child;
             const effectiveLimit =
               evaluation.dailyLimitMinutes + evaluation.bonusMinutes;
-            const percent = remainingPercent(
-              evaluation.dailyRemainingMinutes,
-              effectiveLimit
-            );
+            const percent = getBindingRemainingPercent(evaluation);
             const onlineDevices = child.devices.filter((d) => d.isOnline).length;
             const manageHref = `/demo/children/${child.id}`;
             const remainingDisplay = getPolicyRemainingDisplay(evaluation);

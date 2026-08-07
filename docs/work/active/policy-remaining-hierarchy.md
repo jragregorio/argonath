@@ -1,9 +1,9 @@
 # Policy remaining-time hierarchy (window vs budget)
 
-**Status:** complete (deployed v0.8.8)  
+**Status:** complete (deployed v0.8.9)  
 **Started:** 2026-08-07  
 **Orchestrator:** Cursor Grok  
-**Executor:** Composer 2.5
+**Executor:** Composer 2.5 / orchestrator
 
 ## Problem
 
@@ -21,7 +21,8 @@ When the schedule window is the binding limit, the UI leads with `used / dailyLi
 | Used today | Keep visible but secondary when window is binding (muted / not competing with primary). |
 | Urgency thresholds | Window binding + `remainingMinutes <= 60` → warning/attention color (use existing theme tokens, e.g. yellow/warning — match nearby patterns). Window binding + `> 60` → `text-foreground` + `font-medium` (not muted). Non-window cases unchanged hierarchy. |
 | Absolute end clock | Do **not** add “ends at 7:00 PM” unless already available on evaluation without new API fields. |
-| Out of scope | Progress bar semantics change, policy engine changes, agent, API, commits/push. |
+| Out of scope | Agent, API shape beyond evaluation fields, commits/push (unless requested). |
+| Progress bar (option D) | Fill tracks the **binding** constraint: window → access left / today's window capacity; after-hours bonus → usable / granted bonus; daily limit → daily remaining / effective limit. |
 
 ## Acceptance criteria
 
@@ -67,6 +68,23 @@ npm run typecheck -w @warden/web
 **Validation**
 
 ```bash
+npm run typecheck -w @warden/web
+# exit 0
+```
+
+### Phase 3 — binding progress bar (option D)
+
+- Added `inWindow` + `windowCapacityMinutes` on `PolicyEvaluation` (shared engine).
+- `getBindingRemainingFraction` / `getBindingRemainingPercent` drive dashboard + demo bars.
+- Window-binding near end of hours → nearly empty bar (matches “N min left today”).
+
+**Validation**
+
+```bash
+npm run test -w @warden/shared
+# exit 0 (33 tests)
+npm run typecheck -w @warden/shared
+# exit 0
 npm run typecheck -w @warden/web
 # exit 0
 ```

@@ -17,7 +17,10 @@ import { InlineBackLink } from "@/components/sticky-back-chip";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { progressBarClass } from "./child-detail-helpers";
-import { getPolicyRemainingDisplay } from "@/lib/policy-remaining-display";
+import {
+  getBindingRemainingFraction,
+  getPolicyRemainingDisplay,
+} from "@/lib/policy-remaining-display";
 import {
   PolicyRemainingFooter,
   PolicyWindowRemainingPrimary,
@@ -148,11 +151,9 @@ export function ChildUsageHeader({
   const effectiveLimit = evaluation
     ? evaluation.dailyLimitMinutes + evaluation.bonusMinutes
     : 0;
-  const dailyRemaining = evaluation?.dailyRemainingMinutes ?? 0;
-  const remainingFraction =
-    !evaluation || effectiveLimit <= 0
-      ? 0
-      : Math.min(1, Math.max(0, dailyRemaining / effectiveLimit));
+  const remainingFraction = evaluation
+    ? getBindingRemainingFraction(evaluation)
+    : 0;
   const usageFillClass =
     !evaluation ||
     evaluation.status === "blocked" ||

@@ -97,6 +97,8 @@ describe("policy engine", () => {
     expect(result.dailyRemainingMinutes).toBe(120);
     expect(result.windowRemainingMinutes).toBe(30);
     expect(result.limitingFactor).toBe("window");
+    expect(result.windowCapacityMinutes).toBe(240);
+    expect(result.inWindow).toBe(true);
     expect(shouldLock(result)).toBe(false);
   });
 
@@ -245,6 +247,7 @@ describe("policy engine", () => {
       expect(result.remainingMinutes).toBe(15);
       expect(result.dailyRemainingMinutes).toBe(105);
       expect(result.limitingFactor).toBe("daily_limit");
+      expect(result.inWindow).toBe(false);
       expect(shouldLock(result)).toBe(false);
     });
 

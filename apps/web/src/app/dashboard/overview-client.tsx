@@ -23,17 +23,12 @@ import {
 } from "@warden/shared";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 import { useDeviceActions } from "@/lib/use-device-actions";
-import { getPolicyRemainingDisplay } from "@/lib/policy-remaining-display";
+import { getPolicyRemainingDisplay, getBindingRemainingPercent } from "@/lib/policy-remaining-display";
 import {
   PolicyRemainingFooter,
   PolicyWindowRemainingPrimary,
 } from "@/components/policy-remaining-status";
 import { cn } from "@warden/ui";
-
-function remainingPercent(remaining: number, limit: number) {
-  if (limit <= 0) return 0;
-  return Math.min(100, Math.round((remaining / limit) * 100));
-}
 
 function progressBarClass(status: PolicyStatus) {
   if (status === "blocked") return "bg-destructive";
@@ -191,10 +186,7 @@ export default function DashboardOverviewPage() {
               const { evaluation } = child;
               const effectiveLimit =
                 evaluation.dailyLimitMinutes + evaluation.bonusMinutes;
-              const percent = remainingPercent(
-                evaluation.dailyRemainingMinutes,
-                effectiveLimit
-              );
+              const percent = getBindingRemainingPercent(evaluation);
               const onlineDevices = child.devices.filter((d) => d.isOnline)
                 .length;
 

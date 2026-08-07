@@ -206,8 +206,11 @@ export function evaluatePolicy(
   const hasWindows = policy.allowedWindows.length > 0;
 
   const { dayOfWeek: today } = getZonedTimeParts(now, timeZone);
-  const windowCapacityToday = hasWindows
+  const windowCapacityMinutes = hasWindows
     ? getWindowCapacityMinutes(policy.allowedWindows, today)
+    : 0;
+  const windowCapacityToday = hasWindows
+    ? windowCapacityMinutes
     : effectiveLimit;
   const reachableMinutesToday = Math.min(effectiveLimit, windowCapacityToday);
 
@@ -216,6 +219,8 @@ export function evaluatePolicy(
       status: "allowed",
       remainingMinutes: 999,
       dailyRemainingMinutes,
+      windowCapacityMinutes,
+      inWindow: true,
       limitingFactor: "none",
       reachableMinutesToday,
       usedMinutes: usedMinutesToday,
@@ -240,6 +245,8 @@ export function evaluatePolicy(
         status: "allowed",
         remainingMinutes: bonusRemaining,
         dailyRemainingMinutes,
+        windowCapacityMinutes,
+        inWindow: false,
         limitingFactor: "daily_limit",
         reachableMinutesToday,
         usedMinutes: usedMinutesToday,
@@ -252,6 +259,8 @@ export function evaluatePolicy(
       status: "outside_window",
       remainingMinutes: 0,
       dailyRemainingMinutes,
+      windowCapacityMinutes,
+      inWindow: false,
       limitingFactor: "window",
       reachableMinutesToday,
       usedMinutes: usedMinutesToday,
@@ -279,6 +288,8 @@ export function evaluatePolicy(
       remainingMinutes: 0,
       dailyRemainingMinutes: 0,
       windowRemainingMinutes,
+      windowCapacityMinutes,
+      inWindow: true,
       limitingFactor: "daily_limit",
       reachableMinutesToday,
       usedMinutes: usedMinutesToday,
@@ -303,6 +314,8 @@ export function evaluatePolicy(
     remainingMinutes,
     dailyRemainingMinutes,
     windowRemainingMinutes,
+    windowCapacityMinutes,
+    inWindow: true,
     limitingFactor,
     reachableMinutesToday,
     usedMinutes: usedMinutesToday,

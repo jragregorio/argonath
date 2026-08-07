@@ -20,6 +20,16 @@ export type PolicyEvaluation = {
   dailyRemainingMinutes: number;
   /** Minutes until the current merged window run closes. Undefined when no windows or outside. */
   windowRemainingMinutes?: number;
+  /**
+   * Today's merged allowed-window capacity in minutes.
+   * 0 when no windows are configured or none apply today.
+   */
+  windowCapacityMinutes?: number;
+  /**
+   * True inside an allowed window, or when no windows are configured
+   * (any-time within daily limit). False when outside scheduled hours.
+   */
+  inWindow?: boolean;
   /** Which constraint binds remainingMinutes right now. */
   limitingFactor: LimitingFactor;
   /**
@@ -139,7 +149,7 @@ export const DEVICE_OFFLINE_PUSH_THRESHOLD_SECONDS = 120;
 export const IDLE_THRESHOLD_SECONDS = 300;
 
 /** Product / dashboard version (keep in sync with Warden.Tray `<Version>`). */
-export const APP_VERSION = "0.8.8";
+export const APP_VERSION = "0.8.9";
 
 /** Default text shown on the child PC when a parent sends a nudge without a custom message. */
 export const DEFAULT_NUDGE_MESSAGE = "Your parent wants your attention";
