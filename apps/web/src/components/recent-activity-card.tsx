@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   formatActivityDetail,
+  getActivityIcon,
   getActivityLabel,
   getActivityMessage,
 } from "@/lib/activity";
@@ -94,6 +95,7 @@ export function RecentActivityCard({
           const when = formatRelativeTime(item.createdAt);
           const whenTitle = formatAbsoluteTime(item.createdAt);
           const expanded = expandedId === item.id;
+          const Icon = getActivityIcon(item.action);
 
           return (
             <li
@@ -102,10 +104,8 @@ export function RecentActivityCard({
               tabIndex={0}
               aria-expanded={expanded}
               className={cn(
-                "cursor-pointer px-4 py-3 sm:px-5 sm:py-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                compact
-                  ? "space-y-1"
-                  : "flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-3"
+                "flex items-center gap-3 cursor-pointer px-4 py-3 sm:px-5 sm:py-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                !compact && "md:justify-between"
               )}
               onClick={() => toggleExpanded(item.id)}
               onKeyDown={(event) => {
@@ -115,46 +115,57 @@ export function RecentActivityCard({
                 }
               }}
             >
-              <div className="min-w-0 space-y-0.5">
-                <p className="text-sm font-medium">
-                  {getActivityLabel(item.action, item.metadata)}
-                </p>
-                {message && (
-                  <p className="text-sm text-foreground/90">
-                    &ldquo;{message}&rdquo;
-                  </p>
+              <Icon
+                aria-hidden
+                className="h-4 w-4 shrink-0 text-muted-foreground"
+              />
+              <div
+                className={cn(
+                  "min-w-0 flex-1 space-y-0.5",
+                  !compact && "md:flex md:items-center md:justify-between md:gap-3"
                 )}
-                <p className="text-sm text-muted-foreground">
-                  {[detail, actorName ? `by ${actorName}` : null]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-                {/* Stacked timestamp: always on mobile; also when compact on desktop */}
-                <time
-                  dateTime={new Date(item.createdAt).toISOString()}
-                  title={whenTitle}
-                  className={cn(
-                    "text-xs tabular-nums text-muted-foreground",
-                    !compact && "md:hidden"
-                  )}
-                >
-                  {when}
-                </time>
-                {expanded && (
-                  <p className="text-xs text-muted-foreground/80">
-                    {whenTitle}
+              >
+                <div className="min-w-0 space-y-0.5">
+                  <p className="text-sm font-medium">
+                    {getActivityLabel(item.action, item.metadata)}
                   </p>
+                  {message && (
+                    <p className="text-sm text-foreground/90">
+                      &ldquo;{message}&rdquo;
+                    </p>
+                  )}
+                  <p className="text-sm text-muted-foreground">
+                    {[detail, actorName ? `by ${actorName}` : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  {/* Stacked timestamp: always on mobile; also when compact on desktop */}
+                  <time
+                    dateTime={new Date(item.createdAt).toISOString()}
+                    title={whenTitle}
+                    className={cn(
+                      "text-xs tabular-nums text-muted-foreground",
+                      !compact && "md:hidden"
+                    )}
+                  >
+                    {when}
+                  </time>
+                  {expanded && (
+                    <p className="text-xs text-muted-foreground/80">
+                      {whenTitle}
+                    </p>
+                  )}
+                </div>
+                {!compact && (
+                  <time
+                    dateTime={new Date(item.createdAt).toISOString()}
+                    title={whenTitle}
+                    className="hidden shrink-0 text-xs tabular-nums text-muted-foreground md:block"
+                  >
+                    {when}
+                  </time>
                 )}
               </div>
-              {!compact && (
-                <time
-                  dateTime={new Date(item.createdAt).toISOString()}
-                  title={whenTitle}
-                  className="hidden shrink-0 text-xs tabular-nums text-muted-foreground md:block"
-                >
-                  {when}
-                </time>
-              )}
             </li>
           );
         })}

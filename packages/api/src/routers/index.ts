@@ -1163,6 +1163,8 @@ export const extensionRouter = router({
           }),
           logAudit(family.id, ctx.userId, `extension_${status}`, {
             requestId: request.id,
+            childId: request.childId,
+            deviceId: request.deviceId,
             minutes: request.requestedMinutes,
           }),
         ]);
@@ -1177,6 +1179,8 @@ export const extensionRouter = router({
       } else {
         await logAudit(family.id, ctx.userId, `extension_${status}`, {
           requestId: request.id,
+          childId: request.childId,
+          deviceId: request.deviceId,
           minutes: request.requestedMinutes,
         });
 
@@ -1450,6 +1454,7 @@ export const dashboardRouter = router({
       const childIds = new Set<string>();
       const deviceIds = new Set<string>();
       const nudgeIds = new Set<string>();
+      const extensionRequestIds = new Set<string>();
       for (const log of logs) {
         const meta = asAuditMetadata(log.metadata);
         if (typeof meta.childId === "string") childIds.add(meta.childId);
@@ -1461,6 +1466,31 @@ export const dashboardRouter = router({
         ) {
           nudgeIds.add(meta.nudgeId);
         }
+        if (
+          (log.action === "extension_approved" ||
+            log.action === "extension_denied") &&
+          typeof meta.requestId === "string" &&
+          (typeof meta.childId !== "string" ||
+            typeof meta.deviceId !== "string")
+        ) {
+          extensionRequestIds.add(meta.requestId);
+        }
+      }
+
+      const extensionRequests =
+        extensionRequestIds.size > 0
+          ? await prisma.extensionRequest.findMany({
+              where: {
+                id: { in: [...extensionRequestIds] },
+                child: { familyId: family.id },
+              },
+              select: { id: true, childId: true, deviceId: true },
+            })
+          : [];
+
+      for (const request of extensionRequests) {
+        childIds.add(request.childId);
+        deviceIds.add(request.deviceId);
       }
 
       const [children, devices, nudges] = await Promise.all([
@@ -1501,6 +1531,9 @@ export const dashboardRouter = router({
       const nudgeById = new Map(
         nudges.map((nudge) => [nudge.id, nudge] as const)
       );
+      const extensionRequestById = new Map(
+        extensionRequests.map((request) => [request.id, request] as const)
+      );
 
       return logs.map((log) => {
         let meta = asAuditMetadata(log.metadata);
@@ -1515,6 +1548,26 @@ export const dashboardRouter = router({
               ...meta,
               message: nudge.message,
               custom: nudge.message !== DEFAULT_NUDGE_MESSAGE,
+            };
+          }
+        }
+        if (
+          (log.action === "extension_approved" ||
+            log.action === "extension_denied") &&
+          typeof meta.requestId === "string"
+        ) {
+          const request = extensionRequestById.get(meta.requestId);
+          if (request) {
+            meta = {
+              ...meta,
+              childId:
+                typeof meta.childId === "string"
+                  ? meta.childId
+                  : request.childId,
+              deviceId:
+                typeof meta.deviceId === "string"
+                  ? meta.deviceId
+                  : request.deviceId,
             };
           }
         }

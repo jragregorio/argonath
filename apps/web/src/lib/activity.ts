@@ -1,4 +1,18 @@
 import { DEFAULT_NUDGE_MESSAGE } from "@warden/shared";
+import {
+  Activity,
+  Bell,
+  Camera,
+  Clock,
+  Lock,
+  Monitor,
+  Settings,
+  Unlock,
+  Users,
+  Wifi,
+  WifiOff,
+  type LucideIcon,
+} from "lucide-react";
 
 const ACTION_LABELS: Record<string, string> = {
   admin_lock: "Locked down a device",
@@ -22,6 +36,34 @@ const ACTION_LABELS: Record<string, string> = {
   pin_updated: "Updated the parent PIN",
   timezone_updated: "Updated family time zone",
 };
+
+const ACTION_ICONS: Record<string, LucideIcon> = {
+  capture_requested: Camera,
+  snapshot_deleted: Camera,
+  snapshots_bulk_deleted: Camera,
+  extension_approved: Clock,
+  extension_denied: Clock,
+  bonus_cleared: Clock,
+  policy_updated: Clock,
+  admin_lock: Lock,
+  admin_unlock: Unlock,
+  device_online: Wifi,
+  device_offline: WifiOff,
+  nudge_sent: Bell,
+  child_created: Users,
+  child_renamed: Users,
+  child_deleted: Users,
+  device_renamed: Monitor,
+  device_deleted: Monitor,
+  pairing_code_generated: Monitor,
+  family_renamed: Settings,
+  pin_updated: Settings,
+  timezone_updated: Settings,
+};
+
+export function getActivityIcon(action: string): LucideIcon {
+  return ACTION_ICONS[action] ?? Activity;
+}
 
 export type ActivityItemLike = {
   action: string;
