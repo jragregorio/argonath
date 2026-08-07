@@ -35,17 +35,32 @@ export function PolicyWindowRemainingPrimary({
   );
 }
 
-/** Secondary window-binding line, or the default single status line. */
+/** Secondary window-binding line(s), or the default single status line. */
 export function PolicyRemainingFooter({
   evaluation,
   className,
   mutedClassName = "text-sm md:text-xs text-muted-foreground",
 }: PolicyRemainingStatusProps) {
   const display = getPolicyRemainingDisplay(evaluation);
-  const text =
-    display.layout === "window_binding"
-      ? display.secondaryText
-      : display.statusText;
 
-  return <p className={cn(mutedClassName, className)}>{text}</p>;
+  if (display.layout === "window_binding") {
+    return (
+      <div className={cn("space-y-0.5", className)}>
+        <p className={mutedClassName}>{display.secondaryText}</p>
+        {display.afterHoursText ? (
+          <p
+            className={cn(
+              "text-sm md:text-xs font-medium",
+              // Plume undertone lifted for readable body text on dark surfaces
+              "text-[color-mix(in_srgb,#e8e0f0_78%,var(--color-plume))]"
+            )}
+          >
+            {display.afterHoursText}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  return <p className={cn(mutedClassName, className)}>{display.statusText}</p>;
 }

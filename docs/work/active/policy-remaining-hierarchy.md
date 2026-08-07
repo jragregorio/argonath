@@ -57,3 +57,16 @@ When the schedule window is the binding limit, the UI leads with `used / dailyLi
 npm run typecheck -w @warden/web
 # exit 0
 ```
+
+### Phase 2 — after-hours bonus footnote
+
+- When window-binding + usable bonus remaining: muted line `+{N} min allowed after hours end`
+- Usable amount matches policy-engine outside-window bonus (`bonus − max(0, used − dailyLimit)`)
+- Wired via `PolicyRemainingFooter` (dashboard + demo pick up automatically)
+
+**Validation**
+
+```bash
+npm run typecheck -w @warden/web
+# exit 0
+```

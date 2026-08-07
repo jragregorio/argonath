@@ -12,6 +12,9 @@ export type PolicyRemainingDisplayInput = Pick<
   | "dailyRemainingMinutes"
   | "nextWindowStart"
   | "message"
+  | "usedMinutes"
+  | "dailyLimitMinutes"
+  | "bonusMinutes"
 >;
 
 export type PolicyRemainingDisplay = {
@@ -19,6 +22,8 @@ export type PolicyRemainingDisplay = {
   statusText: string;
   primaryText: string | null;
   secondaryText: string | null;
+  /** Usable bonus that applies after allowed hours end; null when not shown. */
+  afterHoursText: string | null;
   primaryClassName: string;
   usedTodaySecondary: boolean;
 };
@@ -30,6 +35,24 @@ export function isWindowBindingAllowed(
 ): boolean {
   return (
     evaluation.status === "allowed" && evaluation.limitingFactor === "window"
+  );
+}
+
+/**
+ * Minutes of bonus that still apply once allowed hours end.
+ * Matches policy-engine outside-window bonus remaining.
+ */
+export function getUsableAfterHoursBonusMinutes(
+  evaluation: Pick<
+    PolicyRemainingDisplayInput,
+    "bonusMinutes" | "usedMinutes" | "dailyLimitMinutes"
+  >
+): number {
+  if (evaluation.bonusMinutes <= 0) return 0;
+  return Math.max(
+    0,
+    evaluation.bonusMinutes -
+      Math.max(0, evaluation.usedMinutes - evaluation.dailyLimitMinutes)
   );
 }
 
@@ -75,11 +98,16 @@ export function getPolicyRemainingDisplay(
   const statusText = buildDefaultStatusText(evaluation);
 
   if (isWindowBindingAllowed(evaluation)) {
+    const afterHoursBonus = getUsableAfterHoursBonusMinutes(evaluation);
     return {
       layout: "window_binding",
       statusText,
       primaryText: `${evaluation.remainingMinutes} min left today`,
       secondaryText: `Allowed hours ending · ${evaluation.dailyRemainingMinutes} min of daily budget left`,
+      afterHoursText:
+        afterHoursBonus > 0
+          ? `+${afterHoursBonus} min allowed after hours end`
+          : null,
       primaryClassName: getWindowBindingPrimaryClassName(
         evaluation.remainingMinutes
       ),
@@ -92,6 +120,7 @@ export function getPolicyRemainingDisplay(
     statusText,
     primaryText: null,
     secondaryText: null,
+    afterHoursText: null,
     primaryClassName: "",
     usedTodaySecondary: false,
   };
