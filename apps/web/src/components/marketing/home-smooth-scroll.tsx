@@ -22,7 +22,7 @@ const STICKY_CONTENT_ATTR = "data-home-sticky-content";
 const FRAMED_STAGE_ATTR = "data-home-framed-stage";
 
 /**
- * Scroll runway after each card before the next sticks.
+ * Scroll runway between sticky sections (sibling, not inside sticky).
  * Desktop 350px; mobile shorter. Literal class so Tailwind picks it up.
  */
 const stickyCardScrollBufferClassName = "h-20 shrink-0 md:h-[350px]";
@@ -153,6 +153,7 @@ export function StickyHomeCard({
   className,
   id,
   tone = "default",
+  isLast = false,
 }: {
   children: ReactNode;
   zIndex: number;
@@ -160,6 +161,8 @@ export function StickyHomeCard({
   id?: string;
   /** Slot page-fill behind the framed stage. default = background; alt = muted. */
   tone?: StickyHomeCardTone;
+  /** Final sticky slot — full-viewport fill + centered panel; no scroll runway before footer. */
+  isLast?: boolean;
 }) {
   const sectionRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -188,11 +191,18 @@ export function StickyHomeCard({
 
     const update = () => {
       raf = 0;
-      const next = section.nextElementSibling;
-      if (
-        !(next instanceof HTMLElement) ||
-        !next.classList.contains("home-sticky-card")
+      // Buffers are siblings between sticky sections — skip them.
+      let next = section.nextElementSibling;
+      while (
+        next &&
+        !(
+          next instanceof HTMLElement &&
+          next.classList.contains("home-sticky-card")
+        )
       ) {
+        next = next.nextElementSibling;
+      }
+      if (!(next instanceof HTMLElement)) {
         if (lastProgressRef.current !== 0) clearCover();
         return;
       }
@@ -249,49 +259,65 @@ export function StickyHomeCard({
     };
   }, [mdUp, reducedMotion]);
 
+  const slotFillClass = tone === "alt" ? "bg-muted" : "bg-background";
+
   return (
-    <section
-      id={id}
-      ref={sectionRef}
-      className={cn(
-        "home-sticky-card relative flex w-full flex-col",
-        /* Full-viewport sticky slot; fill covers behind the floating header. */
-        "md:sticky md:top-0",
-        "scroll-mt-20 md:scroll-mt-24",
-        className
-      )}
-      style={{ zIndex }}
-    >
-      <div
+    <>
+      {/*
+        Sticky section stays ~viewport tall so it pins inside <main> for the
+        full stack. Scroll buffers are siblings (not inside sticky) — a taller
+        sticky box unsticks early and the covered card rides up with the next.
+      */}
+      <section
+        id={id}
+        ref={sectionRef}
         className={cn(
-          "pointer-events-none absolute inset-0 hidden md:block",
-          tone === "alt" ? "bg-muted" : "bg-background"
+          "home-sticky-card relative flex w-full flex-col",
+          "md:sticky md:top-0 md:min-h-dvh",
+          "scroll-mt-20 md:scroll-mt-24",
+          className
         )}
-        aria-hidden="true"
-      />
-      {/* Viewport shell only — buffer is a sibling so it does not skew centering. */}
-      <div
-        className={cn(
-          "relative z-10 flex w-full flex-col px-4 py-8 sm:px-6 sm:py-9",
-          "md:min-h-dvh md:items-center md:justify-center md:px-8 md:py-6",
-          /* Clears floating home header (h-12 + md:top-4 when scrolled). */
-          "md:pt-[4.75rem]"
-        )}
+        style={{ zIndex }}
       >
         <div
-          ref={contentRef}
-          data-home-sticky-content=""
-          className="mx-auto w-full max-w-6xl"
+          className={cn(
+            "pointer-events-none absolute inset-0 hidden md:block",
+            slotFillClass
+          )}
+          aria-hidden="true"
+        />
+        <div
+          className={cn(
+            "relative z-10 flex w-full flex-1 flex-col px-4 py-8 sm:px-6 sm:py-9",
+            "md:items-center md:justify-center md:px-8 md:py-6",
+            /* Clears floating home header (h-12 + md:top-4 when scrolled). */
+            "md:pt-[4.75rem]"
+          )}
         >
-          {children}
+          <div
+            ref={contentRef}
+            data-home-sticky-content=""
+            className={cn(
+              "mx-auto w-full max-w-6xl",
+              /* Keep the framed panel content-sized; shell fill + justify centers it. */
+              isLast && "h-auto shrink-0"
+            )}
+          >
+            {children}
+          </div>
         </div>
-      </div>
-      {/* Colored runway attached to this slot (visible between framed stages). */}
+      </section>
+      {/* Colored runway between sticky sections (outside sticky — keeps pin stable). */}
       <div
-        className={cn("relative z-0", stickyCardScrollBufferClassName)}
+        className={cn(
+          "relative z-0",
+          isLast
+            ? "h-20 shrink-0 md:hidden"
+            : cn(stickyCardScrollBufferClassName, slotFillClass)
+        )}
         aria-hidden="true"
       />
-    </section>
+    </>
   );
 }
 

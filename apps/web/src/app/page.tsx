@@ -332,7 +332,7 @@ export default function HomePage() {
           </StickyHomeCard>
 
           {/* Get started */}
-          <StickyHomeCard zIndex={60} tone="alt">
+          <StickyHomeCard zIndex={60} tone="alt" isLast>
             <FramedStage
               tone="alt"
               className={`relative ${stickyCardStageClassName} mx-auto max-w-3xl`}
