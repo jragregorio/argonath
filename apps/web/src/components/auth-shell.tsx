@@ -52,7 +52,7 @@ export function AuthShell({ title, subtitle, children, footer }: AuthShellProps)
             <div className="space-y-5 text-left sm:space-y-6">
               <Link href="/" className="inline-flex items-center gap-2">
                 <Shield
-                  className="h-7 w-7 text-attention"
+                  className="h-7 w-7 text-brand"
                   aria-hidden="true"
                 />
                 <span className="font-display text-lg font-semibold tracking-tight">

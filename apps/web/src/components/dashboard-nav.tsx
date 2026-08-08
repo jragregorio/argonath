@@ -211,12 +211,12 @@ function NavFooter() {
 function Brand() {
   return (
     <div className="flex items-center gap-2.5 px-2">
-      <Shield className="h-7 w-7 text-attention" aria-hidden="true" />
+      <Shield className="h-7 w-7 text-brand" aria-hidden="true" />
       <div>
         <span className="font-display text-lg font-semibold tracking-tight">
           Warden
         </span>
-        <div className="mt-2 h-px w-10 bg-attention/50" aria-hidden="true" />
+        <div className="mt-2 h-px w-10 bg-brand/50" aria-hidden="true" />
       </div>
     </div>
   );

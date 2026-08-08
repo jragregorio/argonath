@@ -23,6 +23,9 @@
   --color-destructive-foreground: #ffffff;
   --color-attention: #c5a059;
   --color-attention-foreground: #1a2420;
+  /* Fixed brand gold — do not override per dashboard theme */
+  --color-brand: #c5a059;
+  --color-brand-foreground: #1a2420;
   --color-border: #36454f;
   --color-input: #36454f;
   --color-ring: #d4af37;
