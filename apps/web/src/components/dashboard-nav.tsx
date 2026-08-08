@@ -477,7 +477,7 @@ export function DashboardNav() {
       <MobileMoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
 
       {/* Desktop sidebar */}
-      <aside className="relative hidden h-dvh w-64 shrink-0 sticky top-0 flex-col overflow-y-auto border-r border-border bg-[#1a2420]/40 p-4 md:flex">
+      <aside className="relative hidden h-dvh w-64 shrink-0 sticky top-0 flex-col overflow-y-auto border-r border-border bg-background/40 p-4 md:flex">
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-primary/5 blur-2xl"
           aria-hidden="true"

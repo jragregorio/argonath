@@ -154,14 +154,14 @@ export function SwipeToLock({
       ref={trackRef}
       data-swipe-lock
       className={cn(
-        "relative h-14 md:h-11 w-full min-w-0 shrink-0 select-none overflow-hidden rounded-lg border border-destructive/40 bg-destructive/15",
+        "relative h-14 md:h-11 w-full min-w-0 shrink-0 select-none overflow-hidden rounded-lg border border-attention/40 bg-attention/15",
         inactive && "opacity-50",
         className,
       )}
       title={title}
     >
       <div
-        className="pointer-events-none absolute inset-y-0 left-0 bg-destructive/25 transition-[width] duration-75"
+        className="pointer-events-none absolute inset-y-0 left-0 bg-attention/25 transition-[width] duration-75"
         style={{ width: fillWidth }}
         aria-hidden="true"
       />
@@ -174,7 +174,7 @@ export function SwipeToLock({
       >
         {pending ? (
           <>
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-destructive" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-attention" />
             Locking…
           </>
         ) : (
@@ -195,7 +195,7 @@ export function SwipeToLock({
         aria-valuenow={Math.round(progress * 100)}
         role="slider"
         className={cn(
-          "absolute top-1/2 z-10 flex h-11 w-11 md:h-9 md:w-9 -translate-y-1/2 items-center justify-center rounded-md bg-destructive text-destructive-foreground shadow-sm touch-none",
+          "absolute top-1/2 z-10 flex h-11 w-11 md:h-9 md:w-9 -translate-y-1/2 items-center justify-center rounded-md bg-attention text-attention-foreground shadow-sm touch-none",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           !inactive && "cursor-grab active:cursor-grabbing",
           !dragging && "transition-[left] duration-150 ease-out",

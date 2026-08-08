@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { HydrationBoundary } from "@tanstack/react-query";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { dashboardThemeFoucScript } from "@/components/dashboard-theme-constants";
 import { prefetchDashboardShell } from "@/lib/trpc-server";
 
 async function DashboardLayoutData({
@@ -22,10 +23,11 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <Suspense
-      fallback={<DashboardShell>{children}</DashboardShell>}
-    >
-      <DashboardLayoutData>{children}</DashboardLayoutData>
-    </Suspense>
+    <>
+      <script dangerouslySetInnerHTML={{ __html: dashboardThemeFoucScript }} />
+      <Suspense fallback={<DashboardShell>{children}</DashboardShell>}>
+        <DashboardLayoutData>{children}</DashboardLayoutData>
+      </Suspense>
+    </>
   );
 }

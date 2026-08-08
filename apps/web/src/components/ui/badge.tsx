@@ -14,14 +14,14 @@ type BadgeProps = {
 };
 
 const variants = {
-  default: "bg-primary/20 text-primary",
-  success: "bg-green-500/20 text-green-400",
-  warning: "bg-yellow-500/20 text-yellow-400",
-  destructive: "bg-destructive/20 text-destructive",
+  default: "bg-primary/15 text-primary",
+  // Semantic tokens (not green-400) so light themes keep readable contrast
+  success: "bg-primary/15 text-primary",
+  warning: "bg-attention/15 text-attention",
+  destructive: "bg-destructive/15 text-destructive",
   secondary: "bg-muted text-muted-foreground",
-  // After-hours bonus — soft violet wash + light lilac text (readable on dark cards)
-  plume:
-    "bg-[color-mix(in_srgb,#e8e0f0_16%,var(--color-plume))] text-[color-mix(in_srgb,#e8e0f0_82%,var(--color-plume))]",
+  // After-hours bonus — plume wash + foreground (readable on dark and light)
+  plume: "bg-plume text-foreground",
 };
 
 export function Badge({ children, variant = "default", className, title }: BadgeProps) {

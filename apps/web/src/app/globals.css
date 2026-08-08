@@ -66,6 +66,38 @@ html.home-theme-light {
   --home-framed-shadow: 0 20px 60px color-mix(in srgb, var(--color-armor) 14%, transparent);
 }
 
+/*
+ * Dashboard Blackberry theme — light surfaces from the same accent kit.
+ * Mauve Magic / Blackberry Cream / Sea Green / Rusty Spice / Glaucous
+ * (bright counterpart to dark Maiev; DashboardThemeProvider strips on unmount)
+ */
+html[data-dashboard-theme="blackberry"] {
+  color-scheme: light;
+  --color-background: #f3eaf1;
+  --color-foreground: #2a1528;
+  --color-card: #fbf7fa;
+  --color-card-foreground: #2a1528;
+  --color-primary: #148057;
+  --color-primary-foreground: #f5faf8;
+  --color-secondary: #e8d5e3;
+  --color-secondary-foreground: #2a1528;
+  --color-muted: #ebe0e8;
+  --color-muted-foreground: #6b4060;
+  --color-accent: #1a9a68;
+  --color-accent-foreground: #f5faf8;
+  --color-destructive: #b54a3f;
+  --color-destructive-foreground: #ffffff;
+  --color-attention: #6b4060;
+  --color-attention-foreground: #f7f0f5;
+  --color-border: #b7c1d9;
+  --color-input: #b7c1d9;
+  --color-ring: #d481ea;
+  --color-plume: #f0d6f5;
+  --color-live: #148057;
+  --color-fel: #1a9a68;
+  --color-armor: #3d8f6a;
+}
+
 /* Marketing device previews — always dark chrome regardless of page theme */
 .mock-device-chrome {
   color-scheme: dark;
