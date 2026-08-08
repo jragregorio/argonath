@@ -1,3 +1,5 @@
+"use client";
+
 import { getDeviceChannelName } from "@warden/shared";
 import type { RealtimeEvent } from "@warden/shared";
 import {
@@ -80,13 +82,17 @@ export function subscribeDeviceChannels(
     }
   }
 
-  function removeEntry(entry: ChannelEntry) {
+  async function removeEntry(entry: ChannelEntry) {
     clearReconnectTimer(entry);
     const index = entries.indexOf(entry);
     if (index >= 0) {
       entries.splice(index, 1);
     }
-    void supabase!.removeChannel(entry.channel);
+    try {
+      await supabase!.removeChannel(entry.channel);
+    } catch (error) {
+      console.warn("[warden] realtime channel remove failed:", error);
+    }
   }
 
   function subscribeChannel(deviceId: string): ChannelEntry {
@@ -126,10 +132,12 @@ export function subscribeDeviceChannels(
         if (disposed) return;
 
         const attempts = entry.resubscribeAttempts;
-        removeEntry(entry);
-        const next = subscribeChannel(deviceId);
-        next.resubscribeAttempts = attempts;
-        entries.push(next);
+        void removeEntry(entry).then(() => {
+          if (disposed) return;
+          const next = subscribeChannel(deviceId);
+          next.resubscribeAttempts = attempts;
+          entries.push(next);
+        });
       }, delay);
     });
 
@@ -141,19 +149,19 @@ export function subscribeDeviceChannels(
     };
   }
 
-  function teardownChannels() {
+  async function teardownChannels() {
     const toRemove = [...entries];
-    for (const entry of toRemove) {
-      removeEntry(entry);
-    }
+    await Promise.all(toRemove.map((entry) => removeEntry(entry)));
   }
 
   function resubscribeAll() {
     if (disposed) return;
-    teardownChannels();
-    for (const deviceId of deviceIds) {
-      entries.push(subscribeChannel(deviceId));
-    }
+    void teardownChannels().then(() => {
+      if (disposed) return;
+      for (const deviceId of deviceIds) {
+        entries.push(subscribeChannel(deviceId));
+      }
+    });
   }
 
   function scheduleResubscribeAll() {
@@ -166,17 +174,30 @@ export function subscribeDeviceChannels(
     }, VISIBILITY_DEBOUNCE_MS);
   }
 
+  let wasHidden = false;
+
   function onVisibilityChange() {
-    if (document.visibilityState !== "visible") return;
+    if (document.visibilityState === "hidden") {
+      wasHidden = true;
+      return;
+    }
+    // Skip the first visible event on cold load (Capacitor WebView initial paint).
+    if (!wasHidden) return;
     scheduleResubscribeAll();
   }
 
   function onOnline() {
+    // Match visibility: ignore cold-start online; wait for a real background period.
+    if (!wasHidden) return;
     scheduleResubscribeAll();
   }
 
-  document.addEventListener("visibilitychange", onVisibilityChange);
-  window.addEventListener("online", onOnline);
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisibilityChange);
+  }
+  if (typeof window !== "undefined") {
+    window.addEventListener("online", onOnline);
+  }
 
   for (const deviceId of deviceIds) {
     entries.push(subscribeChannel(deviceId));
@@ -184,12 +205,16 @@ export function subscribeDeviceChannels(
 
   return () => {
     disposed = true;
-    document.removeEventListener("visibilitychange", onVisibilityChange);
-    window.removeEventListener("online", onOnline);
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    }
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", onOnline);
+    }
     if (visibilityDebounceTimer) {
       clearTimeout(visibilityDebounceTimer);
     }
-    teardownChannels();
+    void teardownChannels();
   };
 }
 

@@ -3,15 +3,15 @@
 import { DashboardNav } from "@/components/dashboard-nav";
 import { DashboardThemeProvider } from "@/components/dashboard-theme";
 import { DashboardVisibilityRefresh } from "@/components/dashboard-visibility-refresh";
-import { NativeAppResumeRefresh } from "@/components/native-app-resume-refresh";
 import { PushTokenSync } from "@/components/native-push-bootstrap";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { FamilyRealtimeProvider } from "@/lib/family-realtime";
 import { ToastProvider } from "@/lib/toast";
 
 /**
- * Dashboard chrome: theme, realtime, PTR (Capacitor), resume/visibility refresh.
- * FCM deep-link listener left out after client crash.
+ * Dashboard chrome: theme, realtime, PTR (Capacitor), visibility refresh.
+ * NativeAppResumeRefresh / FCM deep-link left out after Capacitor client crashes
+ * (visibility soft-refresh covers badge freshness on resume).
  * Theme provider lives here so Settings (and all dashboard pages) are always under context.
  */
 export function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -20,7 +20,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <FamilyRealtimeProvider>
         <ToastProvider>
           <PushTokenSync />
-          <NativeAppResumeRefresh />
           <DashboardVisibilityRefresh />
           <PullToRefresh>
             <div className="flex w-full min-h-dvh flex-col overflow-x-hidden md:h-dvh md:min-h-0 md:flex-row md:overflow-hidden">

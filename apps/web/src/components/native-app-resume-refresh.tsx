@@ -32,28 +32,42 @@ export function NativeAppResumeRefresh() {
       return;
     }
 
-    let removed = false;
+    let cancelled = false;
     let listenerHandle: { remove: () => Promise<void> } | undefined;
+    let sawInactive = false;
 
-    void app
-      .addListener("appStateChange", ({ isActive }) => {
-        if (!isActive) return;
-        const now = Date.now();
-        if (now - lastResumeRef.current < RESUME_DEBOUNCE_MS) return;
-        lastResumeRef.current = now;
-        void refreshDashboard();
-      })
-      .then((handle) => {
-        if (removed) {
-          void handle.remove();
+    void (async () => {
+      try {
+        const result = app.addListener("appStateChange", ({ isActive }) => {
+          if (!isActive) {
+            sawInactive = true;
+            return;
+          }
+          // Ignore the first isActive:true on cold start (WebView initial load).
+          if (!sawInactive) return;
+          const now = Date.now();
+          if (now - lastResumeRef.current < RESUME_DEBOUNCE_MS) return;
+          lastResumeRef.current = now;
+          void refreshDashboard();
+        });
+        const handle = await Promise.resolve(result);
+        if (cancelled) {
+          await handle?.remove?.();
         } else {
           listenerHandle = handle;
         }
-      });
+      } catch (error) {
+        console.error("[warden] App resume listener failed:", error);
+      }
+    })();
 
     return () => {
-      removed = true;
-      void listenerHandle?.remove();
+      cancelled = true;
+      try {
+        void listenerHandle?.remove?.();
+      } catch {
+        // Bridge remove can throw if the plugin is partially available.
+      }
     };
   }, [refreshDashboard]);
 

@@ -22,23 +22,33 @@ export async function invalidateDashboardQueries(utils: TrpcUtils) {
   ]);
 }
 
+type RefreshOptions = {
+  /** Invalidate React Query only — skip RSC `router.refresh()` (safer on Capacitor resume). */
+  soft?: boolean;
+};
+
 export function useDashboardRefresh() {
   const utils = trpc.useUtils();
   const router = useRouter();
   const inFlightRef = useRef(false);
 
-  const refreshDashboard = useCallback(async () => {
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
-    try {
-      await invalidateDashboardQueries(utils);
-      router.refresh();
-    } catch (error) {
-      console.error("[warden] dashboard refresh failed:", error);
-    } finally {
-      inFlightRef.current = false;
-    }
-  }, [utils, router]);
+  const refreshDashboard = useCallback(
+    async (options?: RefreshOptions) => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      try {
+        await invalidateDashboardQueries(utils);
+        if (!options?.soft) {
+          router.refresh();
+        }
+      } catch (error) {
+        console.error("[warden] dashboard refresh failed:", error);
+      } finally {
+        inFlightRef.current = false;
+      }
+    },
+    [utils, router]
+  );
 
   return { refreshDashboard };
 }

@@ -57,3 +57,33 @@ npm run check:boundaries           # exit 0
 **Orchestrator follow-up:** preserved `resubscribeAttempts` across per-channel recreate so max-3 backoff actually stops; visibility/`online` full resubscribe still resets.
 
 **Next:** manual idle-tab + native resume smoke test; archive when accepted. Do not commit unless asked.
+
+### Phase 2 — mobile WebView crash fix (2026-08-08)
+
+**Symptom:** Capacitor remote-URL app shows Next.js "Application error: a client-side exception has occurred" after commit `44584f0`.
+
+**Diagnosis (evidence):**
+1. No `@capacitor/*` npm imports in web client bundle (confirmed via build grep; `apps/web/package.json` has no Capacitor deps).
+2. `NativeAppResumeRefresh` was remounted in `44584f0` after being removed in `94fe7a6` for prior Capacitor client crashes; it called `app.addListener(...).then(...)` without try/catch — a non-Promise bridge return throws synchronously in `useEffect`.
+3. **Primary likely crash:** new `DashboardVisibilityRefresh` + hardened `realtime.ts` both listen for `visibilitychange`. Capacitor Android WebView fires `visible` on initial paint; the handler immediately scheduled `router.refresh()` / full channel resubscribe ~400ms after mount, during hydration — matching the generic Next client error on load.
+4. `NativeAppResumeRefresh` has the same cold-start pattern (`appStateChange` `isActive:true` on launch) and could also call `router.refresh()` during hydration.
+5. Realtime resubscribe called `removeChannel` without awaiting before re-adding channels (Supabase reuses topic names); hardened to await removal.
+
+**Fix:**
+- `dashboard-visibility-refresh.tsx` — only refresh after a prior `hidden` state (true resume, not cold load).
+- `native-app-resume-refresh.tsx` — try/catch + `Promise.resolve(addListener)`; ignore first `isActive:true` until after `isActive:false`.
+- `realtime.ts` — add `"use client"`; skip initial visibility resubscribe; guard `document`/`window`; await `removeChannel` before reconnect/resubscribe.
+
+**Validation:**
+```bash
+npm run typecheck -w @warden/web   # exit 0
+npm run check:boundaries           # exit 0
+```
+
+**Orchestrator hardening (same day):**
+- Unmounted `NativeAppResumeRefresh` again (same component removed in `94fe7a6` after Capacitor crashes).
+- Visibility refresh uses `refreshDashboard({ soft: true })` — invalidate queries only, no `router.refresh()`.
+- 2s mount grace + `online` only after prior `hidden`.
+- Realtime `online` also requires prior `hidden`.
+
+**Next:** push (no version bump); redeploy; retest Capacitor cold start + background/resume.
