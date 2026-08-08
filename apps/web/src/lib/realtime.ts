@@ -1,7 +1,15 @@
 import { getDeviceChannelName } from "@warden/shared";
 import type { RealtimeEvent } from "@warden/shared";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  createClient,
+  type RealtimeChannel,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
 import { useEffect, useRef } from "react";
+
+const RECONNECT_BACKOFF_MS = 1000;
+const MAX_RESUBSCRIBE_ATTEMPTS = 3;
+const VISIBILITY_DEBOUNCE_MS = 400;
 
 function isSupabaseRealtimeConfigured() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -33,6 +41,21 @@ export function isRealtimeConfigured() {
   return isSupabaseRealtimeConfigured();
 }
 
+type ChannelEntry = {
+  deviceId: string;
+  channel: RealtimeChannel;
+  resubscribeAttempts: number;
+  reconnectTimer: ReturnType<typeof setTimeout> | null;
+};
+
+function isChannelFailureStatus(status: string) {
+  return (
+    status === "CHANNEL_ERROR" ||
+    status === "TIMED_OUT" ||
+    status === "CLOSED"
+  );
+}
+
 /**
  * Low-level multi-device channel subscription.
  * Prefer FamilyRealtimeProvider / useFamilyRealtimeEvent in dashboard UI.
@@ -46,19 +69,127 @@ export function subscribeDeviceChannels(
     return () => {};
   }
 
-  const channels = deviceIds.map((deviceId) =>
-    supabase
-      .channel(getDeviceChannelName(deviceId))
-      .on("broadcast", { event: "warden" }, (payload) => {
-        onEvent(payload.payload as RealtimeEvent);
-      })
-      .subscribe()
-  );
+  const entries: ChannelEntry[] = [];
+  let disposed = false;
+  let visibilityDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearReconnectTimer(entry: ChannelEntry) {
+    if (entry.reconnectTimer) {
+      clearTimeout(entry.reconnectTimer);
+      entry.reconnectTimer = null;
+    }
+  }
+
+  function removeEntry(entry: ChannelEntry) {
+    clearReconnectTimer(entry);
+    const index = entries.indexOf(entry);
+    if (index >= 0) {
+      entries.splice(index, 1);
+    }
+    void supabase!.removeChannel(entry.channel);
+  }
+
+  function subscribeChannel(deviceId: string): ChannelEntry {
+    const channelName = getDeviceChannelName(deviceId);
+    const channel = supabase!.channel(channelName);
+
+    channel.on("broadcast", { event: "warden" }, (payload) => {
+      onEvent(payload.payload as RealtimeEvent);
+    });
+
+    channel.subscribe((status) => {
+      if (disposed) return;
+
+      const entry = entries.find((e) => e.deviceId === deviceId);
+      if (!entry) return;
+
+      if (status === "SUBSCRIBED") {
+        entry.resubscribeAttempts = 0;
+        return;
+      }
+
+      if (!isChannelFailureStatus(status)) return;
+
+      if (entry.resubscribeAttempts >= MAX_RESUBSCRIBE_ATTEMPTS) {
+        console.warn(
+          `[warden] realtime channel ${channelName} failed after ${MAX_RESUBSCRIBE_ATTEMPTS} attempts`
+        );
+        return;
+      }
+
+      entry.resubscribeAttempts += 1;
+      const delay = RECONNECT_BACKOFF_MS * entry.resubscribeAttempts;
+      clearReconnectTimer(entry);
+
+      entry.reconnectTimer = setTimeout(() => {
+        entry.reconnectTimer = null;
+        if (disposed) return;
+
+        const attempts = entry.resubscribeAttempts;
+        removeEntry(entry);
+        const next = subscribeChannel(deviceId);
+        next.resubscribeAttempts = attempts;
+        entries.push(next);
+      }, delay);
+    });
+
+    return {
+      deviceId,
+      channel,
+      resubscribeAttempts: 0,
+      reconnectTimer: null,
+    };
+  }
+
+  function teardownChannels() {
+    const toRemove = [...entries];
+    for (const entry of toRemove) {
+      removeEntry(entry);
+    }
+  }
+
+  function resubscribeAll() {
+    if (disposed) return;
+    teardownChannels();
+    for (const deviceId of deviceIds) {
+      entries.push(subscribeChannel(deviceId));
+    }
+  }
+
+  function scheduleResubscribeAll() {
+    if (visibilityDebounceTimer) {
+      clearTimeout(visibilityDebounceTimer);
+    }
+    visibilityDebounceTimer = setTimeout(() => {
+      visibilityDebounceTimer = null;
+      resubscribeAll();
+    }, VISIBILITY_DEBOUNCE_MS);
+  }
+
+  function onVisibilityChange() {
+    if (document.visibilityState !== "visible") return;
+    scheduleResubscribeAll();
+  }
+
+  function onOnline() {
+    scheduleResubscribeAll();
+  }
+
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("online", onOnline);
+
+  for (const deviceId of deviceIds) {
+    entries.push(subscribeChannel(deviceId));
+  }
 
   return () => {
-    channels.forEach((channel) => {
-      void supabase.removeChannel(channel);
-    });
+    disposed = true;
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    window.removeEventListener("online", onOnline);
+    if (visibilityDebounceTimer) {
+      clearTimeout(visibilityDebounceTimer);
+    }
+    teardownChannels();
   };
 }
 
