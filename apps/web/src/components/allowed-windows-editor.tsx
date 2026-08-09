@@ -2,8 +2,9 @@
 
 import type { AllowedWindow } from "@warden/shared";
 import { Button } from "@/components/ui/button";
+import { TimePicker } from "@/components/ui/time-picker";
 import { cn } from "@warden/ui";
-import { formatTime12, formatTimeRange12 } from "@/lib/time-format";
+import { formatTimeRange12 } from "@/lib/time-format";
 
 const DAYS = [
   { value: 1, label: "Mon" },
@@ -15,17 +16,16 @@ const DAYS = [
   { value: 7, label: "Sun" },
 ] as const;
 
-const TIME_OPTIONS: string[] = (() => {
-  const options: string[] = [];
-  for (let minutes = 0; minutes < 24 * 60; minutes += 15) {
-    const h = Math.floor(minutes / 60)
-      .toString()
-      .padStart(2, "0");
-    const m = (minutes % 60).toString().padStart(2, "0");
-    options.push(`${h}:${m}`);
-  }
-  return options;
-})();
+function timeStringToDate(time: string): Date {
+  const [h, m] = time.split(":").map(Number);
+  const d = new Date();
+  d.setHours(h || 0, m || 0, 0, 0);
+  return d;
+}
+
+function dateToTimeString(date: Date): string {
+  return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+}
 
 type Preset = {
   id: string;
@@ -71,11 +71,6 @@ const PRESETS: Preset[] = [
 function parseTime(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
-}
-
-function ensureTimeOption(time: string): string[] {
-  if (TIME_OPTIONS.includes(time)) return TIME_OPTIONS;
-  return [...TIME_OPTIONS, time].sort((a, b) => parseTime(a) - parseTime(b));
 }
 
 function windowsForDay(windows: AllowedWindow[], day: number) {
@@ -235,47 +230,37 @@ export function AllowedWindowsEditor({
                         className="space-y-1.5"
                       >
                         <div className="flex flex-wrap items-center gap-2">
-                          <select
-                            value={window.start}
+                          <TimePicker
+                            value={timeStringToDate(window.start)}
                             aria-label={`${day.label} start time`}
-                            onChange={(e) =>
+                            use12HourFormat
+                            modal
+                            onChange={(date) =>
                               updateDayWindow(
                                 day.value,
                                 index,
                                 "start",
-                                e.target.value
+                                dateToTimeString(date)
                               )
                             }
-                            className="h-10 min-w-[7rem] rounded-lg border border-border bg-background px-2 text-sm"
-                          >
-                            {ensureTimeOption(window.start).map((time) => (
-                              <option key={time} value={time}>
-                                {formatTime12(time)}
-                              </option>
-                            ))}
-                          </select>
+                          />
                           <span className="text-sm text-muted-foreground">
                             to
                           </span>
-                          <select
-                            value={window.end}
+                          <TimePicker
+                            value={timeStringToDate(window.end)}
                             aria-label={`${day.label} end time`}
-                            onChange={(e) =>
+                            use12HourFormat
+                            modal
+                            onChange={(date) =>
                               updateDayWindow(
                                 day.value,
                                 index,
                                 "end",
-                                e.target.value
+                                dateToTimeString(date)
                               )
                             }
-                            className="h-10 min-w-[7rem] rounded-lg border border-border bg-background px-2 text-sm"
-                          >
-                            {ensureTimeOption(window.end).map((time) => (
-                              <option key={time} value={time}>
-                                {formatTime12(time)}
-                              </option>
-                            ))}
-                          </select>
+                          />
                           {dayWindows.length > 1 && (
                             <Button
                               type="button"
