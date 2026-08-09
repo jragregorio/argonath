@@ -50,6 +50,7 @@ public class EnforcementEngine
     public event Action<CapturePayload, string>? CaptureRequested;
     public event Action<NudgePayload>? NudgeRequested;
     public event Action<TimeWarningPayload>? TimeWarningRequested;
+    public event Action<ExtensionPayload>? ExtensionApprovedNoticeRequested;
 
     public bool IsLocked => _isLocked;
     public bool IsAdminLocked => _currentPolicy?.AdminLock ?? false;
@@ -340,6 +341,7 @@ public class EnforcementEngine
         {
             case "extension:approved":
                 _ = RefreshPolicyAsync(syncUsageFromServer: true);
+                RaiseExtensionApprovedNotice(evt);
                 break;
             case "extension:denied":
                 break;
@@ -372,6 +374,25 @@ public class EnforcementEngine
                 }
                 break;
         }
+    }
+
+    private void RaiseExtensionApprovedNotice(RealtimeEvent evt)
+    {
+        ExtensionPayload payload;
+        if (evt.Payload != null)
+        {
+            var json = evt.Payload is JsonElement el
+                ? el.GetRawText()
+                : JsonSerializer.Serialize(evt.Payload);
+            payload = JsonSerializer.Deserialize<ExtensionPayload>(json, JsonOptions)
+                ?? new ExtensionPayload();
+        }
+        else
+        {
+            payload = new ExtensionPayload();
+        }
+
+        ExtensionApprovedNoticeRequested?.Invoke(payload);
     }
 
     private void TryRequestNudge(NudgePayload payload)

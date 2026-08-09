@@ -49,8 +49,15 @@ static class Program
     private static readonly HashSet<string> _activeNudgeWindows = new();
     private static readonly object _nudgeUiLock = new();
     private static bool _attentionBusy;
-    private static readonly Queue<Action> _attentionQueue = new();
+    private static readonly Queue<(AttentionItemKind Kind, Action Show)> _attentionQueue = new();
     private static readonly object _attentionLock = new();
+    private static AttentionWindow? _activeTimeWarningWindow;
+
+    private enum AttentionItemKind
+    {
+        General,
+        TimeWarning
+    }
     private static StartupDiagnosis? _startupDiagnosis;
     private static string? _lastErrorSummary;
     private static readonly HeartbeatHealthTracker _heartbeatHealth = new();
@@ -248,11 +255,26 @@ static class Program
                 {
                     try
                     {
-                        EnqueueAttention(() => ShowTimeWarning(payload));
+                        EnqueueAttention(() => ShowTimeWarning(payload), AttentionItemKind.TimeWarning);
                     }
                     catch (Exception ex)
                     {
                         WardenLog.Warn("TimeWarning", "TimeWarningRequested UI enqueue failed", ex);
+                    }
+                });
+            };
+
+            _engine.ExtensionApprovedNoticeRequested += payload =>
+            {
+                _ = app.Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        OnExtensionApprovedNotice(payload);
+                    }
+                    catch (Exception ex)
+                    {
+                        WardenLog.Warn("Extension", "ExtensionApprovedNotice UI enqueue failed", ex);
                     }
                 });
             };
@@ -886,13 +908,13 @@ static class Program
         }
     }
 
-    private static void EnqueueAttention(Action show)
+    private static void EnqueueAttention(Action show, AttentionItemKind kind = AttentionItemKind.General)
     {
         lock (_attentionLock)
         {
             if (_attentionBusy)
             {
-                _attentionQueue.Enqueue(show);
+                _attentionQueue.Enqueue((kind, show));
                 return;
             }
 
@@ -902,6 +924,64 @@ static class Program
         show();
     }
 
+    private static void PurgeQueuedTimeWarnings()
+    {
+        lock (_attentionLock)
+        {
+            if (_attentionQueue.Count == 0)
+            {
+                return;
+            }
+
+            var kept = new Queue<(AttentionItemKind Kind, Action Show)>();
+            while (_attentionQueue.Count > 0)
+            {
+                var item = _attentionQueue.Dequeue();
+                if (item.Kind != AttentionItemKind.TimeWarning)
+                {
+                    kept.Enqueue(item);
+                }
+            }
+
+            while (kept.Count > 0)
+            {
+                _attentionQueue.Enqueue(kept.Dequeue());
+            }
+        }
+    }
+
+    private static void DismissActiveTimeWarning()
+    {
+        var window = _activeTimeWarningWindow;
+        if (window == null)
+        {
+            return;
+        }
+
+        try
+        {
+            window.Close();
+        }
+        catch (Exception ex)
+        {
+            WardenLog.Debug("TimeWarning", "Dismiss active time warning failed", ex);
+            if (ReferenceEquals(_activeTimeWarningWindow, window))
+            {
+                _activeTimeWarningWindow = null;
+            }
+
+            ReleaseAttentionSlot();
+        }
+    }
+
+    private static void OnExtensionApprovedNotice(Warden.Core.Models.ExtensionPayload payload)
+    {
+        PurgeQueuedTimeWarnings();
+        DismissActiveTimeWarning();
+        var extraMinutes = payload.ExtraMinutes;
+        EnqueueAttention(() => ShowBonusGranted(extraMinutes));
+    }
+
     private static void ReleaseAttentionSlot()
     {
         Action? next = null;
@@ -909,7 +989,7 @@ static class Program
         {
             if (_attentionQueue.Count > 0)
             {
-                next = _attentionQueue.Dequeue();
+                next = _attentionQueue.Dequeue().Show;
             }
             else
             {
@@ -1005,6 +1085,25 @@ static class Program
                 : null
         );
 
+        _activeTimeWarningWindow = window;
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_activeTimeWarningWindow, window))
+            {
+                _activeTimeWarningWindow = null;
+            }
+
+            ReleaseAttentionSlot();
+        };
+        window.Show();
+    }
+
+    private static void ShowBonusGranted(int extraMinutes)
+    {
+        var body = extraMinutes > 0
+            ? $"Your parent added +{extraMinutes} minutes"
+            : "Your parent added extra screen time";
+        var window = new AttentionWindow("Extra time", body, okDelaySeconds: 3);
         window.Closed += (_, _) => ReleaseAttentionSlot();
         window.Show();
     }

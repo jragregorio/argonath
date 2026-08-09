@@ -1,18 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@warden/api/router-type";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { getEvaluationStatusLabel } from "@warden/shared";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { ClockPlus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { InlineBackLink } from "@/components/sticky-back-chip";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { progressBarClass } from "./child-detail-helpers";
 import {
@@ -24,6 +26,7 @@ import {
   PolicyRemainingFooter,
   PolicyWindowRemainingPrimary,
 } from "@/components/policy-remaining-status";
+import { useIsDesktopMd } from "@/lib/use-is-desktop-md";
 import { cn } from "@warden/ui";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
@@ -37,6 +40,10 @@ type ChildUsageHeaderProps = {
 };
 
 type ConfirmState = { type: "delete-child" } | { type: "clear-bonus" } | null;
+
+const GRANT_PRESETS = [15, 30, 60] as const;
+const GRANT_MINUTES_MIN = 1;
+const GRANT_MINUTES_MAX = 240;
 
 export function ChildUsageHeader({
   child,
@@ -52,6 +59,17 @@ export function ChildUsageHeader({
       void utils.children.get.invalidate({ childId });
       void utils.dashboard.overview.invalidate();
       void utils.dashboard.activity.invalidate();
+    },
+  });
+  const grantBonus = trpc.extension.grantBonus.useMutation({
+    onSuccess: () => {
+      void utils.policy.getEvaluation.invalidate({ childId });
+      void utils.children.get.invalidate({ childId });
+      void utils.dashboard.overview.invalidate();
+      void utils.dashboard.activity.invalidate();
+      setGrantBonusOpen(false);
+      setGrantMinutes(15);
+      setGrantCustomMode(false);
     },
   });
   const renameChild = trpc.children.rename.useMutation({
@@ -76,6 +94,11 @@ export function ChildUsageHeader({
   const [childNameDraft, setChildNameDraft] = useState("");
   const [childActionsOpen, setChildActionsOpen] = useState(false);
   const [confirmState, setConfirmState] = useState<ConfirmState>(null);
+  const [grantBonusOpen, setGrantBonusOpen] = useState(false);
+  const [grantMinutes, setGrantMinutes] = useState(15);
+  const [grantCustomMode, setGrantCustomMode] = useState(false);
+  const grantInputId = useId();
+  const isDesktop = useIsDesktopMd();
 
   const startRenameChild = () => {
     setChildNameDraft(child.displayName);
@@ -98,6 +121,30 @@ export function ChildUsageHeader({
   const requestClearBonus = () => {
     if (!evaluation || evaluation.bonusMinutes <= 0) return;
     setConfirmState({ type: "clear-bonus" });
+  };
+
+  const openGrantBonus = () => {
+    setGrantMinutes(15);
+    setGrantCustomMode(false);
+    setGrantBonusOpen(true);
+  };
+
+  const closeGrantBonus = () => {
+    if (grantBonus.isPending) return;
+    setGrantBonusOpen(false);
+    setGrantMinutes(15);
+    setGrantCustomMode(false);
+  };
+
+  const confirmGrantBonus = () => {
+    if (
+      grantMinutes < GRANT_MINUTES_MIN ||
+      grantMinutes > GRANT_MINUTES_MAX ||
+      grantBonus.isPending
+    ) {
+      return;
+    }
+    grantBonus.mutate({ childId, minutes: grantMinutes });
   };
 
   const handleConfirmDestructive = () => {
@@ -165,6 +212,81 @@ export function ChildUsageHeader({
   const remainingDisplay = evaluation
     ? getPolicyRemainingDisplay(evaluation)
     : null;
+
+  const grantBonusForm = (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {GRANT_PRESETS.map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            disabled={grantBonus.isPending}
+            onClick={() => {
+              setGrantMinutes(preset);
+              setGrantCustomMode(false);
+            }}
+            className={cn(
+              "rounded-lg border px-3 py-2 text-sm transition-colors disabled:pointer-events-none disabled:opacity-50 max-md:min-h-11",
+              !grantCustomMode && grantMinutes === preset
+                ? "border-primary bg-primary/10 text-foreground"
+                : "border-border text-muted-foreground hover:bg-secondary hover:text-foreground"
+            )}
+          >
+            +{preset} min
+          </button>
+        ))}
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor={grantInputId}>Custom minutes</Label>
+        <Input
+          id={grantInputId}
+          type="number"
+          inputMode="numeric"
+          min={GRANT_MINUTES_MIN}
+          max={GRANT_MINUTES_MAX}
+          value={grantCustomMode ? grantMinutes : ""}
+          placeholder={`${GRANT_MINUTES_MIN}–${GRANT_MINUTES_MAX}`}
+          onChange={(event) => {
+            setGrantCustomMode(true);
+            const next = Number.parseInt(event.target.value, 10);
+            setGrantMinutes(Number.isFinite(next) ? next : 0);
+          }}
+          onFocus={() => setGrantCustomMode(true)}
+          disabled={grantBonus.isPending}
+          className="max-w-[10rem]"
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Bonus expires at the end of today and unlocks all of {child.displayName}
+        &apos;s devices.
+      </p>
+    </div>
+  );
+
+  const grantBonusFooter = (
+    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={closeGrantBonus}
+        disabled={grantBonus.isPending}
+      >
+        Cancel
+      </Button>
+      <Button
+        type="button"
+        onClick={confirmGrantBonus}
+        disabled={
+          grantBonus.isPending ||
+          grantMinutes < GRANT_MINUTES_MIN ||
+          grantMinutes > GRANT_MINUTES_MAX
+        }
+      >
+        <ClockPlus className="mr-1.5 h-4 w-4" />
+        {grantBonus.isPending ? "Granting…" : `Grant +${grantMinutes} min`}
+      </Button>
+    </div>
+  );
 
   return (
     <>
@@ -276,6 +398,17 @@ export function ChildUsageHeader({
                   {evaluation.bonusMinutes > 0 &&
                     ` (+${evaluation.bonusMinutes} bonus)`}
                 </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs max-md:min-h-9"
+                  onClick={openGrantBonus}
+                  disabled={grantBonus.isPending}
+                >
+                  <ClockPlus className="mr-1 h-3.5 w-3.5" />
+                  {grantBonus.isPending ? "Granting…" : "Grant bonus"}
+                </Button>
                 {evaluation.bonusMinutes > 0 && (
                   <Button
                     type="button"
@@ -317,6 +450,19 @@ export function ChildUsageHeader({
             type="button"
             variant="outline"
             className="w-full justify-start gap-3 max-md:min-h-14"
+            disabled={!evaluation || grantBonus.isPending}
+            onClick={() => {
+              setChildActionsOpen(false);
+              openGrantBonus();
+            }}
+          >
+            <ClockPlus className="h-5 w-5" />
+            Grant bonus
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full justify-start gap-3 max-md:min-h-14"
             onClick={() => {
               setChildActionsOpen(false);
               startRenameChild();
@@ -340,6 +486,30 @@ export function ChildUsageHeader({
           </Button>
         </div>
       </BottomSheet>
+
+      {isDesktop ? (
+        <Modal
+          open={grantBonusOpen}
+          onClose={closeGrantBonus}
+          title="Grant bonus screen time"
+          description={`Add extra minutes for ${child.displayName} today`}
+          className="w-[min(24rem,calc(100vw-2rem))]"
+          footer={grantBonusFooter}
+        >
+          {grantBonusForm}
+        </Modal>
+      ) : (
+        <BottomSheet
+          open={grantBonusOpen}
+          onClose={closeGrantBonus}
+          title="Grant bonus screen time"
+          description={`Add extra minutes for ${child.displayName} today`}
+          showDone={false}
+          footer={grantBonusFooter}
+        >
+          {grantBonusForm}
+        </BottomSheet>
+      )}
 
       <ConfirmDialog
         open={confirmState !== null}

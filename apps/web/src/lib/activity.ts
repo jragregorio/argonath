@@ -23,6 +23,7 @@ const ACTION_LABELS: Record<string, string> = {
   snapshot_deleted: "Deleted a snapshot",
   extension_approved: "Approved extra screen time",
   extension_denied: "Denied extra screen time",
+  bonus_granted: "Granted bonus screen time",
   bonus_cleared: "Cleared bonus screen time",
   policy_updated: "Updated screen time policy",
   child_created: "Added a child",
@@ -43,6 +44,7 @@ const ACTION_ICONS: Record<string, LucideIcon> = {
   snapshots_bulk_deleted: Camera,
   extension_approved: Clock,
   extension_denied: Clock,
+  bonus_granted: Clock,
   bonus_cleared: Clock,
   policy_updated: Clock,
   admin_lock: Lock,
@@ -113,6 +115,7 @@ export function formatActivityDetail(item: ActivityItemLike) {
   if (
     item.action === "extension_approved" ||
     item.action === "extension_denied" ||
+    item.action === "bonus_granted" ||
     item.action === "bonus_cleared"
   ) {
     const minutes = item.metadata?.minutes;

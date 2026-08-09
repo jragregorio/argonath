@@ -1241,6 +1241,51 @@ export const extensionRouter = router({
         clearedCount: activeOverrides.length,
       };
     }),
+
+  grantBonus: parentProcedure
+    .input(
+      z.object({
+        childId: z.string(),
+        minutes: z.number().int().min(1).max(240),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const child = await getChildForFamily(input.childId, family.id);
+      const now = new Date();
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+      const timeZone = family.timezone || DEFAULT_TIME_ZONE;
+
+      await Promise.all([
+        createExtensionOverrideWithBaseline({
+          childId: child.id,
+          extraMinutes: input.minutes,
+          expiresAt: endOfDay,
+          timeZone,
+          now,
+        }),
+        prisma.device.updateMany({
+          where: { childId: child.id },
+          data: { isLocked: false },
+        }),
+        logAudit(family.id, ctx.userId, "bonus_granted", {
+          childId: child.id,
+          minutes: input.minutes,
+        }),
+      ]);
+
+      for (const device of child.devices) {
+        void broadcastToDevice(device.id, {
+          type: "extension:approved",
+          deviceId: device.id,
+          payload: { extraMinutes: input.minutes },
+          timestamp: new Date().toISOString(),
+        }).catch(() => {});
+      }
+
+      return { ok: true, minutes: input.minutes };
+    }),
 });
 
 export const dashboardRouter = router({

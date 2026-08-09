@@ -55,13 +55,7 @@ export function PolicyRemainingFooter({
       <div className={cn("space-y-0.5", className)}>
         <p className={mutedClassName}>{display.secondaryText}</p>
         {display.afterHoursText ? (
-          <p
-            className={cn(
-              "text-sm md:text-xs font-medium",
-              // Plume undertone lifted for readable body text on dark surfaces
-              "text-[color-mix(in_srgb,#e8e0f0_78%,var(--color-plume))]"
-            )}
-          >
+          <p className="text-sm md:text-xs font-medium text-bonus-foreground">
             {display.afterHoursText}
           </p>
         ) : null}
