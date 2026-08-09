@@ -183,3 +183,38 @@ Outside allowed hours, the agent counts down bonus from a **usage baseline** cap
 | `npm run typecheck -w @warden/web` | 0 |
 | `dotnet build apps/agent/Warden.sln` | 0 |
 
+### Phase 7 — agent outside-grant persist race (done)
+
+**Incident (Niccolo device, 2026-08-08):** Child window Sat 10:00–21:00. Parent approved bonus ~5 min before window end. At window end agent locked instead of switching to bonus. Agent log showed `IOException` on fixed `outside-grant.json.tmp` from concurrent `PersistOutsideGrantBaseline` writes (WinForms timer re-entry + heartbeat `RefreshPolicyAsync`).
+
+**Root cause:** `OutsideGrantStateStore.Save` used a single `.tmp` path; `PersistOutsideGrantBaseline` ran every tick when server baseline present; persist exceptions aborted `EvaluateAndEnforce` before lock/unlock.
+
+**Implemented:**
+
+1. `OutsideGrantStateStore`: per-write unique temp file, static lock serializing Save/Load/Clear, 3× IOException retry with backoff, atomic `File.Replace`/`Move`.
+2. `EnforcementEngine.PersistOutsideGrantBaseline`: skip disk when date/baseline/bonus unchanged; try/catch Warn (non-fatal) — in-memory baseline kept on failure.
+3. `LogOutsideWindowDiagnostics` on outside-window lock/unlock transitions and when outside-window status flips.
+4. Agent version `0.6.12` → `0.6.13` (`Directory.Build.props`).
+
+**Validation (Phase 7)**
+
+| Command | Exit |
+|---------|------|
+| `dotnet build apps/agent/Warden.sln -c Release --nologo -v q` | 0 |
+
+### Phase 8 — agent log timestamps local (done)
+
+**Problem:** File log lines used ISO UTC (`2026-08-08T13:02:15.563Z`), hard for parents to match wall-clock when reading `%LOCALAPPDATA%\Warden\logs\`.
+
+**Implemented:**
+
+1. `WardenLog`: timestamps use local machine time `yyyy-MM-dd HH:mm:ss` (no `T`/`Z`).
+2. Daily rotation and purge keyed off local calendar date (`_currentDateLocal`) so filename date aligns with line timestamps.
+3. Agent version `0.6.13` → `0.6.14` (`Directory.Build.props`).
+
+**Validation (Phase 8)**
+
+| Command | Exit |
+|---------|------|
+| `dotnet build apps/agent/Warden.sln -c Release --nologo -v q` | 0 |
+

@@ -16,7 +16,7 @@ public static class WardenLog
     private static LogLevel _minLevel = LogLevel.Information;
     private static string? _directory;
     private static string? _currentPath;
-    private static DateTime _currentDateUtc;
+    private static DateTime _currentDateLocal;
     private static int _rollIndex;
 
     public enum LogLevel
@@ -109,9 +109,9 @@ public static class WardenLog
             };
 
             var cat = string.IsNullOrWhiteSpace(category) ? "App" : category.Trim();
-            var utc = DateTime.UtcNow;
+            var local = DateTime.Now;
             var sb = new StringBuilder(256);
-            sb.Append(utc.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+            sb.Append(local.ToString("yyyy-MM-dd HH:mm:ss"));
             sb.Append(" [").Append(levelTag).Append("] [").Append(cat).Append("] ");
             sb.Append(message ?? string.Empty);
 
@@ -131,7 +131,7 @@ public static class WardenLog
 
             lock (Gate)
             {
-                RotateIfNeeded_NoLock(utc);
+                RotateIfNeeded_NoLock(local);
                 if (string.IsNullOrEmpty(_currentPath))
                 {
                     return;
@@ -179,9 +179,9 @@ public static class WardenLog
                 // Continue; writes will fail softly.
             }
 
-            _currentDateUtc = DateTime.UtcNow.Date;
+            _currentDateLocal = DateTime.Now.Date;
             _rollIndex = 0;
-            _currentPath = Path.Combine(_directory, $"warden-{_currentDateUtc:yyyyMMdd}.log");
+            _currentPath = Path.Combine(_directory, $"warden-{_currentDateLocal:yyyyMMdd}.log");
             TryPurgeOldLogs_NoLock();
             _initialized = true;
         }
@@ -205,7 +205,7 @@ public static class WardenLog
         };
     }
 
-    private static void RotateIfNeeded_NoLock(DateTime utcNow)
+    private static void RotateIfNeeded_NoLock(DateTime localNow)
     {
         try
         {
@@ -214,11 +214,11 @@ public static class WardenLog
                 return;
             }
 
-            if (utcNow.Date != _currentDateUtc)
+            if (localNow.Date != _currentDateLocal)
             {
-                _currentDateUtc = utcNow.Date;
+                _currentDateLocal = localNow.Date;
                 _rollIndex = 0;
-                _currentPath = Path.Combine(_directory, $"warden-{_currentDateUtc:yyyyMMdd}.log");
+                _currentPath = Path.Combine(_directory, $"warden-{_currentDateLocal:yyyyMMdd}.log");
             }
 
             if (string.IsNullOrEmpty(_currentPath) || !File.Exists(_currentPath))
@@ -235,7 +235,7 @@ public static class WardenLog
             _rollIndex++;
             var rolled = Path.Combine(
                 _directory,
-                $"warden-{_currentDateUtc:yyyyMMdd}.{_rollIndex}.log"
+                $"warden-{_currentDateLocal:yyyyMMdd}.{_rollIndex}.log"
             );
             try
             {
@@ -266,7 +266,7 @@ public static class WardenLog
                 return;
             }
 
-            var cutoff = DateTime.UtcNow.Date.AddDays(-RetentionDays);
+            var cutoff = DateTime.Now.Date.AddDays(-RetentionDays);
             foreach (var file in Directory.EnumerateFiles(_directory, "warden-*.log"))
             {
                 try
@@ -283,8 +283,7 @@ public static class WardenLog
                             datePart,
                             "yyyyMMdd",
                             System.Globalization.CultureInfo.InvariantCulture,
-                            System.Globalization.DateTimeStyles.AssumeUniversal
-                                | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                            System.Globalization.DateTimeStyles.None,
                             out var fileDate
                         ))
                     {

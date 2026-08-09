@@ -39,6 +39,8 @@ public class EnforcementEngine
     private double? _outsideExtensionBaselineSeconds;
     private int _outsideExtensionBonusMinutes;
     private int? _persistedOutsideGrantBaselineUsedMinutes;
+    private string? _outsideGrantPersistedDate;
+    private bool? _lastIsOutsideAllowedWindow;
     private readonly OutsideGrantStateStore _outsideGrantStateStore = new();
 
     public event Action<PolicyEvaluation>? PolicyChanged;
@@ -208,19 +210,42 @@ public class EnforcementEngine
 
         _persistedOutsideGrantBaselineUsedMinutes = state.BaselineUsedMinutes;
         _outsideExtensionBonusMinutes = state.BonusMinutes;
+        _outsideGrantPersistedDate = today;
     }
 
     private void PersistOutsideGrantBaseline(int baselineUsedMinutes, int bonusMinutes)
     {
+        var date = FamilyCalendarDateString();
+        if (
+            _persistedOutsideGrantBaselineUsedMinutes == baselineUsedMinutes
+            && _outsideExtensionBonusMinutes == bonusMinutes
+            && string.Equals(_outsideGrantPersistedDate, date, StringComparison.Ordinal)
+        )
+        {
+            return;
+        }
+
         _persistedOutsideGrantBaselineUsedMinutes = baselineUsedMinutes;
         _outsideExtensionBonusMinutes = bonusMinutes;
-        _outsideGrantStateStore.Save(
-            new OutsideGrantState
-            {
-                Date = FamilyCalendarDateString(),
-                BaselineUsedMinutes = baselineUsedMinutes,
-                BonusMinutes = bonusMinutes
-            });
+
+        try
+        {
+            _outsideGrantStateStore.Save(
+                new OutsideGrantState
+                {
+                    Date = date,
+                    BaselineUsedMinutes = baselineUsedMinutes,
+                    BonusMinutes = bonusMinutes
+                });
+            _outsideGrantPersistedDate = date;
+        }
+        catch (Exception ex)
+        {
+            WardenLog.Warn(
+                "Engine",
+                $"Outside-grant persist failed (non-fatal): baseline={baselineUsedMinutes} bonus={bonusMinutes}",
+                ex);
+        }
     }
 
     private string FamilyCalendarDateString()
@@ -297,6 +322,7 @@ public class EnforcementEngine
         _outsideExtensionBaselineSeconds = null;
         _outsideExtensionBonusMinutes = 0;
         _persistedOutsideGrantBaselineUsedMinutes = null;
+        _outsideGrantPersistedDate = null;
         _outsideGrantStateStore.Clear();
     }
 
@@ -572,20 +598,50 @@ public class EnforcementEngine
         PolicyChanged?.Invoke(evaluation);
         MaybeEmitTimeWarnings(evaluation);
 
+        var isOutsideWindow = IsOutsideAllowedWindow();
+        if (_lastIsOutsideAllowedWindow is bool wasOutside && wasOutside != isOutsideWindow)
+        {
+            LogOutsideWindowDiagnostics(
+                isOutsideWindow ? "entered outside window" : "left outside window",
+                evaluation);
+        }
+        _lastIsOutsideAllowedWindow = isOutsideWindow;
+
         var shouldLock = _currentPolicy.AdminLock || PolicyEngine.ShouldLock(evaluation);
 
         if (shouldLock && !_isLocked)
         {
+            if (isOutsideWindow)
+            {
+                LogOutsideWindowDiagnostics("locking outside window", evaluation);
+            }
+
             _isLocked = true;
             LockRequired?.Invoke();
             _ = NotifyLockedAsync(true);
         }
         else if (!shouldLock && _isLocked)
         {
+            if (isOutsideWindow)
+            {
+                LogOutsideWindowDiagnostics("unlocking outside window", evaluation);
+            }
+
             _isLocked = false;
             UnlockRequired?.Invoke();
             _ = NotifyLockedAsync(false);
         }
+    }
+
+    private void LogOutsideWindowDiagnostics(string transition, PolicyEvaluation evaluation)
+    {
+        var used = UsedMinutesForEnforcement();
+        var bonus = _currentPolicy?.BonusMinutes ?? 0;
+        var baseline = _persistedOutsideGrantBaselineUsedMinutes;
+        var grantRemaining = GetOutsideExtensionRemainingSeconds(evaluation);
+        WardenLog.Info(
+            "Engine",
+            $"Outside-window {transition}: used={used}m bonus={bonus}m baseline={baseline?.ToString() ?? "null"} grantRemaining={grantRemaining}s status={evaluation.Status}");
     }
 
     private async Task NotifyLockedAsync(bool isLocked)

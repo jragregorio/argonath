@@ -9,6 +9,8 @@ namespace Warden.Core.Services;
 public sealed class OutsideGrantStateStore
 {
     private readonly string _path;
+    private static readonly object FileLock = new();
+    private const int MaxIoRetries = 3;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -34,46 +36,106 @@ public sealed class OutsideGrantStateStore
 
     public OutsideGrantState? Load()
     {
-        if (!File.Exists(_path)) return null;
-        try
+        lock (FileLock)
         {
-            var json = File.ReadAllText(_path);
-            if (string.IsNullOrWhiteSpace(json)) return null;
-            return JsonSerializer.Deserialize<OutsideGrantState>(json, JsonOptions);
-        }
-        catch
-        {
-            return null;
+            if (!File.Exists(_path)) return null;
+            try
+            {
+                var json = File.ReadAllText(_path);
+                if (string.IsNullOrWhiteSpace(json)) return null;
+                return JsonSerializer.Deserialize<OutsideGrantState>(json, JsonOptions);
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 
     public void Save(OutsideGrantState state)
     {
         var json = JsonSerializer.Serialize(state, JsonOptions);
-        var tempPath = _path + ".tmp";
-        File.WriteAllText(tempPath, json);
-        if (File.Exists(_path))
+        var directory = Path.GetDirectoryName(_path)!;
+
+        lock (FileLock)
         {
-            File.Replace(tempPath, _path, null);
-        }
-        else
-        {
-            File.Move(tempPath, _path);
+            string? tempPath = null;
+            try
+            {
+                for (var attempt = 1; attempt <= MaxIoRetries; attempt++)
+                {
+                    tempPath = Path.Combine(directory, $"outside-grant.{Guid.NewGuid():N}.tmp");
+                    try
+                    {
+                        File.WriteAllText(tempPath, json);
+
+                        if (File.Exists(_path))
+                        {
+                            File.Replace(tempPath, _path, null);
+                        }
+                        else
+                        {
+                            File.Move(tempPath, _path);
+                        }
+
+                        tempPath = null;
+                        return;
+                    }
+                    catch (IOException) when (attempt < MaxIoRetries)
+                    {
+                        if (tempPath != null)
+                        {
+                            TryDeleteTemp(tempPath);
+                        }
+
+                        tempPath = null;
+                        Thread.Sleep(attempt * 20);
+                    }
+                }
+
+                throw new IOException(
+                    $"Failed to persist outside-grant state after {MaxIoRetries} attempts.");
+            }
+            finally
+            {
+                if (tempPath != null)
+                {
+                    TryDeleteTemp(tempPath);
+                }
+            }
         }
     }
 
     public void Clear()
     {
+        lock (FileLock)
+        {
+            try
+            {
+                if (File.Exists(_path))
+                {
+                    File.Delete(_path);
+                }
+            }
+            catch
+            {
+                // Best-effort
+            }
+        }
+    }
+
+    private static void TryDeleteTemp(string path)
+    {
         try
         {
-            if (File.Exists(_path))
+            if (File.Exists(path))
             {
-                File.Delete(_path);
+                File.Delete(path);
             }
         }
         catch
         {
-            // Best-effort
+            // Best-effort cleanup of partial temp file.
         }
     }
 }
