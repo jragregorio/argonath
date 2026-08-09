@@ -151,65 +151,88 @@ static class Program
             WardenLog.Info("Startup", "Wiring engine event handlers");
             _engine.LockRequired += () =>
             {
-                var monitors = System.Windows.Forms.Screen.AllScreens
-                    .Select(s => new MonitorBounds(
-                        s.Bounds.Left,
-                        s.Bounds.Top,
-                        s.Bounds.Width,
-                        s.Bounds.Height,
-                        s.Primary
-                    ))
-                    .ToList();
-
-                LockWindowManager.Show(
-                    minutes => _engine!.RequestExtensionAsync(minutes),
-                    async () =>
+                _ = app.Dispatcher.BeginInvoke(() =>
+                {
+                    try
                     {
-                        try
-                        {
-                            SessionMarker.ClearClean();
-                            return await Task.FromResult(SystemShutdown.Initiate());
-                        }
-                        catch (Exception ex)
-                        {
-                            WardenLog.Error("LockUI", "Shutdown PC handler failed", ex);
-                            return (false, "Unexpected error. Try the Start menu.");
-                        }
-                    },
-                    async pin =>
+                        var monitors = System.Windows.Forms.Screen.AllScreens
+                            .Select(s => new MonitorBounds(
+                                s.Bounds.Left,
+                                s.Bounds.Top,
+                                s.Bounds.Width,
+                                s.Bounds.Height,
+                                s.Primary
+                            ))
+                            .ToList();
+
+                        LockWindowManager.Show(
+                            minutes => _engine!.RequestExtensionAsync(minutes),
+                            async () =>
+                            {
+                                try
+                                {
+                                    SessionMarker.ClearClean();
+                                    return await Task.FromResult(SystemShutdown.Initiate());
+                                }
+                                catch (Exception ex)
+                                {
+                                    WardenLog.Error("LockUI", "Shutdown PC handler failed", ex);
+                                    return (false, "Unexpected error. Try the Start menu.");
+                                }
+                            },
+                            async pin =>
+                            {
+                                try
+                                {
+                                    var result = _engine!.ValidateParentPin(pin);
+                                    if (!result.ok)
+                                    {
+                                        return result;
+                                    }
+
+                                    try
+                                    {
+                                        await _engine.ClearAdminLockAsync();
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        WardenLog.Warn("Shutdown", "ClearAdminLockAsync failed during PIN unlock", ex);
+                                    }
+
+                                    ShutdownWarden("parent-pin-unlock");
+                                    return result;
+                                }
+                                catch (Exception ex)
+                                {
+                                    WardenLog.Error("LockUI", "PIN unlock handler failed", ex);
+                                    return (false, "Unexpected error. Try again.");
+                                }
+                            },
+                            _engine.CurrentEvaluation,
+                            monitors
+                        );
+                    }
+                    catch (Exception ex)
                     {
-                        try
-                        {
-                            var result = _engine!.ValidateParentPin(pin);
-                            if (!result.ok)
-                            {
-                                return result;
-                            }
-
-                            try
-                            {
-                                await _engine.ClearAdminLockAsync();
-                            }
-                            catch (Exception ex)
-                            {
-                                WardenLog.Warn("Shutdown", "ClearAdminLockAsync failed during PIN unlock", ex);
-                            }
-
-                            ShutdownWarden("parent-pin-unlock");
-                            return result;
-                        }
-                        catch (Exception ex)
-                        {
-                            WardenLog.Error("LockUI", "PIN unlock handler failed", ex);
-                            return (false, "Unexpected error. Try again.");
-                        }
-                    },
-                    _engine.CurrentEvaluation,
-                    monitors
-                );
+                        WardenLog.Warn("LockUI", "LockRequired Show failed", ex);
+                    }
+                });
             };
 
-            _engine.UnlockRequired += () => LockWindowManager.Hide();
+            _engine.UnlockRequired += () =>
+            {
+                _ = app.Dispatcher.BeginInvoke(() =>
+                {
+                    try
+                    {
+                        LockWindowManager.Hide();
+                    }
+                    catch (Exception ex)
+                    {
+                        WardenLog.Warn("LockUI", "UnlockRequired Hide failed", ex);
+                    }
+                });
+            };
             _engine.PolicyChanged += eval =>
             {
                 LockWindowManager.Update(eval);
@@ -988,7 +1011,22 @@ static class Program
         PurgeQueuedTimeWarnings();
         DismissActiveTimeWarning();
         var extraMinutes = payload.ExtraMinutes;
+        // Prefer bonus notice ahead of any other queued attention (except leave current nudge).
         EnqueueAttention(() => ShowBonusGranted(extraMinutes));
+    }
+
+    private static void ShowBonusGranted(int extraMinutes)
+    {
+        // Any positive grant size (15/30/60/custom) — never special-case a single preset.
+        // okDelaySeconds: 0 — immediate OK. Delayed OK used a DispatcherTimer that can
+        // freeze at OK (N) on this WinForms+WPF hybrid message loop after unlock.
+        var body = extraMinutes > 0
+            ? $"Your parent added +{extraMinutes} minutes"
+            : "Your parent added extra screen time";
+        var window = new AttentionWindow("Extra time", body, okDelaySeconds: 0);
+        window.Closed += (_, _) => ReleaseAttentionSlot();
+        window.Show();
+        WardenLog.Info("Extension", $"Showing Extra time UI for +{extraMinutes}m");
     }
 
     private static void ReleaseAttentionSlot()
@@ -1110,16 +1148,6 @@ static class Program
 
             ReleaseAttentionSlot();
         };
-        window.Show();
-    }
-
-    private static void ShowBonusGranted(int extraMinutes)
-    {
-        var body = extraMinutes > 0
-            ? $"Your parent added +{extraMinutes} minutes"
-            : "Your parent added extra screen time";
-        var window = new AttentionWindow("Extra time", body, okDelaySeconds: 3);
-        window.Closed += (_, _) => ReleaseAttentionSlot();
         window.Show();
     }
 

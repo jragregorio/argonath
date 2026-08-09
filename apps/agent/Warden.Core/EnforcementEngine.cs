@@ -33,6 +33,10 @@ public class EnforcementEngine
     private int? _lastRemainingMinutes;
     /// <summary>Set on extension:approved until policy refresh baselines remaining (blocks races).</summary>
     private volatile bool _suppressTimeWarnings;
+    /// <summary>-1 until first successful getPolicy; used to detect bonus increases on poll.</summary>
+    private int _lastKnownBonusMinutes = -1;
+    private DateTime _lastBonusNoticeUtc = DateTime.MinValue;
+    private int _lastBonusNoticeExtraMinutes = int.MinValue;
     private DateTime _usageDayLocal = DateTime.Today;
 
     /// <summary>
@@ -416,6 +420,7 @@ public class EnforcementEngine
     public void HandleRealtimeEvent(RealtimeEvent evt)
     {
         RealtimeEventReceived?.Invoke(evt);
+        WardenLog.Info("Realtime", $"event={evt.Type}");
 
         switch (evt.Type)
         {
@@ -462,19 +467,8 @@ public class EnforcementEngine
         _suppressTimeWarnings = true;
         _firedTimeWarnings.Clear();
         _lastRemainingMinutes = null;
-        // Drop stale disk pierce so a fresh server baseline / re-pierce can unlock.
-        _outsideExtensionBaselineSeconds = null;
-        _persistedOutsideGrantBaselineUsedMinutes = null;
-        _outsideExtensionBonusMinutes = 0;
-        _outsideGrantPersistedDate = null;
-        try
-        {
-            _outsideGrantStateStore.Clear();
-        }
-        catch (Exception ex)
-        {
-            WardenLog.Debug("Engine", "Clear outside-grant state on approve failed", ex);
-        }
+        // Do not clear durable outside-grant state here — that raced unlock and could
+        // leave IsLocked/UI inconsistent. Fresh pierce happens after policy refresh.
     }
 
     private async Task RefreshPolicyAfterExtensionApprovedAsync()
@@ -482,6 +476,24 @@ public class EnforcementEngine
         try
         {
             await RefreshPolicyAsync(syncUsageFromServer: true).ConfigureAwait(false);
+
+            // Parent just granted/approved while outside: pierce at current used so the
+            // new bonus is fully available (in-window burn / stale baseline cannot zero it).
+            if (
+                _currentPolicy != null
+                && _currentPolicy.BonusMinutes > 0
+                && IsOutsideAllowedWindow()
+            )
+            {
+                var used = UsedMinutesForEnforcement();
+                PersistOutsideGrantBaseline(used, _currentPolicy.BonusMinutes);
+                _outsideExtensionBaselineSeconds = UsedSecondsToday;
+                WardenLog.Info(
+                    "Engine",
+                    $"Post-approve outside pierce: used={used}m bonus={_currentPolicy.BonusMinutes}m"
+                );
+                EvaluateAndEnforce();
+            }
         }
         finally
         {
@@ -506,6 +518,38 @@ public class EnforcementEngine
             payload = new ExtensionPayload();
         }
 
+        TryNotifyBonusGranted(payload.ExtraMinutes, "realtime");
+    }
+
+    /// <summary>
+    /// Show the Extra time AttentionWindow for any grant size.
+    /// Debounce only collapses realtime+poll duplicates of the same grant (same
+    /// extra minutes within a few seconds) — stacked grants must each notify.
+    /// </summary>
+    private void TryNotifyBonusGranted(int extraMinutes, string source)
+    {
+        var extra = Math.Max(0, extraMinutes);
+        var now = DateTime.UtcNow;
+        var isDuplicate =
+            extra == _lastBonusNoticeExtraMinutes
+            && (now - _lastBonusNoticeUtc).TotalSeconds < 4;
+
+        if (isDuplicate)
+        {
+            WardenLog.Info(
+                "Engine",
+                $"Bonus notice skipped (duplicate); source={source} extra={extra}"
+            );
+            return;
+        }
+
+        _lastBonusNoticeUtc = now;
+        _lastBonusNoticeExtraMinutes = extra;
+        var payload = new ExtensionPayload { ExtraMinutes = extra };
+        WardenLog.Info(
+            "Engine",
+            $"Bonus grant notice: +{payload.ExtraMinutes}m source={source}"
+        );
         ExtensionApprovedNoticeRequested?.Invoke(payload);
     }
 
@@ -573,6 +617,22 @@ public class EnforcementEngine
                 _lastRemainingMinutes = null;
             }
         }
+
+        var bonus = _currentPolicy.BonusMinutes;
+        if (_lastKnownBonusMinutes >= 0 && bonus > _lastKnownBonusMinutes)
+        {
+            var delta = bonus - _lastKnownBonusMinutes;
+            // Poll path (realtime often missed): show Extra time notice when bonus rises.
+            TryNotifyBonusGranted(delta, "policy-poll");
+        }
+        else if (_lastKnownBonusMinutes >= 0 && bonus < _lastKnownBonusMinutes)
+        {
+            // Bonus cleared/reduced — allow a future grant to notify again immediately.
+            _lastBonusNoticeUtc = DateTime.MinValue;
+            _lastBonusNoticeExtraMinutes = int.MinValue;
+        }
+
+        _lastKnownBonusMinutes = bonus;
 
         EvaluateAndEnforce();
     }

@@ -317,7 +317,8 @@ public class MainWindow : Window
         {
             try
             {
-                Dispatcher.Invoke(RefreshStatus);
+                // BeginInvoke avoids deadlock with lock-UI / attention windows on this dispatcher.
+                Dispatcher.BeginInvoke(RefreshStatus);
             }
             catch
             {
