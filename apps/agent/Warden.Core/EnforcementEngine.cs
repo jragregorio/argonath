@@ -45,6 +45,8 @@ public class EnforcementEngine
     private int? _persistedOutsideGrantBaselineUsedMinutes;
     private string? _outsideGrantPersistedDate;
     private bool? _lastIsOutsideAllowedWindow;
+    /// <summary>Usage when we last entered an allowed window; used to forgive in-window burn against after-hours pierce.</summary>
+    private int? _usedMinutesWhenEnteredAllowedWindow;
     private readonly OutsideGrantStateStore _outsideGrantStateStore = new();
 
     public event Action<PolicyEvaluation>? PolicyChanged;
@@ -199,11 +201,14 @@ public class EnforcementEngine
                     dailyLimit,
                     serverBaseline);
 
-                // Stale local baseline zeros the session while server still has grant.
+                // Stale local zeros the session while server still has grant.
+                // Or server is behind a fresh window-exit pierce on disk.
                 var chosen =
                     remLocal <= 0 && remServer > 0
                         ? serverBaseline
-                        : Math.Min(serverBaseline, localBaseline);
+                        : remServer <= 0 && remLocal > 0
+                            ? localBaseline
+                            : Math.Min(serverBaseline, localBaseline);
                 PersistOutsideGrantBaseline(chosen, bonus);
                 return chosen;
             }
@@ -353,7 +358,53 @@ public class EnforcementEngine
         _outsideExtensionBonusMinutes = 0;
         _persistedOutsideGrantBaselineUsedMinutes = null;
         _outsideGrantPersistedDate = null;
+        _usedMinutesWhenEnteredAllowedWindow = null;
         _outsideGrantStateStore.Clear();
+    }
+
+    /// <summary>
+    /// When leaving allowed hours, in-window usage must not consume the after-hours
+    /// bonus pool. Shift an existing pierce by in-window growth, or pierce at current used.
+    /// </summary>
+    private void AdjustOutsideGrantBaselineForWindowExit(int bonusMinutes)
+    {
+        var used = UsedMinutesForEnforcement();
+        EnsurePersistedOutsideGrantLoaded();
+
+        int? existing = _currentPolicy?.OutsideGrantBaselineUsedMinutes;
+        if (existing is null)
+        {
+            existing = _persistedOutsideGrantBaselineUsedMinutes;
+        }
+        else if (_persistedOutsideGrantBaselineUsedMinutes is int local)
+        {
+            existing = Math.Min(existing.Value, local);
+        }
+
+        if (
+            _usedMinutesWhenEnteredAllowedWindow is int usedAtWindowEnter
+            && existing is int baseline
+        )
+        {
+            var growth = Math.Max(0, used - usedAtWindowEnter);
+            var shifted = Math.Min(used, baseline + growth);
+            PersistOutsideGrantBaseline(shifted, bonusMinutes);
+            WardenLog.Info(
+                "Engine",
+                $"Window-exit baseline shift: used={used}m enter={usedAtWindowEnter}m was={baseline}m now={shifted}m bonus={bonusMinutes}m"
+            );
+        }
+        else
+        {
+            PersistOutsideGrantBaseline(used, bonusMinutes);
+            WardenLog.Info(
+                "Engine",
+                $"Window-exit fresh pierce: used={used}m bonus={bonusMinutes}m"
+            );
+        }
+
+        _outsideExtensionBaselineSeconds = UsedSecondsToday;
+        _usedMinutesWhenEnteredAllowedWindow = null;
     }
 
     public EnforcementEngine(WardenApiClient api, ConfigStore configStore)
@@ -589,10 +640,17 @@ public class EnforcementEngine
             evaluation.LimitingFactor = "daily_limit";
             evaluation.Message = "Locked down by parent";
             ClearOutsideExtensionGrant();
+            _usedMinutesWhenEnteredAllowedWindow = null;
         }
         else if (IsOutsideAllowedWindow())
         {
             var bonus = _currentPolicy.BonusMinutes;
+            var enteringOutside = _lastIsOutsideAllowedWindow != true;
+            if (enteringOutside && bonus > 0)
+            {
+                AdjustOutsideGrantBaselineForWindowExit(bonus);
+            }
+
             var effectiveBaseline = ResolveOutsideGrantBaselineUsedMinutes();
             if (bonus > 0 && effectiveBaseline is int serverOrPersistedBaseline)
             {
@@ -676,6 +734,10 @@ public class EnforcementEngine
             // later window exit does not look like a fresh full grant after restart.
             // Only clear the volatile in-process seconds pierce.
             _outsideExtensionBaselineSeconds = null;
+            if (_lastIsOutsideAllowedWindow != false)
+            {
+                _usedMinutesWhenEnteredAllowedWindow = UsedMinutesForEnforcement();
+            }
         }
 
         CurrentEvaluation = evaluation;
@@ -757,6 +819,14 @@ public class EnforcementEngine
 
         // After parent grant/approve: baseline new remaining, do not emit on this cycle.
         if (_suppressTimeWarnings)
+        {
+            _lastRemainingMinutes = remaining;
+            return;
+        }
+
+        // With active bonus: never warn about schedule ending (after-hours pierce continues).
+        // Only warn near expiry of the bonus/daily remaining (10/5/1).
+        if (evaluation.BonusMinutes > 0 && evaluation.LimitingFactor == "window")
         {
             _lastRemainingMinutes = remaining;
             return;

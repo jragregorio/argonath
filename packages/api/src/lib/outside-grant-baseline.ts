@@ -106,18 +106,21 @@ export async function ensureOutsideGrantBaselines(args: {
 }
 
 /**
- * Baseline for a newly approved override: reuse the lowest active baseline when
- * stacking after-hours bonus, else pierce at today's used minutes (family TZ).
+ * Baseline for a newly approved override.
+ * - In-window: null (set on first outside observe — in-window usage must not
+ *   pre-consume the after-hours pool).
+ * - Outside: reuse lowest active baseline when stacking a live pool; pierce at
+ *   current used when the previous pool is spent or none exists.
  */
 export async function resolveBaselineForNewOverride(args: {
   childId: string;
   timeZone: string;
   now: Date;
-}): Promise<number> {
+}): Promise<number | null> {
   const { childId, timeZone, now } = args;
   const today = getCalendarDateInTimeZone(now, timeZone);
 
-  const [usageLogs, activeOverrides] = await Promise.all([
+  const [usageLogs, activeOverrides, policyRow] = await Promise.all([
     prisma.usageLog.findMany({
       where: {
         device: { childId },
@@ -133,23 +136,63 @@ export async function resolveBaselineForNewOverride(args: {
       WHERE "childId" = ${childId}
         AND "expiresAt" > ${now}
     `,
+    prisma.screenTimePolicy.findFirst({
+      where: { childId, isActive: true },
+      select: {
+        dailyLimitMinutes: true,
+        allowedWindows: true,
+        isActive: true,
+      },
+    }),
   ]);
 
   const usedMinutes = usageLogs.reduce(
-    (sum, log) => sum + log.activeMinutes,
+    (sum: number, log: { activeMinutes: number }) => sum + log.activeMinutes,
     0
   );
 
+  if (policyRow) {
+    const windows = Array.isArray(policyRow.allowedWindows)
+      ? (policyRow.allowedWindows as ScreenTimePolicyInput["allowedWindows"])
+      : [];
+    const probe = evaluatePolicy(
+      {
+        dailyLimitMinutes: policyRow.dailyLimitMinutes,
+        allowedWindows: windows,
+        isActive: policyRow.isActive,
+      },
+      usedMinutes,
+      [],
+      now,
+      timeZone
+    );
+    if (probe.inWindow) {
+      return null;
+    }
+  }
+
   const activeBaselines = activeOverrides
-    .map((row) => row.outsideGrantBaselineUsedMinutes)
+    .map(
+      (row: {
+        extraMinutes: number;
+        outsideGrantBaselineUsedMinutes: number | null;
+      }) => row.outsideGrantBaselineUsedMinutes
+    )
     .filter(
-      (value): value is number => value != null && Number.isFinite(value)
+      (value: number | null): value is number =>
+        value != null && Number.isFinite(value)
     );
 
   if (activeBaselines.length > 0) {
     const minBaseline = Math.min(...activeBaselines);
     const activeBonusMinutes = activeOverrides.reduce(
-      (sum, row) => sum + row.extraMinutes,
+      (
+        sum: number,
+        row: {
+          extraMinutes: number;
+          outsideGrantBaselineUsedMinutes: number | null;
+        }
+      ) => sum + row.extraMinutes,
       0
     );
     // Previous after-hours pool already spent — pierce at current used so a new
@@ -163,7 +206,7 @@ export async function resolveBaselineForNewOverride(args: {
   return usedMinutes;
 }
 
-/** Create an override and set {@link outsideGrantBaselineUsedMinutes} via raw SQL. */
+/** Create an override; set after-hours baseline only when currently outside. */
 export async function createExtensionOverrideWithBaseline(args: {
   childId: string;
   extraMinutes: number;
@@ -190,11 +233,13 @@ export async function createExtensionOverrideWithBaseline(args: {
     select: { id: true },
   });
 
-  await prisma.$executeRaw`
-    UPDATE "ExtensionOverride"
-    SET "outsideGrantBaselineUsedMinutes" = ${baseline}
-    WHERE id = ${created.id}
-  `;
+  if (baseline != null) {
+    await prisma.$executeRaw`
+      UPDATE "ExtensionOverride"
+      SET "outsideGrantBaselineUsedMinutes" = ${baseline}
+      WHERE id = ${created.id}
+    `;
+  }
 
   return created;
 }
