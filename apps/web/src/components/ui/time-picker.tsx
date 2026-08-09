@@ -10,7 +10,6 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 type AmPm = "AM" | "PM";
 
@@ -91,6 +90,7 @@ type TimeColumnProps = {
   value: string | number;
   onSelect: (value: string | number) => void;
   isOptionDisabled?: (option: string | number) => boolean;
+  scrollOnOpen?: boolean;
 };
 
 function TimeColumn({
@@ -99,56 +99,61 @@ function TimeColumn({
   value,
   onSelect,
   isOptionDisabled,
+  scrollOnOpen,
 }: TimeColumnProps) {
   const selectedRef = useRef<HTMLButtonElement>(null);
   const listId = useId();
 
   useEffect(() => {
+    if (!scrollOnOpen) return;
     selectedRef.current?.scrollIntoView({ block: "center" });
-  }, [value]);
+  }, [value, scrollOnOpen]);
 
   return (
     <div className="flex flex-col">
       <div className="border-b border-border px-2 py-1.5 text-center text-xs font-medium text-muted-foreground">
         {label}
       </div>
-      <ScrollArea className="h-48 w-14">
-        <div
-          id={listId}
-          role="listbox"
-          aria-label={label}
-          className="flex flex-col p-1"
-        >
-          {options.map((option) => {
-            const selected = option === value;
-            const optionDisabled = isOptionDisabled?.(option) ?? false;
-            const display =
-              typeof option === "number"
-                ? option.toString().padStart(2, "0")
-                : option;
+      <div
+        id={listId}
+        role="listbox"
+        aria-label={label}
+        className={cn(
+          "flex h-48 w-14 flex-col overflow-y-auto overscroll-contain p-1",
+          "[scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent]",
+          "[&::-webkit-scrollbar]:w-1.5",
+          "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
+        )}
+      >
+        {options.map((option) => {
+          const selected = option === value;
+          const optionDisabled = isOptionDisabled?.(option) ?? false;
+          const display =
+            typeof option === "number"
+              ? option.toString().padStart(2, "0")
+              : option;
 
-            return (
-              <button
-                key={String(option)}
-                ref={selected ? selectedRef : undefined}
-                type="button"
-                role="option"
-                aria-selected={selected}
-                disabled={optionDisabled}
-                onClick={() => onSelect(option)}
-                className={cn(
-                  "rounded-md px-2 py-1.5 text-sm tabular-nums transition-colors",
-                  "hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  selected && "bg-primary text-primary-foreground hover:bg-primary",
-                  optionDisabled && "pointer-events-none opacity-40"
-                )}
-              >
-                {display}
-              </button>
-            );
-          })}
-        </div>
-      </ScrollArea>
+          return (
+            <button
+              key={String(option)}
+              ref={selected ? selectedRef : undefined}
+              type="button"
+              role="option"
+              aria-selected={selected}
+              disabled={optionDisabled}
+              onClick={() => onSelect(option)}
+              className={cn(
+                "rounded-md px-2 py-1.5 text-sm tabular-nums transition-colors",
+                "hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                selected && "bg-primary text-primary-foreground hover:bg-primary",
+                optionDisabled && "pointer-events-none opacity-40"
+              )}
+            >
+              {display}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -245,6 +250,7 @@ export function TimePicker({
             label="Hour"
             options={hourOptions}
             value={hour}
+            scrollOnOpen={open}
             onSelect={(next) => {
               const nextHour = next as number;
               setHour(nextHour);
@@ -258,6 +264,7 @@ export function TimePicker({
             label="Min"
             options={MINUTE_OPTIONS}
             value={minute}
+            scrollOnOpen={open}
             onSelect={(next) => {
               const nextMinute = next as number;
               setMinute(nextMinute);
@@ -272,6 +279,7 @@ export function TimePicker({
               label=""
               options={AMPM_OPTIONS}
               value={ampm}
+              scrollOnOpen={open}
               onSelect={(next) => {
                 const nextAmpm = next as AmPm;
                 setAmpm(nextAmpm);
