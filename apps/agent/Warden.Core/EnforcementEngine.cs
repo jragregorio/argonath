@@ -27,8 +27,12 @@ public class EnforcementEngine
     private readonly object _nudgeLock = new();
 
     private static readonly int[] TimeWarningThresholds = [60, 30, 10, 5, 1];
+    /// <summary>While bonus is active, only warn near expiry (skip 60/30 comfort warnings).</summary>
+    private static readonly int[] BonusActiveTimeWarningThresholds = [10, 5, 1];
     private readonly HashSet<int> _firedTimeWarnings = new();
     private int? _lastRemainingMinutes;
+    /// <summary>Set on extension:approved until policy refresh baselines remaining (blocks races).</summary>
+    private volatile bool _suppressTimeWarnings;
     private DateTime _usageDayLocal = DateTime.Today;
 
     /// <summary>
@@ -167,6 +171,9 @@ public class EnforcementEngine
 
     /// <summary>
     /// Server baseline from getPolicy, else same-day persisted baseline, else null.
+    /// When both exist, keep the earlier pierce (min) unless the local pierce has
+    /// already exhausted the grant while the server baseline still has time — that
+    /// happens after a fresh post-window parent grant and a stale disk baseline.
     /// </summary>
     private int? ResolveOutsideGrantBaselineUsedMinutes()
     {
@@ -176,11 +183,33 @@ public class EnforcementEngine
         if (_currentPolicy.OutsideGrantBaselineUsedMinutes is int serverBaseline)
         {
             EnsurePersistedOutsideGrantLoaded();
-            var chosen = _persistedOutsideGrantBaselineUsedMinutes is int localBaseline
-                ? Math.Min(serverBaseline, localBaseline)
-                : serverBaseline;
-            PersistOutsideGrantBaseline(chosen, _currentPolicy.BonusMinutes);
-            return chosen;
+            if (_persistedOutsideGrantBaselineUsedMinutes is int localBaseline)
+            {
+                var bonus = _currentPolicy.BonusMinutes;
+                var dailyLimit = _currentPolicy.Policy.DailyLimitMinutes;
+                var used = UsedMinutesForEnforcement();
+                var remLocal = PolicyEngine.GetOutsideExtensionRemainingMinutes(
+                    bonus,
+                    used,
+                    dailyLimit,
+                    localBaseline);
+                var remServer = PolicyEngine.GetOutsideExtensionRemainingMinutes(
+                    bonus,
+                    used,
+                    dailyLimit,
+                    serverBaseline);
+
+                // Stale local baseline zeros the session while server still has grant.
+                var chosen =
+                    remLocal <= 0 && remServer > 0
+                        ? serverBaseline
+                        : Math.Min(serverBaseline, localBaseline);
+                PersistOutsideGrantBaseline(chosen, bonus);
+                return chosen;
+            }
+
+            PersistOutsideGrantBaseline(serverBaseline, _currentPolicy.BonusMinutes);
+            return serverBaseline;
         }
 
         EnsurePersistedOutsideGrantLoaded();
@@ -340,8 +369,9 @@ public class EnforcementEngine
         switch (evt.Type)
         {
             case "extension:approved":
-                _ = RefreshPolicyAsync(syncUsageFromServer: true);
+                BeginExtensionApprovedTimeWarningSuppress();
                 RaiseExtensionApprovedNotice(evt);
+                _ = RefreshPolicyAfterExtensionApprovedAsync();
                 break;
             case "extension:denied":
                 break;
@@ -373,6 +403,39 @@ public class EnforcementEngine
                         TryRequestNudge(payload);
                 }
                 break;
+        }
+    }
+
+    private void BeginExtensionApprovedTimeWarningSuppress()
+    {
+        _suppressTimeWarnings = true;
+        _firedTimeWarnings.Clear();
+        _lastRemainingMinutes = null;
+        // Drop stale disk pierce so a fresh server baseline / re-pierce can unlock.
+        _outsideExtensionBaselineSeconds = null;
+        _persistedOutsideGrantBaselineUsedMinutes = null;
+        _outsideExtensionBonusMinutes = 0;
+        _outsideGrantPersistedDate = null;
+        try
+        {
+            _outsideGrantStateStore.Clear();
+        }
+        catch (Exception ex)
+        {
+            WardenLog.Debug("Engine", "Clear outside-grant state on approve failed", ex);
+        }
+    }
+
+    private async Task RefreshPolicyAfterExtensionApprovedAsync()
+    {
+        try
+        {
+            await RefreshPolicyAsync(syncUsageFromServer: true).ConfigureAwait(false);
+        }
+        finally
+        {
+            // RefreshPolicy → EvaluateAndEnforce already baselined remaining under suppress.
+            _suppressTimeWarnings = false;
         }
     }
 
@@ -692,11 +755,24 @@ public class EnforcementEngine
 
         var remaining = evaluation.RemainingMinutes;
 
+        // After parent grant/approve: baseline new remaining, do not emit on this cycle.
+        if (_suppressTimeWarnings)
+        {
+            _lastRemainingMinutes = remaining;
+            return;
+        }
+
+        // With active bonus, only resume warnings near expiry (10/5/1) — not 60/30.
+        var thresholds =
+            evaluation.BonusMinutes > 0
+                ? BonusActiveTimeWarningThresholds
+                : TimeWarningThresholds;
+
         if (_lastRemainingMinutes is int previous)
         {
             if (remaining > previous)
             {
-                foreach (var threshold in TimeWarningThresholds)
+                foreach (var threshold in thresholds)
                 {
                     if (remaining > threshold)
                     {
@@ -705,7 +781,7 @@ public class EnforcementEngine
                 }
             }
 
-            foreach (var threshold in TimeWarningThresholds)
+            foreach (var threshold in thresholds)
             {
                 if (previous > threshold && remaining <= threshold && _firedTimeWarnings.Add(threshold))
                 {

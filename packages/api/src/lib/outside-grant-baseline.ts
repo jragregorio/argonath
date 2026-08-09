@@ -117,7 +117,7 @@ export async function resolveBaselineForNewOverride(args: {
   const { childId, timeZone, now } = args;
   const today = getCalendarDateInTimeZone(now, timeZone);
 
-  const [usageLogs, activeBaselines] = await Promise.all([
+  const [usageLogs, activeOverrides] = await Promise.all([
     prisma.usageLog.findMany({
       where: {
         device: { childId },
@@ -125,7 +125,14 @@ export async function resolveBaselineForNewOverride(args: {
       },
       select: { activeMinutes: true },
     }),
-    loadActiveOverrideBaselines(childId, now),
+    prisma.$queryRaw<
+      { extraMinutes: number; outsideGrantBaselineUsedMinutes: number | null }[]
+    >`
+      SELECT "extraMinutes", "outsideGrantBaselineUsedMinutes"
+      FROM "ExtensionOverride"
+      WHERE "childId" = ${childId}
+        AND "expiresAt" > ${now}
+    `,
   ]);
 
   const usedMinutes = usageLogs.reduce(
@@ -133,8 +140,24 @@ export async function resolveBaselineForNewOverride(args: {
     0
   );
 
+  const activeBaselines = activeOverrides
+    .map((row) => row.outsideGrantBaselineUsedMinutes)
+    .filter(
+      (value): value is number => value != null && Number.isFinite(value)
+    );
+
   if (activeBaselines.length > 0) {
-    return Math.min(...activeBaselines);
+    const minBaseline = Math.min(...activeBaselines);
+    const activeBonusMinutes = activeOverrides.reduce(
+      (sum, row) => sum + row.extraMinutes,
+      0
+    );
+    // Previous after-hours pool already spent — pierce at current used so a new
+    // parent grant unlocks again instead of stacking onto a dead baseline.
+    if (usedMinutes - minBaseline >= activeBonusMinutes) {
+      return usedMinutes;
+    }
+    return minBaseline;
   }
 
   return usedMinutes;
@@ -174,25 +197,6 @@ export async function createExtensionOverrideWithBaseline(args: {
   `;
 
   return created;
-}
-
-async function loadActiveOverrideBaselines(
-  childId: string,
-  now: Date
-): Promise<number[]> {
-  const rows = await prisma.$queryRaw<
-    { outsideGrantBaselineUsedMinutes: number | null }[]
-  >`
-    SELECT "outsideGrantBaselineUsedMinutes"
-    FROM "ExtensionOverride"
-    WHERE "childId" = ${childId}
-      AND "expiresAt" > ${now}
-      AND "outsideGrantBaselineUsedMinutes" IS NOT NULL
-  `;
-
-  return rows
-    .map((row) => row.outsideGrantBaselineUsedMinutes)
-    .filter((value): value is number => value != null && Number.isFinite(value));
 }
 
 async function loadBaselines(

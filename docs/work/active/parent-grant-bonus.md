@@ -39,6 +39,15 @@ Parents can approve child extension requests and clear active bonus, but cannot 
 - `Warden.Tray/Program.cs`: `ShowBonusGranted` AttentionWindow (“Extra time” / “Your parent added +N minutes” or fallback); tagged attention queue (`TimeWarning` vs `General`); `DismissActiveTimeWarning` + `PurgeQueuedTimeWarnings` before enqueueing bonus (nudges left alone).
 - Agent version `0.6.14` → `0.6.15` (`Directory.Build.props`); `HARDCODED_DESKTOP_APP_VERSION` synced in `dashboard-nav.tsx` (web `package.json` unchanged).
 
+### Phase 2b — suppress time warnings while bonus active (bugfix)
+
+**Done (2026-08-09)**
+
+- While `BonusMinutes > 0`, only emit 10/5/1 warnings (skip 60/30 comfort warnings).
+- On `extension:approved`, suppress emits until policy refresh baselines remaining.
+- Tray: 5s UI suppress + dismiss/purge so late dispatcher time-warnings cannot reappear after bonus notice.
+- Agent `0.6.15` → `0.6.16`; desktop hardcoded version synced; MSI rebuilt.
+
 **Validation**
 
 ```text

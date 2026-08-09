@@ -52,6 +52,8 @@ static class Program
     private static readonly Queue<(AttentionItemKind Kind, Action Show)> _attentionQueue = new();
     private static readonly object _attentionLock = new();
     private static AttentionWindow? _activeTimeWarningWindow;
+    /// <summary>Drop late time-warning dispatcher work after a bonus notice (race with Tick).</summary>
+    private static DateTime _suppressTimeWarningUiUntil = DateTime.MinValue;
 
     private enum AttentionItemKind
     {
@@ -255,6 +257,11 @@ static class Program
                 {
                     try
                     {
+                        if (DateTime.UtcNow < _suppressTimeWarningUiUntil)
+                        {
+                            return;
+                        }
+
                         EnqueueAttention(() => ShowTimeWarning(payload), AttentionItemKind.TimeWarning);
                     }
                     catch (Exception ex)
@@ -976,6 +983,8 @@ static class Program
 
     private static void OnExtensionApprovedNotice(Warden.Core.Models.ExtensionPayload payload)
     {
+        // Cover in-flight TimeWarningRequested dispatcher callbacks after purge.
+        _suppressTimeWarningUiUntil = DateTime.UtcNow.AddSeconds(5);
         PurgeQueuedTimeWarnings();
         DismissActiveTimeWarning();
         var extraMinutes = payload.ExtraMinutes;
@@ -1074,6 +1083,12 @@ static class Program
 
     private static void ShowTimeWarning(Warden.Core.Models.TimeWarningPayload payload)
     {
+        if (DateTime.UtcNow < _suppressTimeWarningUiUntil)
+        {
+            ReleaseAttentionSlot();
+            return;
+        }
+
         var allowExtensionRequest = payload.ThresholdMinutes is 10 or 5 or 1;
         var window = new AttentionWindow(
             "Time remaining",
