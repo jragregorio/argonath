@@ -222,19 +222,21 @@ export function AllowedWindowsEditor({
               )}
             >
               <div className="flex items-start gap-3">
-                <label className="flex min-w-[3.5rem] cursor-pointer items-center gap-2 pt-1">
+                <label className="flex min-w-[3.5rem] cursor-pointer items-start gap-2 pt-1">
                   <input
                     type="checkbox"
                     checked={enabled}
                     onChange={(e) => toggleDay(day.value, e.target.checked)}
-                    className="rounded"
+                    className="mt-0.5 rounded"
                   />
-                  <span className="text-sm font-medium">{day.label}</span>
-                  {isToday ? (
-                    <span className="text-[10px] font-normal text-muted-foreground">
-                      Today
-                    </span>
-                  ) : null}
+                  <span className="flex flex-col leading-tight">
+                    <span className="text-sm font-medium">{day.label}</span>
+                    {isToday ? (
+                      <span className="text-[10px] font-normal text-muted-foreground">
+                        Today
+                      </span>
+                    ) : null}
+                  </span>
                 </label>
 
                 {enabled ? (
