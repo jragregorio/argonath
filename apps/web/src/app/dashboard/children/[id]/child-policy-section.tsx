@@ -58,6 +58,7 @@ type ChildPolicySectionProps = {
 
 export function ChildPolicySection({ childId, policy }: ChildPolicySectionProps) {
   const utils = trpc.useUtils();
+  const { data: family } = trpc.family.get.useQuery();
 
   const updatePolicy = trpc.policy.update.useMutation({
     onSuccess: () => {
@@ -247,6 +248,7 @@ export function ChildPolicySection({ childId, policy }: ChildPolicySectionProps)
             <AllowedWindowsEditor
               windows={currentWindows}
               onChange={setAllowedWindows}
+              timeZone={family?.timezone}
             />
           </div>
         )}
@@ -439,6 +441,7 @@ export function ChildPolicySection({ childId, policy }: ChildPolicySectionProps)
             : null
         }
         alsoSavingNote={scheduleAlsoSavingNote}
+        timeZone={family?.timezone}
       />
     </>
   );

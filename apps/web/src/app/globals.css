@@ -138,6 +138,22 @@ html[data-dashboard-theme="blackberry"] {
   border-color: var(--color-border);
 }
 
+/*
+ * Allowed windows — today card highlight.
+ * Placed after the global `* { border-color }` reset. Use !important so
+ * preflight `border: 0` and the universal border-color cannot wipe it.
+ * Maiev: brand gold. Blackberry: primary green.
+ */
+.allowed-windows-day-today {
+  border-width: 3px !important;
+  border-style: solid !important;
+  border-color: #c5a059 !important;
+}
+
+html[data-dashboard-theme="blackberry"] .allowed-windows-day-today {
+  border-color: #148057 !important;
+}
+
 html {
   /* Decorative blurs / full-bleed chrome must not create a page-level x-scrollbar */
   overflow-x: hidden;

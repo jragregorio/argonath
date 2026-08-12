@@ -1,6 +1,7 @@
 "use client";
 
 import type { AllowedWindow } from "@warden/shared";
+import { DEFAULT_TIME_ZONE, getZonedTimeParts } from "@warden/shared";
 import { Button } from "@/components/ui/button";
 import { TimePicker } from "@/components/ui/time-picker";
 import { cn } from "@warden/ui";
@@ -108,12 +109,18 @@ function DayTimeline({ start, end }: { start: string; end: string }) {
 type AllowedWindowsEditorProps = {
   windows: AllowedWindow[];
   onChange: (windows: AllowedWindow[]) => void;
+  timeZone?: string;
 };
 
 export function AllowedWindowsEditor({
   windows,
   onChange,
+  timeZone,
 }: AllowedWindowsEditorProps) {
+  const todayDay = getZonedTimeParts(
+    new Date(),
+    timeZone ?? DEFAULT_TIME_ZONE
+  ).dayOfWeek;
   const toggleDay = (day: number, enabled: boolean) => {
     if (!enabled) {
       onChange(windows.filter((window) => window.day !== day));
@@ -202,12 +209,15 @@ export function AllowedWindowsEditor({
         {DAYS.map((day) => {
           const dayWindows = windowsForDay(windows, day.value);
           const enabled = dayWindows.length > 0;
+          const isToday = day.value === todayDay;
 
           return (
             <div
               key={day.value}
+              aria-current={isToday ? "date" : undefined}
               className={cn(
-                "space-y-2 rounded-lg border border-border/70 px-3 py-2.5",
+                "space-y-2 rounded-lg px-3 py-2.5",
+                isToday ? "allowed-windows-day-today" : "border border-border/70",
                 enabled ? "bg-card" : "bg-muted/10"
               )}
             >
@@ -220,6 +230,11 @@ export function AllowedWindowsEditor({
                     className="rounded"
                   />
                   <span className="text-sm font-medium">{day.label}</span>
+                  {isToday ? (
+                    <span className="text-[10px] font-normal text-muted-foreground">
+                      Today
+                    </span>
+                  ) : null}
                 </label>
 
                 {enabled ? (

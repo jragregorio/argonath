@@ -24,6 +24,7 @@ type AllowedWindowsDialogProps = {
   saving?: boolean;
   errorMessage?: string | null;
   alsoSavingNote?: string | null;
+  timeZone?: string;
 };
 
 export function AllowedWindowsDialog({
@@ -34,6 +35,7 @@ export function AllowedWindowsDialog({
   saving = false,
   errorMessage = null,
   alsoSavingNote = null,
+  timeZone,
 }: AllowedWindowsDialogProps) {
   const [draft, setDraft] = useState<AllowedWindow[]>(windows);
   const wasOpen = useRef(false);
@@ -93,7 +95,11 @@ export function AllowedWindowsDialog({
         </div>
       }
     >
-      <AllowedWindowsEditor windows={draft} onChange={setDraft} />
+      <AllowedWindowsEditor
+        windows={draft}
+        onChange={setDraft}
+        timeZone={timeZone}
+      />
     </Modal>
   );
 }
