@@ -179,6 +179,120 @@ function getActiveBonusMinutes(
 }
 
 /**
+ * When outside today's windows, minutes-since-midnight of the next window start
+ * later today (family TZ). Null when in-window, no windows today, or the next
+ * window is on another calendar day.
+ */
+export function getNextTodayWindowStartMinutes(
+  windows: AllowedWindow[],
+  now: Date,
+  timeZone: string = DEFAULT_TIME_ZONE
+): number | null {
+  if (windows.length === 0) return null;
+
+  const { dayOfWeek: currentDay, minutesSinceMidnight: currentMinutes } =
+    getZonedTimeParts(now, timeZone);
+
+  const todayMerged = mergeWindows(windows).filter((w) => w.day === currentDay);
+  if (todayMerged.length === 0) return null;
+
+  for (const window of todayMerged) {
+    const start = parseTime(window.start);
+    const end = parseTime(window.end);
+    if (currentMinutes >= start && currentMinutes < end) {
+      return null;
+    }
+  }
+
+  let nextStart: number | null = null;
+  for (const window of todayMerged) {
+    const start = parseTime(window.start);
+    if (start > currentMinutes) {
+      nextStart = nextStart === null ? start : Math.min(nextStart, start);
+    }
+  }
+
+  return nextStart;
+}
+
+/** Wall-clock grant end (createdAt + extraMinutes) in family-local minutes-since-midnight. */
+export function getGrantWallClockEndMinutes(
+  createdAt: Date,
+  extraMinutes: number,
+  timeZone: string = DEFAULT_TIME_ZONE
+): number {
+  const parts = getZonedTimeParts(createdAt, timeZone);
+  return parts.minutesSinceMidnight + extraMinutes;
+}
+
+/**
+ * True when any active override with `createdAt` has a wall-clock end that reaches
+ * today's next allowed-window start (same calendar day in family TZ).
+ */
+export function grantWallClockReachesNextTodayWindow(
+  overrides: ExtensionOverrideInput[],
+  windows: AllowedWindow[],
+  now: Date,
+  timeZone: string = DEFAULT_TIME_ZONE
+): boolean {
+  const nextStartMinutes = getNextTodayWindowStartMinutes(windows, now, timeZone);
+  if (nextStartMinutes === null) return false;
+
+  const todayParts = getZonedTimeParts(now, timeZone);
+  const todayKey =
+    todayParts.year * 10000 + todayParts.month * 100 + todayParts.day;
+
+  for (const override of overrides) {
+    if (override.expiresAt <= now || !override.createdAt) continue;
+
+    const createdParts = getZonedTimeParts(override.createdAt, timeZone);
+    const createdKey =
+      createdParts.year * 10000 + createdParts.month * 100 + createdParts.day;
+
+    if (createdKey > todayKey) continue;
+
+    if (createdKey < todayKey) {
+      const grantEndMs =
+        override.createdAt.getTime() + override.extraMinutes * 60 * 1000;
+      const grantEndParts = getZonedTimeParts(new Date(grantEndMs), timeZone);
+      const grantEndKey =
+        grantEndParts.year * 10000 +
+        grantEndParts.month * 100 +
+        grantEndParts.day;
+      if (grantEndKey < todayKey) continue;
+      if (grantEndKey > todayKey) return true;
+      if (grantEndParts.minutesSinceMidnight >= nextStartMinutes) return true;
+      continue;
+    }
+
+    const grantEndMinutes = getGrantWallClockEndMinutes(
+      override.createdAt,
+      override.extraMinutes,
+      timeZone
+    );
+    if (grantEndMinutes >= nextStartMinutes) return true;
+  }
+
+  return false;
+}
+
+/** Max wall-clock end (`createdAt + extraMinutes`) among active overrides, or null. */
+export function getOutsideGrantValidUntil(
+  overrides: ExtensionOverrideInput[],
+  now: Date = new Date()
+): Date | null {
+  let maxEnd: Date | null = null;
+  for (const override of overrides) {
+    if (override.expiresAt <= now || !override.createdAt) continue;
+    const end = new Date(
+      override.createdAt.getTime() + override.extraMinutes * 60 * 1000
+    );
+    if (maxEnd === null || end > maxEnd) maxEnd = end;
+  }
+  return maxEnd;
+}
+
+/**
  * End minute (family TZ wall clock) of the latest merged window run that has
  * already ended today. Null when not applicable: no windows, still in window,
  * before first window today, or no ended run today.
@@ -460,6 +574,39 @@ export function evaluatePolicy(
         windowCapacityMinutes,
         inWindow: false,
         limitingFactor: "daily_limit",
+        reachableMinutesToday,
+        usedMinutes: usedMinutesToday,
+        dailyLimitMinutes: policy.dailyLimitMinutes,
+        bonusMinutes,
+      };
+    }
+
+    const nextTodayStart = getNextTodayWindowStartMinutes(
+      policy.allowedWindows,
+      now,
+      timeZone
+    );
+    if (
+      nextTodayStart !== null &&
+      grantWallClockReachesNextTodayWindow(
+        overrides,
+        policy.allowedWindows,
+        now,
+        timeZone
+      )
+    ) {
+      const { minutesSinceMidnight: currentMinutes } = getZonedTimeParts(
+        now,
+        timeZone
+      );
+      const minutesUntilWindow = Math.max(1, nextTodayStart - currentMinutes);
+      return {
+        status: "allowed",
+        remainingMinutes: minutesUntilWindow,
+        dailyRemainingMinutes,
+        windowCapacityMinutes,
+        inWindow: false,
+        limitingFactor: "window",
         reachableMinutesToday,
         usedMinutes: usedMinutesToday,
         dailyLimitMinutes: policy.dailyLimitMinutes,

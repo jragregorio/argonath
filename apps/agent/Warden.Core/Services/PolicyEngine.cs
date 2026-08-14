@@ -68,6 +68,99 @@ public static class PolicyEngine
     }
 
     /// <summary>
+    /// When outside today's windows, minutes-since-midnight of the next window start
+    /// later today. Null when in-window or no later window today.
+    /// </summary>
+    public static int? GetNextTodayWindowStartMinutes(
+        IReadOnlyList<AllowedWindow> windows,
+        DateTime now)
+    {
+        if (windows.Count == 0) return null;
+
+        var currentDay = GetDayOfWeek(now);
+        var currentMinutes = GetMinutesSinceMidnight(now);
+        var todayMerged = MergeWindows(windows).Where(w => w.Day == currentDay).ToList();
+        if (todayMerged.Count == 0) return null;
+
+        foreach (var window in todayMerged)
+        {
+            var start = ParseTime(window.Start);
+            var end = ParseTime(window.End);
+            if (currentMinutes >= start && currentMinutes < end)
+                return null;
+        }
+
+        int? nextStart = null;
+        foreach (var window in todayMerged)
+        {
+            var start = ParseTime(window.Start);
+            if (start > currentMinutes)
+                nextStart = nextStart is null ? start : Math.Min(nextStart.Value, start);
+        }
+
+        return nextStart;
+    }
+
+    /// <summary>
+    /// True when an active grant's wall-clock end reaches today's next window start.
+    /// Compares family-local calendar day and seconds-since-midnight (UTC server
+    /// instants are converted via <see cref="ResolveNow"/>).
+    /// </summary>
+    public static bool IsPreWindowBridgeActive(
+        IReadOnlyList<AllowedWindow> windows,
+        DateTime now,
+        DateTime? outsideGrantValidUntil,
+        string? timeZoneIana = null)
+    {
+        if (!outsideGrantValidUntil.HasValue) return false;
+
+        var nextStartMinutes = GetNextTodayWindowStartMinutes(windows, now);
+        if (nextStartMinutes is null) return false;
+
+        var grantEndLocal = ToFamilyWallClock(outsideGrantValidUntil.Value, timeZoneIana);
+        var today = now.Date;
+        var grantDay = grantEndLocal.Date;
+
+        if (grantDay < today) return false;
+        if (grantDay > today) return true;
+
+        var grantEndSeconds = GetSecondsSinceMidnight(grantEndLocal);
+        var nextStartSeconds = nextStartMinutes.Value * 60;
+        return grantEndSeconds >= nextStartSeconds;
+    }
+
+    /// <summary>
+    /// UTC grant instants from the server → family wall-clock; Unspecified/local
+    /// values are already family wall-clock (approve-time fallback).
+    /// </summary>
+    private static DateTime ToFamilyWallClock(DateTime instant, string? timeZoneIana)
+    {
+        if (instant.Kind == DateTimeKind.Utc)
+            return ResolveNow(timeZoneIana, instant);
+        return instant;
+    }
+
+    /// <summary>Whole minutes until today's next window start (minimum 1).</summary>
+    public static int GetMinutesUntilNextTodayWindow(
+        IReadOnlyList<AllowedWindow> windows,
+        DateTime now)
+    {
+        var nextStartMinutes = GetNextTodayWindowStartMinutes(windows, now);
+        if (nextStartMinutes is null) return 0;
+        return Math.Max(1, nextStartMinutes.Value - GetMinutesSinceMidnight(now));
+    }
+
+    /// <summary>Seconds until today's next window start (minimum 1).</summary>
+    public static int GetSecondsUntilNextTodayWindow(
+        IReadOnlyList<AllowedWindow> windows,
+        DateTime now)
+    {
+        var nextStartMinutes = GetNextTodayWindowStartMinutes(windows, now);
+        if (nextStartMinutes is null) return 0;
+        return Math.Max(1, nextStartMinutes.Value * 60 - GetSecondsSinceMidnight(now));
+    }
+
+    /// <summary>
     /// Per day, sort by start and merge overlapping and adjacent runs.
     /// Does not merge across different days.
     /// </summary>
@@ -160,7 +253,8 @@ public static class PolicyEngine
         int bonusMinutes,
         DateTime? now = null,
         string? timeZoneIana = null,
-        int? outsideGrantBaselineUsedMinutes = null)
+        int? outsideGrantBaselineUsedMinutes = null,
+        DateTime? outsideGrantValidUntil = null)
     {
         now ??= ResolveNow(timeZoneIana);
         var effectiveLimit = policy.DailyLimitMinutes + bonusMinutes;
@@ -205,6 +299,25 @@ public static class PolicyEngine
                     RemainingMinutes = bonusRemaining,
                     DailyRemainingMinutes = dailyRemainingMinutes,
                     LimitingFactor = "daily_limit",
+                    ReachableMinutesToday = reachableMinutesToday,
+                    UsedMinutes = usedMinutesToday,
+                    DailyLimitMinutes = policy.DailyLimitMinutes,
+                    BonusMinutes = bonusMinutes
+                };
+            }
+
+            if (IsPreWindowBridgeActive(
+                policy.AllowedWindows,
+                now.Value,
+                outsideGrantValidUntil,
+                timeZoneIana))
+            {
+                return new PolicyEvaluation
+                {
+                    Status = "allowed",
+                    RemainingMinutes = GetMinutesUntilNextTodayWindow(policy.AllowedWindows, now.Value),
+                    DailyRemainingMinutes = dailyRemainingMinutes,
+                    LimitingFactor = "window",
                     ReachableMinutesToday = reachableMinutesToday,
                     UsedMinutes = usedMinutesToday,
                     DailyLimitMinutes = policy.DailyLimitMinutes,

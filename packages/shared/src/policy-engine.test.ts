@@ -317,6 +317,125 @@ describe("policy engine", () => {
     });
   });
 
+  describe("pre-window bonus handoff", () => {
+    // Thursday 2026-01-08, window 15:00–18:00 UTC
+    const thuWindowPolicy: ScreenTimePolicyInput = {
+      dailyLimitMinutes: 180,
+      allowedWindows: [{ day: 4, start: "15:00", end: "18:00" }],
+      isActive: true,
+    };
+    const thuMidnight = new Date("2026-01-09T00:00:00.000Z");
+    const grantAt1400 = {
+      extraMinutes: 60,
+      createdAt: new Date("2026-01-08T14:00:00.000Z"),
+      expiresAt: thuMidnight,
+      outsideGrantBaselineUsedMinutes: 0,
+    };
+
+    it("bridges to scheduled window when grant wall-clock reaches window start", () => {
+      const at1459 = new Date("2026-01-08T14:59:00.000Z");
+      const result = evaluatePolicy(
+        thuWindowPolicy,
+        60,
+        [grantAt1400],
+        at1459,
+        "UTC"
+      );
+      expect(result.status).toBe("allowed");
+      expect(result.inWindow).toBe(false);
+      expect(result.remainingMinutes).toBe(1);
+      expect(shouldLock(result)).toBe(false);
+
+      const at1500 = new Date("2026-01-08T15:00:00.000Z");
+      const inWindow = evaluatePolicy(
+        thuWindowPolicy,
+        60,
+        [grantAt1400],
+        at1500,
+        "UTC"
+      );
+      expect(inWindow.status).toBe("allowed");
+      expect(inWindow.inWindow).toBe(true);
+      expect(shouldLock(inWindow)).toBe(false);
+    });
+
+    it("bridges in Asia/Manila family timezone (UTC grant instants)", () => {
+      const manilaTz = "Asia/Manila";
+      const grantAt1400Manila = {
+        extraMinutes: 60,
+        createdAt: new Date("2026-01-08T06:00:00.000Z"), // 14:00 Manila
+        expiresAt: new Date("2026-01-08T16:00:00.000Z"), // midnight Manila
+        outsideGrantBaselineUsedMinutes: 0,
+      };
+      const at1459Manila = new Date("2026-01-08T06:59:00.000Z"); // 14:59 Manila
+      const result = evaluatePolicy(
+        thuWindowPolicy,
+        60,
+        [grantAt1400Manila],
+        at1459Manila,
+        manilaTz
+      );
+      expect(result.status).toBe("allowed");
+      expect(result.inWindow).toBe(false);
+      expect(result.remainingMinutes).toBe(1);
+      expect(shouldLock(result)).toBe(false);
+
+      const at1500Manila = new Date("2026-01-08T07:00:00.000Z"); // 15:00 Manila
+      const inWindow = evaluatePolicy(
+        thuWindowPolicy,
+        60,
+        [grantAt1400Manila],
+        at1500Manila,
+        manilaTz
+      );
+      expect(inWindow.status).toBe("allowed");
+      expect(inWindow.inWindow).toBe(true);
+      expect(shouldLock(inWindow)).toBe(false);
+    });
+
+    it("locks when grant wall-clock end is before next today window", () => {
+      const grantAt1300 = {
+        ...grantAt1400,
+        createdAt: new Date("2026-01-08T13:00:00.000Z"),
+      };
+      const at1400 = new Date("2026-01-08T14:00:00.000Z");
+      const result = evaluatePolicy(
+        thuWindowPolicy,
+        60,
+        [grantAt1300],
+        at1400,
+        "UTC"
+      );
+      expect(result.status).toBe("outside_window");
+      expect(shouldLock(result)).toBe(true);
+    });
+
+    it("evening after-hours still locks when pool spent and next window is tomorrow", () => {
+      const wedWindowPolicy: ScreenTimePolicyInput = {
+        dailyLimitMinutes: 120,
+        allowedWindows: [{ day: 3, start: "04:00", end: "19:00" }],
+        isActive: true,
+      };
+      const wed8pm = new Date("2026-01-07T20:00:00.000Z");
+      const activeBonus = [
+        {
+          extraMinutes: 15,
+          createdAt: new Date("2026-01-07T20:00:00.000Z"),
+          expiresAt: new Date("2026-01-08T00:00:00.000Z"),
+        },
+      ];
+      const result = evaluatePolicy(
+        wedWindowPolicy,
+        135,
+        activeBonus,
+        wed8pm,
+        "UTC"
+      );
+      expect(result.status).toBe("outside_window");
+      expect(shouldLock(result)).toBe(true);
+    });
+  });
+
   it("computes window remaining in a non-UTC family timezone", () => {
     const policy: ScreenTimePolicyInput = {
       dailyLimitMinutes: 200,

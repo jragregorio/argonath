@@ -51,6 +51,7 @@ public class EnforcementEngine
     private bool? _lastIsOutsideAllowedWindow;
     /// <summary>Usage when we last entered an allowed window; used to forgive in-window burn against after-hours pierce.</summary>
     private int? _usedMinutesWhenEnteredAllowedWindow;
+    private DateTime? _localOutsideGrantValidUntil;
     private readonly OutsideGrantStateStore _outsideGrantStateStore = new();
 
     public event Action<PolicyEvaluation>? PolicyChanged;
@@ -101,7 +102,20 @@ public class EnforcementEngine
         // Outside allowed hours: GetWindowRemainingSeconds is null — do not fall back to
         // full daily leftover; only unused extension/bonus time may remain.
         if (windowRemainingSeconds is null)
+        {
+            if (
+                eval.Status == "allowed"
+                && eval.LimitingFactor == "window"
+                && eval.RemainingMinutes > 0
+            )
+            {
+                return PolicyEngine.GetSecondsUntilNextTodayWindow(
+                    _currentPolicy.Policy.AllowedWindows,
+                    now);
+            }
+
             return GetOutsideExtensionRemainingSeconds(eval);
+        }
 
         return Math.Min(dailyRemainingSeconds, windowRemainingSeconds.Value);
     }
@@ -173,6 +187,58 @@ public class EnforcementEngine
         }
 
         return GetLocalOutsideExtensionRemainingSeconds(eval.BonusMinutes);
+    }
+
+    private DateTime? GetEffectiveOutsideGrantValidUntil()
+    {
+        if (_currentPolicy?.OutsideGrantValidUntil is DateTime serverValidUntil)
+            return serverValidUntil;
+        return _localOutsideGrantValidUntil;
+    }
+
+    private bool TryApplyPreWindowBridge(ref PolicyEvaluation evaluation)
+    {
+        if (_currentPolicy == null) return false;
+
+        var now = PolicyEngine.ResolveNow(_currentPolicy.Timezone);
+        var validUntil = GetEffectiveOutsideGrantValidUntil();
+        if (
+            !PolicyEngine.IsPreWindowBridgeActive(
+                _currentPolicy.Policy.AllowedWindows,
+                now,
+                validUntil,
+                _currentPolicy.Timezone)
+        )
+        {
+            return false;
+        }
+
+        evaluation.Status = "allowed";
+        evaluation.RemainingMinutes = PolicyEngine.GetMinutesUntilNextTodayWindow(
+            _currentPolicy.Policy.AllowedWindows,
+            now);
+        evaluation.LimitingFactor = "window";
+        evaluation.NextWindowStart = null;
+        evaluation.Message = null;
+        return true;
+    }
+
+    private void StampLocalOutsideGrantValidUntilFromPayload(RealtimeEvent evt)
+    {
+        var extraMinutes = 0;
+        if (evt.Payload != null)
+        {
+            var json = evt.Payload is JsonElement el
+                ? el.GetRawText()
+                : JsonSerializer.Serialize(evt.Payload);
+            var payload = JsonSerializer.Deserialize<ExtensionPayload>(json, JsonOptions);
+            extraMinutes = payload?.ExtraMinutes ?? 0;
+        }
+
+        if (extraMinutes <= 0) return;
+
+        var now = PolicyEngine.ResolveNow(_currentPolicy?.Timezone);
+        _localOutsideGrantValidUntil = now.AddMinutes(extraMinutes);
     }
 
     /// <summary>
@@ -425,6 +491,7 @@ public class EnforcementEngine
         switch (evt.Type)
         {
             case "extension:approved":
+                StampLocalOutsideGrantValidUntilFromPayload(evt);
                 BeginExtensionApprovedTimeWarningSuppress();
                 RaiseExtensionApprovedNotice(evt);
                 _ = RefreshPolicyAfterExtensionApprovedAsync();
@@ -583,6 +650,9 @@ public class EnforcementEngine
         _currentPolicy = await _api.GetPolicyAsync();
         if (_currentPolicy == null) return;
 
+        if (_currentPolicy.OutsideGrantValidUntil != null)
+            _localOutsideGrantValidUntil = null;
+
         var thisDevice = _currentPolicy.ThisDeviceMinutes;
         var childTotal = _currentPolicy.UsedMinutesToday;
         _otherDevicesMinutes = Math.Max(0, childTotal - thisDevice);
@@ -689,7 +759,8 @@ public class EnforcementEngine
             UsedMinutesForEnforcement(),
             _currentPolicy.BonusMinutes,
             timeZoneIana: _currentPolicy.Timezone,
-            outsideGrantBaselineUsedMinutes: _currentPolicy.OutsideGrantBaselineUsedMinutes
+            outsideGrantBaselineUsedMinutes: _currentPolicy.OutsideGrantBaselineUsedMinutes,
+            outsideGrantValidUntil: GetEffectiveOutsideGrantValidUntil()
         );
 
         if (_currentPolicy.AdminLock)
@@ -729,6 +800,12 @@ public class EnforcementEngine
                 var grantSeconds = GetOutsideExtensionRemainingSeconds(evaluation);
                 if (grantSeconds <= 0)
                 {
+                    if (TryApplyPreWindowBridge(ref evaluation))
+                    {
+                        // Bridge to today's next window — stay unlocked until schedule opens.
+                    }
+                    else
+                    {
                     var lockedEval = PolicyEngine.Evaluate(
                         _currentPolicy.Policy,
                         UsedMinutesForEnforcement(),
@@ -740,6 +817,7 @@ public class EnforcementEngine
                     evaluation.LimitingFactor = "window";
                     evaluation.NextWindowStart = lockedEval.NextWindowStart;
                     evaluation.Message = lockedEval.Message;
+                    }
                 }
                 else
                 {
@@ -759,6 +837,12 @@ public class EnforcementEngine
                 var grantSeconds = GetLocalOutsideExtensionRemainingSeconds(bonus);
                 if (grantSeconds <= 0)
                 {
+                    if (TryApplyPreWindowBridge(ref evaluation))
+                    {
+                        // Bridge to today's next window — stay unlocked until schedule opens.
+                    }
+                    else
+                    {
                     var lockedEval = PolicyEngine.Evaluate(
                         _currentPolicy.Policy,
                         UsedMinutesForEnforcement(),
@@ -770,6 +854,7 @@ public class EnforcementEngine
                     evaluation.LimitingFactor = "window";
                     evaluation.NextWindowStart = lockedEval.NextWindowStart;
                     evaluation.Message = lockedEval.Message;
+                    }
                 }
                 else
                 {

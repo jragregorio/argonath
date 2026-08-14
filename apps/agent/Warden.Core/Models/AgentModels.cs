@@ -65,6 +65,11 @@ public class PolicyData
     /// Null when not yet pierced / not applicable.
     /// </summary>
     public int? OutsideGrantBaselineUsedMinutes { get; set; }
+    /// <summary>
+    /// Max wall-clock end (createdAt + extraMinutes) among active overrides.
+    /// Used for pre-window bonus handoff into the next today window.
+    /// </summary>
+    public DateTime? OutsideGrantValidUntil { get; set; }
     public string? ParentPin { get; set; }
     /// <summary>Parent-triggered lockdown from the dashboard.</summary>
     public bool AdminLock { get; set; }

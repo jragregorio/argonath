@@ -42,6 +42,7 @@ export async function ensureOutsideGrantBaselines(args: {
   const mapped: ExtensionOverrideInput[] = overrides.map((o) => ({
     extraMinutes: o.extraMinutes,
     expiresAt: o.expiresAt,
+    createdAt: o.createdAt,
     outsideGrantBaselineUsedMinutes: baselineById.get(o.id) ?? null,
   }));
 
@@ -100,6 +101,7 @@ export async function ensureOutsideGrantBaselines(args: {
     return {
       extraMinutes: o.extraMinutes,
       expiresAt: o.expiresAt,
+      createdAt: o.createdAt,
       outsideGrantBaselineUsedMinutes: effective,
     };
   });

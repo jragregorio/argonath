@@ -11,6 +11,7 @@ import {
   getCalendarDateInTimeZone,
   getDeviceDisplayName,
   getOutsideGrantBaselineUsedMinutes,
+  getOutsideGrantValidUntil,
   isDeviceRecentlySeen,
   isValidTimeZone,
   PAIRING_CODE_EXPIRY_MINUTES,
@@ -2211,6 +2212,7 @@ export const agentRouter = router({
 
     const outsideGrantBaselineUsedMinutes =
       getOutsideGrantBaselineUsedMinutes(overrides, now);
+    const outsideGrantValidUntil = getOutsideGrantValidUntil(overrides, now);
 
     return {
       policy,
@@ -2218,6 +2220,7 @@ export const agentRouter = router({
       thisDeviceMinutes: thisDeviceLog?.activeMinutes ?? 0,
       bonusMinutes,
       outsideGrantBaselineUsedMinutes,
+      outsideGrantValidUntil: outsideGrantValidUntil?.toISOString() ?? null,
       parentPin: child.family.parentPin ?? null,
       adminLock: ctx.device.adminLock,
       timezone: timeZone,
