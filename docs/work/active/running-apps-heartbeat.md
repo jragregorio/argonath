@@ -180,3 +180,11 @@ Optional: vitest for a `sanitizeRunningApps` helper if extracted to shared.
 - Commands + exit codes:
   - `npm run typecheck -w @warden/web` → 0
 - Next: manual refresh on TESTPC child page — confirm online/offline timestamp copy and hover title.
+
+### Phase 5 — row alignment + hairlines (web-only)
+
+- Date: 2026-08-16
+- Rows: `items-center` (was `items-start`). Full-width `divide-y divide-border/50`. No rounded row pills.
+- Parked: per-app foreground minutes — see `docs/work/active/per-app-foreground-usage.md`. Do not add process uptime.
+- Web-only. No version bump.
+

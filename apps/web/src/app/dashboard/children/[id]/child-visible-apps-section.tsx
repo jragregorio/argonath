@@ -59,7 +59,7 @@ function RunningAppsList({
 }: RunningAppsListProps) {
   return (
     <ul
-      className="max-h-64 space-y-1 overflow-y-auto rounded-md border border-border/60 bg-muted/30 px-2 py-1.5"
+      className="max-h-64 divide-y divide-border/50 overflow-y-auto rounded-md border border-border/60 bg-muted/30"
       aria-label="Visible apps on device"
     >
       {apps.map((app, index) => {
@@ -69,7 +69,7 @@ function RunningAppsList({
         const blocked = isProcessBlocked(app.processName, blockedProcessNames);
         const canBlock = !blocked && !isNeverBlockProcessName(app.processName);
         const rowClass = cn(
-          "flex w-full items-start gap-2 rounded px-1 py-1.5 text-left text-sm md:py-0.5 md:text-xs",
+          "flex w-full items-center gap-2 px-2 py-2 text-left text-sm md:py-1.5 md:text-xs",
           app.isForeground && "bg-primary/10 font-medium",
           canBlock &&
             "cursor-pointer hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-11"

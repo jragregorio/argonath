@@ -85,4 +85,4 @@ This is product phase 2 after running-apps heartbeat (see / display).
   - Blocklist chips render once per card (child-scoped), not duplicated per device.
   - Identity is `processName` only (not per-window title); multiple windows share one process.
   - Old agents ignore `blockedProcessNames`; no enforcement until Tray upgrade.
-- Shipped: web **0.8.16**, agent **0.6.24**. Next: rebuild MSI when asked; local smoke (block Notepad, relaunch).
+- Shipped: web **0.8.16**, agent **0.6.24**. Next: local smoke (block Notepad, relaunch). Per-app usage parked — see `per-app-foreground-usage.md`.
