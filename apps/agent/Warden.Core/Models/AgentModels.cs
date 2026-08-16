@@ -90,6 +90,7 @@ public class PolicyInfo
     public int DailyLimitMinutes { get; set; } = 120;
     public List<AllowedWindow> AllowedWindows { get; set; } = new();
     public bool IsActive { get; set; } = true;
+    public List<string> BlockedProcessNames { get; set; } = new();
 }
 
 public class PolicyEvaluation

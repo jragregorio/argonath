@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ChildDetailSkeleton } from "@/components/dashboard-skeletons";
 import { InlineBackLink } from "@/components/sticky-back-chip";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
+import { sanitizeBlockedProcessNames } from "@warden/shared";
 import { ChildActivitySection } from "./child-activity-section";
 import { ChildDevicesSection } from "./child-devices-section";
 import { ChildPolicySection } from "./child-policy-section";
@@ -69,7 +70,13 @@ export default function ChildDetailPage() {
         <ChildPolicySection childId={childId} policy={child.policies[0]} />
       </div>
 
-      <ChildVisibleAppsSection devices={child.devices} />
+      <ChildVisibleAppsSection
+        childId={childId}
+        blockedProcessNames={sanitizeBlockedProcessNames(
+          child.policies[0]?.blockedProcessNames
+        )}
+        devices={child.devices}
+      />
 
       <ChildActivitySection items={activity} />
     </div>

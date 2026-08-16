@@ -16,6 +16,7 @@ import {
   isValidTimeZone,
   PAIRING_CODE_EXPIRY_MINUTES,
   sanitizeRunningApps,
+  sanitizeBlockedProcessNames,
   SNAPSHOT_RETENTION_DAYS,
   type AllowedWindow,
   type RunningApp,
@@ -645,6 +646,101 @@ export const policyRouter = router({
       });
 
       // Best-effort: tray also polls agent.getPolicy for the updated policy.
+      for (const device of child.devices) {
+        void broadcastToDevice(device.id, {
+          type: "policy:updated",
+          deviceId: device.id,
+          timestamp: new Date().toISOString(),
+        }).catch(() => {});
+      }
+
+      return policy;
+    }),
+
+  blockApp: parentProcedure
+    .input(
+      z.object({
+        childId: z.string(),
+        processName: z.string().min(1).max(128),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const child = await getChildForFamily(input.childId, family.id);
+      const existing = child.policies[0];
+      const current = existing
+        ? sanitizeBlockedProcessNames(existing.blockedProcessNames)
+        : [];
+      const updated = sanitizeBlockedProcessNames([
+        ...current,
+        input.processName,
+      ]);
+      const trimmedName = input.processName.trim();
+
+      const policy = existing
+        ? await prisma.screenTimePolicy.update({
+            where: { id: existing.id },
+            data: { blockedProcessNames: updated },
+          })
+        : await prisma.screenTimePolicy.create({
+            data: {
+              childId: child.id,
+              blockedProcessNames: updated,
+            },
+          });
+
+      await logAudit(family.id, ctx.userId, "app_blocked", {
+        childId: child.id,
+        processName: trimmedName,
+      });
+
+      for (const device of child.devices) {
+        void broadcastToDevice(device.id, {
+          type: "policy:updated",
+          deviceId: device.id,
+          timestamp: new Date().toISOString(),
+        }).catch(() => {});
+      }
+
+      return policy;
+    }),
+
+  unblockApp: parentProcedure
+    .input(
+      z.object({
+        childId: z.string(),
+        processName: z.string().min(1).max(128),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const child = await getChildForFamily(input.childId, family.id);
+      const existing = child.policies[0];
+      const trimmedName = input.processName.trim();
+      const nameLower = trimmedName.toLowerCase();
+
+      const current = existing
+        ? sanitizeBlockedProcessNames(existing.blockedProcessNames)
+        : [];
+      const updated = current.filter((name) => name.toLowerCase() !== nameLower);
+
+      const policy = existing
+        ? await prisma.screenTimePolicy.update({
+            where: { id: existing.id },
+            data: { blockedProcessNames: updated },
+          })
+        : await prisma.screenTimePolicy.create({
+            data: {
+              childId: child.id,
+              blockedProcessNames: updated,
+            },
+          });
+
+      await logAudit(family.id, ctx.userId, "app_unblocked", {
+        childId: child.id,
+        processName: trimmedName,
+      });
+
       for (const device of child.devices) {
         void broadcastToDevice(device.id, {
           type: "policy:updated",
@@ -2210,11 +2306,15 @@ export const agentRouter = router({
           dailyLimitMinutes: policyRow.dailyLimitMinutes,
           allowedWindows: policyRow.allowedWindows as AllowedWindow[],
           isActive: policyRow.isActive,
+          blockedProcessNames: sanitizeBlockedProcessNames(
+            policyRow.blockedProcessNames
+          ),
         }
       : {
           dailyLimitMinutes: 120,
           allowedWindows: [] as AllowedWindow[],
           isActive: true,
+          blockedProcessNames: [] as string[],
         };
 
     const overrides = await ensureOutsideGrantBaselines({

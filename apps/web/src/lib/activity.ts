@@ -1,6 +1,7 @@
 import { DEFAULT_NUDGE_MESSAGE } from "@warden/shared";
 import {
   Activity,
+  Ban,
   Bell,
   Camera,
   Clock,
@@ -26,6 +27,8 @@ const ACTION_LABELS: Record<string, string> = {
   bonus_granted: "Granted bonus screen time",
   bonus_cleared: "Cleared bonus screen time",
   policy_updated: "Updated screen time policy",
+  app_blocked: "Blocked an app",
+  app_unblocked: "Unblocked an app",
   child_created: "Added a child",
   child_renamed: "Renamed a child",
   child_deleted: "Removed a child",
@@ -47,6 +50,8 @@ const ACTION_ICONS: Record<string, LucideIcon> = {
   bonus_granted: Clock,
   bonus_cleared: Clock,
   policy_updated: Clock,
+  app_blocked: Ban,
+  app_unblocked: Ban,
   admin_lock: Lock,
   admin_unlock: Unlock,
   device_online: Wifi,
@@ -138,6 +143,13 @@ export function formatActivityDetail(item: ActivityItemLike) {
       } else if (record.isActive === true) {
         parts.push("policy on");
       }
+    }
+  }
+
+  if (item.action === "app_blocked" || item.action === "app_unblocked") {
+    const processName = item.metadata?.processName;
+    if (typeof processName === "string" && processName.trim()) {
+      parts.push(processName.trim());
     }
   }
 

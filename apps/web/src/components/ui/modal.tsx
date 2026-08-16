@@ -6,6 +6,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@warden/ui";
 import { Button } from "@/components/ui/button";
@@ -106,7 +107,7 @@ export function Modal({
       const closeBtn = panelRef.current?.querySelector<HTMLElement>(
         '[data-modal-close="true"]'
       );
-      (preferred ?? closeBtn)?.focus();
+      (preferred ?? closeBtn)?.focus({ preventScroll: true });
     });
 
     return () => {
@@ -117,9 +118,9 @@ export function Modal({
     };
   }, [open]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div className="hidden md:block">
       <button
         type="button"
@@ -222,6 +223,7 @@ export function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

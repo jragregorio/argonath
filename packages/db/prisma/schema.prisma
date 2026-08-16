@@ -151,6 +151,7 @@ model ScreenTimePolicy {
   childId           String
   dailyLimitMinutes Int      @default(120)
   allowedWindows    Json     @default("[]")
+  blockedProcessNames Json   @default("[]")
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

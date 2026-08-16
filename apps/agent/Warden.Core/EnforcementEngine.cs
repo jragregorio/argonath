@@ -9,6 +9,7 @@ public class EnforcementEngine
 {
     private readonly WardenApiClient _api;
     private readonly ConfigStore _configStore;
+    private readonly BlockedAppEnforcer _blockedAppEnforcer = new();
     private double _activeSecondsToday;
     private double _idleSecondsToday;
     private int _otherDevicesMinutes;
@@ -922,6 +923,8 @@ public class EnforcementEngine
             UnlockRequired?.Invoke();
             _ = NotifyLockedAsync(false);
         }
+
+        _blockedAppEnforcer.Enforce(_currentPolicy.Policy.BlockedProcessNames);
     }
 
     private void LogOutsideWindowDiagnostics(string transition, PolicyEvaluation evaluation)

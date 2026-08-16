@@ -427,7 +427,7 @@ export function ChildDevicesSection({
               return (
                 <div
                   key={device.id}
-                  className="flex min-h-[12rem] flex-1 flex-col justify-between gap-4 rounded-lg border border-border p-4 max-md:p-5 sm:p-5"
+                  className="flex min-h-[12rem] flex-col gap-4 rounded-lg border border-border p-4 max-md:p-5 sm:p-5"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
