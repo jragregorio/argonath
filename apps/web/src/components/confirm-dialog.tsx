@@ -28,7 +28,31 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const isDesktop = useIsDesktopMd();
 
-  const footer = (
+  const desktopFooter = (
+    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={onClose}
+        disabled={busy}
+      >
+        Cancel
+      </Button>
+      <Button
+        type="button"
+        variant={variant === "destructive" ? "destructive" : "default"}
+        size="sm"
+        className="px-4"
+        onClick={onConfirm}
+        disabled={busy}
+      >
+        {busy ? "Please wait…" : confirmLabel}
+      </Button>
+    </div>
+  );
+
+  const mobileFooter = (
     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
       <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
         Cancel
@@ -46,9 +70,15 @@ export function ConfirmDialog({
 
   if (isDesktop) {
     return (
-      <Modal open={open} onClose={onClose} title={title} footer={footer}>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </Modal>
+      <Modal
+        open={open}
+        onClose={onClose}
+        title={title}
+        description={description}
+        footer={desktopFooter}
+        size="sm"
+        layout="plain"
+      />
     );
   }
 
@@ -58,7 +88,7 @@ export function ConfirmDialog({
       onClose={onClose}
       title={title}
       showDone={false}
-      footer={footer}
+      footer={mobileFooter}
     >
       <p className="text-sm text-muted-foreground">{description}</p>
     </BottomSheet>
