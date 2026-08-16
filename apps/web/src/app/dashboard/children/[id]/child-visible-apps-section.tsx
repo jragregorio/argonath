@@ -8,6 +8,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  formatAbsoluteTime,
+  formatRelativeTime,
+} from "@/lib/format-relative-time";
 import { getDeviceDisplayName, type RunningApp } from "@warden/shared";
 import { AppWindow } from "lucide-react";
 
@@ -91,6 +95,36 @@ function DeviceVisibleAppsContent({ device }: { device: VisibleAppsDevice }) {
   return <RunningAppsList apps={device.runningApps} />;
 }
 
+function formatSnapshotClock(value: Date | string): string {
+  const date = value instanceof Date ? value : new Date(value);
+  return date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function RunningAppsSnapshotTimestamp({
+  runningAppsAt,
+  isOnline,
+}: {
+  runningAppsAt: Date | string;
+  isOnline: boolean;
+}) {
+  const relative = formatRelativeTime(runningAppsAt);
+  const clock = formatSnapshotClock(runningAppsAt);
+  const prefix = isOnline ? "Updated" : "Last updated";
+
+  return (
+    <p
+      className="mt-3 text-right text-sm md:text-xs text-muted-foreground"
+      title={formatAbsoluteTime(runningAppsAt)}
+    >
+      {prefix} {relative} · {clock}
+    </p>
+  );
+}
+
 export function ChildVisibleAppsSection({
   devices,
 }: ChildVisibleAppsSectionProps) {
@@ -101,7 +135,7 @@ export function ChildVisibleAppsSection({
   const showDeviceLabels = devices.length > 1;
 
   return (
-    <Card className="w-full">
+    <Card className="w-full pb-3">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <AppWindow className="h-5 w-5 text-muted-foreground" />
@@ -113,13 +147,19 @@ export function ChildVisibleAppsSection({
       </CardHeader>
       <CardContent className="space-y-4">
         {devices.map((device) => (
-          <div key={device.id} className="space-y-2">
+          <div key={device.id}>
             {showDeviceLabels && (
-              <p className="text-sm font-medium text-foreground">
+              <p className="mb-2 text-sm font-medium text-foreground">
                 {getDeviceDisplayName(device)}
               </p>
             )}
             <DeviceVisibleAppsContent device={device} />
+            {device.runningAppsAt != null && (
+              <RunningAppsSnapshotTimestamp
+                runningAppsAt={device.runningAppsAt}
+                isOnline={device.isOnline}
+              />
+            )}
           </div>
         ))}
       </CardContent>

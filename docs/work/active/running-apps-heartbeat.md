@@ -157,4 +157,26 @@ Optional: vitest for a `sanitizeRunningApps` helper if extracted to shared.
 - Web: `0.8.14` → `0.8.15` (`apps/web/package.json`, `@warden/shared` + `APP_VERSION`)
 - Agent: `0.6.22` → `0.6.23` (`Directory.Build.props`, `HARDCODED_DESKTOP_APP_VERSION`)
 - Mobile: unchanged
-- Next: commit, push `main`, rebuild MSI `Warden-0.6.23-x64.msi`
+- Commit: `9b9ed4c` pushed to `origin/main`
+- MSI: `apps/agent/artifacts/Warden-0.6.23-x64.msi` (88,705,350 bytes)
+- SHA-256: `7da50803fa7633a058b4f49f40481254ee63eaeb6f0bf3b670ff5e88630e1597`
+- Exe: `apps/agent/Warden.Tray/bin/Release/net8.0-windows/win-x64/publish/Warden.Tray.exe`
+- ICE61 warning: same-version upgrade (accepted per ADR-0003)
+- Next: install MSI on child PC; wait for Vercel web deploy of 0.8.15
+
+### Phase 4 — snapshot timestamp footer
+
+- Date: 2026-08-16
+- Goal: Always-visible “Updated …” line at the bottom of the Visible apps card (outside the scroll list).
+- Decisions:
+  - Source: `runningAppsAt` (not `lastSeenAt`, not Date.now()).
+  - Visible: relative via existing `formatRelativeTime` + clock via `toLocaleTimeString` 12h (`Updated just now · 12:46 PM`).
+  - `title`/`formatAbsoluteTime` for full datetime on hover.
+  - Online: “Updated …”. Offline with a snapshot: “Last updated …”. No `runningAppsAt`: omit the line.
+  - Per device group when multiple devices.
+  - Web-only. No version bump. No agent/API change.
+- Files changed:
+  - `apps/web/src/app/dashboard/children/[id]/child-visible-apps-section.tsx` — `RunningAppsSnapshotTimestamp` footer per device group; imports `formatRelativeTime` / `formatAbsoluteTime`.
+- Commands + exit codes:
+  - `npm run typecheck -w @warden/web` → 0
+- Next: manual refresh on TESTPC child page — confirm online/offline timestamp copy and hover title.
