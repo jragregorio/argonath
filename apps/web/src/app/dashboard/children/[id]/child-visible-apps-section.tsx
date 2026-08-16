@@ -67,7 +67,8 @@ function RunningAppsList({
           !app.title ||
           app.title.toLowerCase() !== app.processName.toLowerCase();
         const blocked = isProcessBlocked(app.processName, blockedProcessNames);
-        const canBlock = !blocked && !isNeverBlockProcessName(app.processName);
+        const neverBlock = isNeverBlockProcessName(app.processName);
+        const canBlock = !blocked && !neverBlock;
         const rowClass = cn(
           "flex w-full items-center gap-2 px-2 py-2 text-left text-sm md:py-1.5 md:text-xs",
           app.isForeground && "bg-primary/10 font-medium",
@@ -86,6 +87,15 @@ function RunningAppsList({
                 className="shrink-0 text-[10px] uppercase tracking-wide"
               >
                 In use
+              </Badge>
+            )}
+            {neverBlock && (
+              <Badge
+                variant="secondary"
+                className="shrink-0 bg-brand/20 text-brand text-[10px] uppercase tracking-wide"
+                title="Warden keeps this process running"
+              >
+                Protected
               </Badge>
             )}
             {blocked && (
