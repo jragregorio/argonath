@@ -1042,11 +1042,13 @@ public class EnforcementEngine
 
     public async Task SendHeartbeatAsync(bool previousSessionUnclean = false)
     {
+        var runningApps = RunningAppEnumerator.Enumerate();
         await _api.SendHeartbeatAsync(
             ActiveMinutesToday,
             IdleMinutesToday,
             _isLocked,
-            previousSessionUnclean
+            previousSessionUnclean,
+            runningApps
         );
         // Refresh policy/bonus only — do not clobber local accumulation from a stale server value.
         await RefreshPolicyAsync(syncUsageFromServer: false);

@@ -29,6 +29,13 @@ public class PairingResponse
     public string? SupabaseAnonKey { get; set; }
 }
 
+public class RunningAppInfo
+{
+    public string ProcessName { get; set; } = "";
+    public string Title { get; set; } = "";
+    public bool IsForeground { get; set; }
+}
+
 public class HeartbeatRequest
 {
     public string Action { get; set; } = "heartbeat";
@@ -43,6 +50,7 @@ public class HeartbeatRequest
     /// (End Task, crash, power loss). Cleared client-side after a successful send.
     /// </summary>
     public bool PreviousSessionUnclean { get; set; }
+    public List<RunningAppInfo> RunningApps { get; set; } = new();
 }
 
 public class AllowedWindow

@@ -10,6 +10,7 @@ import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 import { ChildActivitySection } from "./child-activity-section";
 import { ChildDevicesSection } from "./child-devices-section";
 import { ChildPolicySection } from "./child-policy-section";
+import { ChildVisibleAppsSection } from "./child-visible-apps-section";
 import { ChildUsageHeader } from "./child-usage-header";
 
 export default function ChildDetailPage() {
@@ -67,6 +68,8 @@ export default function ChildDetailPage() {
         <ChildDevicesSection child={child} childId={childId} />
         <ChildPolicySection childId={childId} policy={child.policies[0]} />
       </div>
+
+      <ChildVisibleAppsSection devices={child.devices} />
 
       <ChildActivitySection items={activity} />
     </div>

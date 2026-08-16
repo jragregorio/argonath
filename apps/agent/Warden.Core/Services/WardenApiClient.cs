@@ -126,7 +126,8 @@ public class WardenApiClient
         int activeMinutes,
         int idleMinutes,
         bool isLocked,
-        bool previousSessionUnclean = false
+        bool previousSessionUnclean = false,
+        IReadOnlyList<RunningAppInfo>? runningApps = null
     )
     {
         SetDeviceTokenHeader();
@@ -139,11 +140,12 @@ public class WardenApiClient
             IsLocked = isLocked,
             MachineName = Environment.MachineName,
             AgentVersion = AgentVersionInfo.Current,
-            PreviousSessionUnclean = previousSessionUnclean
+            PreviousSessionUnclean = previousSessionUnclean,
+            RunningApps = runningApps?.ToList() ?? new List<RunningAppInfo>(),
         };
 
         var response = await SendWithTransientRetryAsync(
-            ct => _http.PostAsJsonAsync($"{config.ApiBaseUrl}/api/agent", request, ct),
+            ct => _http.PostAsJsonAsync($"{config.ApiBaseUrl}/api/agent", request, JsonOptions, ct),
             "heartbeat"
         );
 

@@ -94,6 +94,15 @@ export function ChildDetailSkeleton() {
           </Card>
         ))}
       </div>
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-64 max-w-full mt-2" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-24 w-full" />
+        </CardContent>
+      </Card>
     </div>
   );
 }

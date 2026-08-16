@@ -15,8 +15,10 @@ import {
   isDeviceRecentlySeen,
   isValidTimeZone,
   PAIRING_CODE_EXPIRY_MINUTES,
+  sanitizeRunningApps,
   SNAPSHOT_RETENTION_DAYS,
   type AllowedWindow,
+  type RunningApp,
 } from "@warden/shared";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -71,6 +73,8 @@ const deviceClientSelect = {
   isLocked: true,
   adminLock: true,
   lastUncleanExitAt: true,
+  runningApps: true,
+  runningAppsAt: true,
   pairingCode: true,
   pairingExpiresAt: true,
   createdAt: true,
@@ -91,6 +95,8 @@ type DeviceClientSource = {
   isLocked: boolean;
   adminLock: boolean;
   lastUncleanExitAt: Date | null;
+  runningApps: unknown;
+  runningAppsAt: Date | null;
   pairingCode: string | null;
   pairingExpiresAt: Date | null;
   createdAt: Date;
@@ -101,9 +107,13 @@ type DeviceClientSource = {
 function toDeviceClientViews(devices: DeviceClientSource[]) {
   const now = new Date();
   return devices.map((device) => {
-    const { deviceToken, ...rest } = device;
+    const { deviceToken, runningApps, ...rest } = device;
     return {
       ...rest,
+      runningApps:
+        device.runningAppsAt == null
+          ? null
+          : sanitizeRunningApps(runningApps) as RunningApp[],
       isOnline: isDeviceRecentlySeen(device.lastSeenAt, now),
       isPaired: Boolean(deviceToken),
     };
@@ -2045,6 +2055,7 @@ export const agentRouter = router({
         agentVersion: z.string(),
         machineName: z.string(),
         previousSessionUnclean: z.boolean().optional(),
+        runningApps: z.unknown().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -2082,6 +2093,14 @@ export const agentRouter = router({
 
       const wasRecentlySeen = isDeviceRecentlySeen(device.lastSeenAt);
 
+      const runningAppsUpdate =
+        input.runningApps !== undefined
+          ? {
+              runningApps: sanitizeRunningApps(input.runningApps),
+              runningAppsAt: new Date(),
+            }
+          : {};
+
       await prisma.device.update({
         where: { id: device.id },
         data: {
@@ -2094,6 +2113,7 @@ export const agentRouter = router({
           ...(input.previousSessionUnclean
             ? { lastUncleanExitAt: new Date() }
             : {}),
+          ...runningAppsUpdate,
         },
       });
 

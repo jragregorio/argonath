@@ -129,6 +129,9 @@ model Device {
   /// Set when the agent reports the previous process exited uncleanly (End Task / crash).
   /// Cleared when a parent dismisses the dashboard banner.
   lastUncleanExitAt DateTime?
+  /// Latest visible-window snapshot from the agent heartbeat (not a history).
+  runningApps     Json      @default("[]")
+  runningAppsAt   DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

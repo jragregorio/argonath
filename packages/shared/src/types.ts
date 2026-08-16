@@ -119,6 +119,12 @@ export type CaptureCommandPayload = {
   storageKey: string;
 };
 
+export type RunningApp = {
+  processName: string; // e.g. "chrome"
+  title: string; // window title
+  isForeground: boolean;
+};
+
 export type AgentHeartbeat = {
   deviceId: string;
   activeMinutesToday: number;
@@ -126,6 +132,7 @@ export type AgentHeartbeat = {
   isLocked: boolean;
   agentVersion: string;
   machineName: string;
+  runningApps?: RunningApp[];
 };
 
 export type AgentPolicySync = {
@@ -156,7 +163,7 @@ export const DEVICE_OFFLINE_PUSH_THRESHOLD_SECONDS = 120;
 export const IDLE_THRESHOLD_SECONDS = 300;
 
 /** Product / dashboard version (keep in sync with Warden.Tray `<Version>`). */
-export const APP_VERSION = "0.8.14";
+export const APP_VERSION = "0.8.15";
 
 /** Default text shown on the child PC when a parent sends a nudge without a custom message. */
 export const DEFAULT_NUDGE_MESSAGE = "Your parent wants your attention";
