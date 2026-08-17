@@ -389,7 +389,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
             ...prev,
             nudgeByDevice: {
               ...prev.nudgeByDevice,
-              [deviceId]: { nudgeId, label: "Seen" },
+              [deviceId]: { nudgeId, label: "On my way" },
             },
           };
         });
@@ -402,6 +402,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
           metadata: {
             message: body,
             custom: Boolean(trimmed && trimmed.length > 0),
+            response: "on_my_way",
           },
         });
         showFeedback(`Nudge sent to ${childName}.`);
@@ -416,7 +417,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
           delete next[deviceId];
           return { ...prev, nudgeByDevice: next };
         });
-      }, 5200);
+      }, 22_000);
     },
     [
       prependActivity,

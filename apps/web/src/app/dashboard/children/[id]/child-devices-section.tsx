@@ -545,7 +545,7 @@ export function ChildDevicesSection({
 
                   <div className="flex flex-col gap-2 max-md:gap-3">
                     {nudgeByDevice[device.id]?.label && (
-                      <span className="text-sm md:text-xs text-muted-foreground">
+                      <span className="block break-words text-sm text-muted-foreground md:text-xs">
                         {nudgeByDevice[device.id].label}
                       </span>
                     )}

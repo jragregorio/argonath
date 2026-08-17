@@ -10,6 +10,7 @@ import {
   getActivityIcon,
   getActivityLabel,
   getActivityMessage,
+  getActivityReply,
 } from "@/lib/activity";
 import {
   formatAbsoluteTime,
@@ -88,6 +89,7 @@ export function RecentActivityCard({
             childName: hideChildName ? null : item.childName,
           });
           const message = getActivityMessage(item);
+          const reply = getActivityReply(item);
           const actorName =
             item.actor?.name?.trim() ||
             item.actor?.email ||
@@ -132,6 +134,11 @@ export function RecentActivityCard({
                   {message && (
                     <p className="text-sm text-foreground/90">
                       &ldquo;{message}&rdquo;
+                    </p>
+                  )}
+                  {reply && (
+                    <p className="text-sm text-muted-foreground">
+                      Replied: &ldquo;{reply}&rdquo;
                     </p>
                   )}
                   <p className="text-sm text-muted-foreground">

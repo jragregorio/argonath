@@ -146,7 +146,10 @@ function buildActivitySeed(nowMs: number): RecentActivityItem[] {
       createdAt: hoursAgo(nowMs, 3),
       childName: "Sam",
       deviceName: "SAM-LAPTOP",
-      metadata: { message: "Dinner time" },
+      metadata: {
+        message: "Dinner time",
+        response: "on_my_way",
+      },
     },
     {
       id: "demo-act-4",

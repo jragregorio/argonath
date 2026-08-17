@@ -245,8 +245,9 @@ model Nudge {
   message    String    @default("Your parent wants your attention")
   /// pending | delivered | seen | expired
   status     String    @default("pending")
-  /// ok | on_my_way
+  /// ok | on_my_way | need_a_few
   response   String?
+  responseText String?
   requestedBy String
   createdAt  DateTime  @default(now())
   seenAt     DateTime?

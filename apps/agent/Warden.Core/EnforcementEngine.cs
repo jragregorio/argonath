@@ -1218,6 +1218,10 @@ public class EnforcementEngine
         }
     }
 
-    public Task AckNudgeAsync(string nudgeId, string status, string? response = null) =>
-        _api.AckNudgeAsync(nudgeId, status, response);
+    public Task AckNudgeAsync(
+        string nudgeId,
+        string status,
+        string? response = null,
+        string? responseText = null
+    ) => _api.AckNudgeAsync(nudgeId, status, response, responseText);
 }

@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using WpfButton = System.Windows.Controls.Button;
 using WpfHorizontalAlignment = System.Windows.HorizontalAlignment;
+using WpfTextBox = System.Windows.Controls.TextBox;
 
 namespace Warden.Tray;
 
@@ -17,10 +18,14 @@ public sealed class AttentionWindow : Window
 {
     private readonly DispatcherTimer? _okDelayTimer;
     private readonly DispatcherTimer? _autoDismissTimer;
+    private readonly WpfTextBox? _replyField;
     private bool _closed;
     private bool _busy;
 
     public string? Response { get; private set; }
+
+    /// <summary>Captured on the UI thread at close. Safe to read after Close().</summary>
+    public string? ReplyText { get; private set; }
 
     public AttentionWindow(
         string title,
@@ -28,6 +33,7 @@ public sealed class AttentionWindow : Window
         int okDelaySeconds,
         IReadOnlyList<int>? extensionMinutes = null,
         Func<int, Task<bool>>? onExtensionRequest = null,
+        bool enableNudgeReply = false,
         int autoDismissSeconds = 0
     )
     {
@@ -191,7 +197,101 @@ public sealed class AttentionWindow : Window
             CloseWithResponse("ok");
         };
         delayedButtons.Add((ok, Primary: true));
-        buttonArea.Children.Add(ok);
+
+        if (enableNudgeReply)
+        {
+            _replyField = UiTheme.TextField(placeholder: "Reply (optional)");
+            _replyField.MaxLength = 200;
+            _replyField.Margin = new Thickness(0, 0, 0, 12);
+
+            var cannedRow = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+            cannedRow.ColumnDefinitions.Add(
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+            );
+            cannedRow.ColumnDefinitions.Add(
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+            );
+
+            var onMyWay = UiTheme.SecondaryButton("On my way");
+            onMyWay.Margin = new Thickness(0, 0, 8, 0);
+            onMyWay.HorizontalAlignment = WpfHorizontalAlignment.Stretch;
+            onMyWay.Click += (_, _) =>
+            {
+                if (_closed || _busy || !onMyWay.IsEnabled)
+                {
+                    return;
+                }
+
+                CloseWithResponse("on_my_way");
+            };
+
+            var needFew = UiTheme.SecondaryButton("Need a few min");
+            needFew.Margin = new Thickness(0);
+            needFew.HorizontalAlignment = WpfHorizontalAlignment.Stretch;
+            needFew.Click += (_, _) =>
+            {
+                if (_closed || _busy || !needFew.IsEnabled)
+                {
+                    return;
+                }
+
+                CloseWithResponse("need_a_few");
+            };
+
+            Grid.SetColumn(onMyWay, 0);
+            Grid.SetColumn(needFew, 1);
+            cannedRow.Children.Add(onMyWay);
+            cannedRow.Children.Add(needFew);
+            delayedButtons.Add((onMyWay, Primary: false));
+            delayedButtons.Add((needFew, Primary: false));
+
+            var expandPanel = new StackPanel { Visibility = Visibility.Collapsed };
+            expandPanel.Children.Add(_replyField);
+            expandPanel.Children.Add(cannedRow);
+            buttonArea.Children.Add(expandPanel);
+
+            var compactRow = new Grid();
+            compactRow.ColumnDefinitions.Add(
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+            );
+            compactRow.ColumnDefinitions.Add(
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+            );
+
+            var replyToggle = UiTheme.SecondaryButton("Reply");
+            replyToggle.Margin = new Thickness(0, 0, 8, 0);
+            replyToggle.HorizontalAlignment = WpfHorizontalAlignment.Stretch;
+            replyToggle.Click += (_, _) =>
+            {
+                if (_closed || _busy || !replyToggle.IsEnabled)
+                {
+                    return;
+                }
+
+                if (expandPanel.Visibility == Visibility.Visible)
+                {
+                    return;
+                }
+
+                expandPanel.Visibility = Visibility.Visible;
+                replyToggle.Visibility = Visibility.Collapsed;
+                Grid.SetColumn(ok, 0);
+                Grid.SetColumnSpan(ok, 2);
+                ok.Margin = new Thickness(0);
+                _replyField.Focus();
+            };
+
+            delayedButtons.Add((replyToggle, Primary: false));
+            Grid.SetColumn(replyToggle, 0);
+            Grid.SetColumn(ok, 1);
+            compactRow.Children.Add(replyToggle);
+            compactRow.Children.Add(ok);
+            buttonArea.Children.Add(compactRow);
+        }
+        else
+        {
+            buttonArea.Children.Add(ok);
+        }
 
         if (delay > 0)
         {
@@ -307,6 +407,15 @@ public sealed class AttentionWindow : Window
     {
         if (_closed) return;
         Response = response;
+        if (response != "auto" && _replyField != null)
+        {
+            var trimmed = _replyField.Text.Trim();
+            ReplyText = trimmed.Length > 0 ? trimmed : null;
+        }
+        else
+        {
+            ReplyText = null;
+        }
         _okDelayTimer?.Stop();
         _autoDismissTimer?.Stop();
         try

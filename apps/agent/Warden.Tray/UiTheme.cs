@@ -290,7 +290,8 @@ internal static class UiTheme
             Foreground = TextBrush,
             BorderBrush = BorderBrush,
             BorderThickness = new Thickness(1),
-            CaretBrush = TextBrush
+            CaretBrush = TextBrush,
+            Template = CreateRoundedTextBoxTemplate()
         };
         if (placeholder != null)
         {
@@ -414,6 +415,64 @@ internal static class UiTheme
             HorizontalAlignment = WpfHorizontalAlignment.Stretch,
             Template = CreateRoundedButtonTemplate()
         };
+    }
+
+    private static ControlTemplate CreateRoundedTextBoxTemplate()
+    {
+        var border = new FrameworkElementFactory(typeof(WpfBorder));
+        border.SetValue(WpfBorder.CornerRadiusProperty, new CornerRadius(ButtonRadius));
+        border.SetValue(WpfBorder.SnapsToDevicePixelsProperty, true);
+        border.SetBinding(
+            WpfBorder.BackgroundProperty,
+            new WpfBinding(nameof(WpfTextBox.Background))
+            {
+                RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
+            }
+        );
+        border.SetBinding(
+            WpfBorder.BorderBrushProperty,
+            new WpfBinding(nameof(WpfTextBox.BorderBrush))
+            {
+                RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
+            }
+        );
+        border.SetBinding(
+            WpfBorder.BorderThicknessProperty,
+            new WpfBinding(nameof(WpfTextBox.BorderThickness))
+            {
+                RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
+            }
+        );
+        border.SetBinding(
+            WpfBorder.PaddingProperty,
+            new WpfBinding(nameof(WpfTextBox.Padding))
+            {
+                RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
+            }
+        );
+
+        var host = new FrameworkElementFactory(typeof(ScrollViewer));
+        host.Name = "PART_ContentHost";
+        host.SetValue(UIElement.FocusableProperty, false);
+        host.SetValue(
+            ScrollViewer.HorizontalScrollBarVisibilityProperty,
+            ScrollBarVisibility.Hidden
+        );
+        host.SetValue(
+            ScrollViewer.VerticalScrollBarVisibilityProperty,
+            ScrollBarVisibility.Hidden
+        );
+        border.AppendChild(host);
+
+        var template = new ControlTemplate(typeof(WpfTextBox)) { VisualTree = border };
+        var focus = new Trigger
+        {
+            Property = UIElement.IsKeyboardFocusedProperty,
+            Value = true
+        };
+        focus.Setters.Add(new Setter(System.Windows.Controls.Control.BorderBrushProperty, GoldLightBrush));
+        template.Triggers.Add(focus);
+        return template;
     }
 
     private static ControlTemplate CreateRoundedButtonTemplate()

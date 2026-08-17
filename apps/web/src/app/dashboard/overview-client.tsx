@@ -361,7 +361,7 @@ export default function DashboardOverviewPage() {
 
                               <div className="space-y-2">
                                 {nudgeByDevice[device.id]?.label && (
-                                  <span className="text-xs text-muted-foreground">
+                                  <span className="block break-words text-xs text-muted-foreground">
                                     {nudgeByDevice[device.id].label}
                                   </span>
                                 )}

@@ -288,18 +288,36 @@ public class WardenApiClient
             ?? [];
     }
 
-    public async Task AckNudgeAsync(string nudgeId, string status, string? responseLabel = null)
+    public async Task AckNudgeAsync(
+        string nudgeId,
+        string status,
+        string? responseLabel = null,
+        string? responseText = null
+    )
     {
         SetDeviceTokenHeader();
         var config = _configStore.Load();
 
-        object request = string.IsNullOrEmpty(responseLabel)
-            ? new { action = "ackNudge", nudgeId, status }
-            : new { action = "ackNudge", nudgeId, status, response = responseLabel };
+        var trimmedText = responseText?.Trim();
+        var hasText = !string.IsNullOrEmpty(trimmedText);
+
+        object request = hasText
+            ? new
+            {
+                action = "ackNudge",
+                nudgeId,
+                status,
+                response = responseLabel,
+                responseText = trimmedText,
+            }
+            : string.IsNullOrEmpty(responseLabel)
+                ? new { action = "ackNudge", nudgeId, status }
+                : new { action = "ackNudge", nudgeId, status, response = responseLabel };
 
         var response = await _http.PostAsJsonAsync(
             $"{config.ApiBaseUrl}/api/agent",
-            request
+            request,
+            JsonOptions
         );
 
         var body = await response.Content.ReadAsStringAsync();

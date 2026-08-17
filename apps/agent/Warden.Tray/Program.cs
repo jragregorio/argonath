@@ -1171,7 +1171,11 @@ static class Program
             string.IsNullOrWhiteSpace(payload.Message)
                 ? "Your parent wants your attention"
                 : payload.Message,
-            okDelaySeconds: 5
+            okDelaySeconds: 5,
+            enableNudgeReply: true,
+            autoDismissSeconds: payload.AutoDismissSeconds > 0
+                ? payload.AutoDismissSeconds
+                : 45
         );
 
         _ = Task.Run(async () =>
@@ -1193,11 +1197,21 @@ static class Program
                 _activeNudgeWindows.Remove(payload.NudgeId);
             }
 
+            var canned = window.Response == "auto"
+                ? "ok"
+                : window.Response ?? "ok";
+            if (canned is not ("ok" or "on_my_way" or "need_a_few"))
+            {
+                canned = "ok";
+            }
+
+            var text = window.ReplyText;
+
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    await _engine.AckNudgeAsync(payload.NudgeId, "seen", "ok");
+                    await _engine.AckNudgeAsync(payload.NudgeId, "seen", canned, text);
                 }
                 catch (Exception ex)
                 {

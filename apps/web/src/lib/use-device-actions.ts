@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  formatNudgeReply,
+  isMeaningfulNudgeReply,
+} from "@warden/shared";
 import { trpc } from "@/lib/trpc";
 import { useFamilyRealtimeEvent } from "@/lib/family-realtime";
 import {
@@ -46,6 +50,21 @@ export type UseDeviceActionsReturn = {
   getEffectiveAdminLock: (device: DeviceForActions) => boolean;
 };
 
+const CHIP_LABEL_MAX = 80;
+
+function formatNudgeChipLabel(
+  response?: string | null,
+  responseText?: string | null
+): string {
+  const formatted = formatNudgeReply(response, responseText) ?? "OK";
+  const typed = responseText?.trim();
+  let label = typed ? `"${formatted}"` : formatted;
+  if (label.length > CHIP_LABEL_MAX) {
+    label = `${label.slice(0, CHIP_LABEL_MAX - 1)}…`;
+  }
+  return label;
+}
+
 export function useDeviceActions({
   devices,
   childId,
@@ -55,6 +74,8 @@ export function useDeviceActions({
 }: UseDeviceActionsOptions): UseDeviceActionsReturn {
   const utils = trpc.useUtils();
   const { showToast } = useToast();
+  const toastedNudgesRef = useRef(new Set<string>());
+  const settledNudgesRef = useRef(new Set<string>());
 
   const [pendingLocks, setPendingLocks] = useState<
     Record<string, boolean | undefined>
@@ -141,7 +162,11 @@ export function useDeviceActions({
     [nudgeByDevice]
   );
 
-  const clearNudgeSoon = (deviceId: string, nudgeId: string) => {
+  const clearNudgeSoon = (
+    deviceId: string,
+    nudgeId: string,
+    holdMs: number
+  ) => {
     window.setTimeout(() => {
       setNudgeByDevice((prev) => {
         const cur = prev[deviceId];
@@ -150,17 +175,20 @@ export function useDeviceActions({
         delete next[deviceId];
         return next;
       });
-    }, 5000);
+    }, holdMs);
   };
 
   const applyNudgeStatus = (
     deviceId: string,
     nudgeId: string,
-    status: string
+    status: string,
+    response?: string | null,
+    responseText?: string | null
   ) => {
     let label = "Waiting…";
     if (status === "delivered") label = "Delivered";
-    else if (status === "seen") label = "Seen";
+    else if (status === "seen")
+      label = formatNudgeChipLabel(response, responseText);
     else if (status === "expired") label = "Expired";
     else if (status === "pending") label = "Waiting…";
 
@@ -173,16 +201,51 @@ export function useDeviceActions({
     });
 
     if (status === "seen" || status === "expired") {
-      clearNudgeSoon(deviceId, nudgeId);
+      if (settledNudgesRef.current.has(nudgeId)) return;
+      settledNudgesRef.current.add(nudgeId);
+
+      if (status === "seen") {
+        const formatted = formatNudgeReply(response, responseText) ?? "OK";
+        const typed = responseText?.trim();
+        if (
+          isMeaningfulNudgeReply(response, responseText) &&
+          !toastedNudgesRef.current.has(nudgeId)
+        ) {
+          toastedNudgesRef.current.add(nudgeId);
+          const child =
+            getChildLabel?.(deviceId) ?? getDeviceLabel(deviceId);
+          const body = typed ? `"${formatted}"` : formatted;
+          showToast(`${child} replied: ${body}`, "success");
+        }
+        void utils.dashboard.activity.invalidate();
+      }
+
+      clearNudgeSoon(
+        deviceId,
+        nudgeId,
+        status === "seen" && isMeaningfulNudgeReply(response, responseText)
+          ? 20_000
+          : 5_000
+      );
     }
   };
 
   useFamilyRealtimeEvent((event) => {
     if (event.type !== "nudge:seen") return;
-    const payload = event.payload as { nudgeId?: string } | undefined;
+    const payload = event.payload as {
+      nudgeId?: string;
+      response?: string | null;
+      responseText?: string | null;
+    } | undefined;
     const nudgeId = payload?.nudgeId;
     if (!nudgeId) return;
-    applyNudgeStatus(event.deviceId, nudgeId, "seen");
+    applyNudgeStatus(
+      event.deviceId,
+      nudgeId,
+      "seen",
+      payload?.response,
+      payload?.responseText
+    );
   });
 
   useEffect(() => {
@@ -200,7 +263,13 @@ export function useDeviceActions({
           try {
             const nudge = await utils.device.getNudge.fetch({ nudgeId });
             if (cancelled) return;
-            applyNudgeStatus(deviceId, nudgeId, nudge.status);
+            applyNudgeStatus(
+              deviceId,
+              nudgeId,
+              nudge.status,
+              nudge.response,
+              nudge.responseText
+            );
           } catch {
             // Keep last label.
           }

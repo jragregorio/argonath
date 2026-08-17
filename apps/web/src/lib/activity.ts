@@ -1,4 +1,8 @@
-import { DEFAULT_NUDGE_MESSAGE } from "@warden/shared";
+import {
+  DEFAULT_NUDGE_MESSAGE,
+  formatNudgeReply,
+  isMeaningfulNudgeReply,
+} from "@warden/shared";
 import {
   Activity,
   Ban,
@@ -103,6 +107,19 @@ export function getActivityMessage(item: ActivityItemLike) {
   const message = item.metadata?.message;
   if (typeof message !== "string" || !message.trim()) return null;
   return message.trim();
+}
+
+/** Child reply on a nudge_sent row. Skip OK-only so old acks stay quiet. */
+export function getActivityReply(item: ActivityItemLike) {
+  if (item.action !== "nudge_sent" || !item.metadata) return null;
+  const response =
+    typeof item.metadata.response === "string" ? item.metadata.response : null;
+  const responseText =
+    typeof item.metadata.responseText === "string"
+      ? item.metadata.responseText
+      : null;
+  if (!isMeaningfulNudgeReply(response, responseText)) return null;
+  return formatNudgeReply(response, responseText);
 }
 
 export function formatActivityDetail(item: ActivityItemLike) {

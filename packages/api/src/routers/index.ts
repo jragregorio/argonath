@@ -1092,6 +1092,7 @@ export const deviceRouter = router({
           message: true,
           status: true,
           response: true,
+          responseText: true,
           createdAt: true,
           seenAt: true,
           expiresAt: true,
@@ -1116,6 +1117,7 @@ export const deviceRouter = router({
             message: true,
             status: true,
             response: true,
+            responseText: true,
             createdAt: true,
             seenAt: true,
             expiresAt: true,
@@ -1613,8 +1615,7 @@ export const dashboardRouter = router({
         if (typeof meta.deviceId === "string") deviceIds.add(meta.deviceId);
         if (
           log.action === "nudge_sent" &&
-          typeof meta.nudgeId === "string" &&
-          typeof meta.message !== "string"
+          typeof meta.nudgeId === "string"
         ) {
           nudgeIds.add(meta.nudgeId);
         }
@@ -1669,7 +1670,12 @@ export const dashboardRouter = router({
         nudgeIds.size > 0
           ? prisma.nudge.findMany({
               where: { familyId: family.id, id: { in: [...nudgeIds] } },
-              select: { id: true, message: true },
+              select: {
+                id: true,
+                message: true,
+                response: true,
+                responseText: true,
+              },
             })
           : Promise.resolve([]),
       ]);
@@ -1691,15 +1697,18 @@ export const dashboardRouter = router({
         let meta = asAuditMetadata(log.metadata);
         if (
           log.action === "nudge_sent" &&
-          typeof meta.message !== "string" &&
           typeof meta.nudgeId === "string"
         ) {
           const nudge = nudgeById.get(meta.nudgeId);
           if (nudge) {
+            const message =
+              typeof meta.message === "string" ? meta.message : nudge.message;
             meta = {
               ...meta,
-              message: nudge.message,
-              custom: nudge.message !== DEFAULT_NUDGE_MESSAGE,
+              message,
+              custom: message !== DEFAULT_NUDGE_MESSAGE,
+              response: nudge.response,
+              responseText: nudge.responseText,
             };
           }
         }
@@ -2575,7 +2584,8 @@ export const agentRouter = router({
       z.object({
         nudgeId: z.string(),
         status: z.enum(["delivered", "seen", "expired"]),
-        response: z.enum(["ok", "on_my_way"]).optional(),
+        response: z.enum(["ok", "on_my_way", "need_a_few"]).optional(),
+        responseText: z.string().trim().max(200).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -2593,14 +2603,23 @@ export const agentRouter = router({
       // Seen from the child always wins (even if parent/getNudge already expired it).
       if (input.status === "seen") {
         if (nudge.status === "seen") {
-          return { ok: true, status: "seen", response: nudge.response };
+          return {
+            ok: true,
+            status: "seen",
+            response: nudge.response,
+            responseText: nudge.responseText,
+          };
         }
+
+        const trimmedText = input.responseText?.trim() ?? "";
+        const responseText = trimmedText.length > 0 ? trimmedText : null;
 
         const updated = await prisma.nudge.update({
           where: { id: nudge.id },
           data: {
             status: "seen",
             response: input.response ?? "ok",
+            responseText,
             seenAt: new Date(),
           },
         });
@@ -2611,11 +2630,17 @@ export const agentRouter = router({
           payload: {
             nudgeId: updated.id,
             response: updated.response,
+            responseText: updated.responseText,
           },
           timestamp: new Date().toISOString(),
         }).catch(() => {});
 
-        return { ok: true, status: "seen", response: updated.response };
+        return {
+          ok: true,
+          status: "seen",
+          response: updated.response,
+          responseText: updated.responseText,
+        };
       }
 
       if (nudge.status === "seen" || nudge.status === "expired") {
