@@ -1,8 +1,9 @@
 "use client";
 
+import { useId, useState } from "react";
 import { notFound } from "next/navigation";
 import { useParams } from "next/navigation";
-import { Monitor, Unlock } from "lucide-react";
+import { ClockPlus, Monitor, Unlock } from "lucide-react";
 import { InlineBackLink } from "@/components/sticky-back-chip";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,11 +14,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/page-header";
 import { NudgeControls } from "@/components/nudge-controls";
 import { SwipeToLock } from "@/components/swipe-to-lock";
 import { RecentActivityCard } from "@/components/recent-activity-card";
 import { AllowedWindowsSummary } from "@/components/allowed-windows-summary";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { Modal } from "@/components/ui/modal";
+import { VisibleAppsCard } from "@/components/visible-apps-card";
 import {
   getDeviceDisplayName,
   getEvaluationStatusLabel,
@@ -33,7 +40,12 @@ import {
   PolicyRemainingFooter,
   PolicyWindowRemainingPrimary,
 } from "@/components/policy-remaining-status";
+import { useIsDesktopMd } from "@/lib/use-is-desktop-md";
 import { cn } from "@warden/ui";
+
+const GRANT_PRESETS = [15, 30, 60] as const;
+const GRANT_MINUTES_MIN = 1;
+const GRANT_MINUTES_MAX = 240;
 
 export default function DemoChildDetailPage() {
   const params = useParams();
@@ -45,6 +57,10 @@ export default function DemoChildDetailPage() {
     pendingLocks,
     sendNudge,
     setAdminLock,
+    blockApp,
+    unblockApp,
+    grantBonus,
+    clearBonus,
   } = useDemo();
 
   const child = getChildById(childId);
@@ -59,6 +75,131 @@ export default function DemoChildDetailPage() {
   );
 
   const remainingDisplay = getPolicyRemainingDisplay(evaluation);
+  const isDesktop = useIsDesktopMd();
+  const grantInputId = useId();
+
+  const [grantBonusOpen, setGrantBonusOpen] = useState(false);
+  const [grantMinutes, setGrantMinutes] = useState(15);
+  const [grantCustomMode, setGrantCustomMode] = useState(false);
+  const [grantBusy, setGrantBusy] = useState(false);
+  const [clearBonusOpen, setClearBonusOpen] = useState(false);
+  const [clearBusy, setClearBusy] = useState(false);
+
+  const openGrantBonus = () => {
+    setGrantMinutes(15);
+    setGrantCustomMode(false);
+    setGrantBonusOpen(true);
+  };
+
+  const closeGrantBonus = () => {
+    if (grantBusy) return;
+    setGrantBonusOpen(false);
+    setGrantMinutes(15);
+    setGrantCustomMode(false);
+  };
+
+  const confirmGrantBonus = () => {
+    if (
+      grantMinutes < GRANT_MINUTES_MIN ||
+      grantMinutes > GRANT_MINUTES_MAX ||
+      grantBusy
+    ) {
+      return;
+    }
+    setGrantBusy(true);
+    grantBonus(childId, grantMinutes);
+    setGrantBusy(false);
+    setGrantBonusOpen(false);
+    setGrantMinutes(15);
+    setGrantCustomMode(false);
+  };
+
+  const requestClearBonus = () => {
+    if (evaluation.bonusMinutes <= 0) return;
+    setClearBonusOpen(true);
+  };
+
+  const confirmClearBonus = () => {
+    setClearBusy(true);
+    clearBonus(childId);
+    setClearBusy(false);
+    setClearBonusOpen(false);
+  };
+
+  const grantBonusForm = (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {GRANT_PRESETS.map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            disabled={grantBusy}
+            onClick={() => {
+              setGrantMinutes(preset);
+              setGrantCustomMode(false);
+            }}
+            className={cn(
+              "rounded-lg border px-3 py-2 text-sm transition-colors disabled:pointer-events-none disabled:opacity-50 max-md:min-h-11",
+              !grantCustomMode && grantMinutes === preset
+                ? "border-primary bg-primary/10 text-foreground"
+                : "border-border text-muted-foreground hover:bg-secondary hover:text-foreground"
+            )}
+          >
+            +{preset} min
+          </button>
+        ))}
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor={grantInputId}>Custom minutes</Label>
+        <Input
+          id={grantInputId}
+          type="number"
+          inputMode="numeric"
+          min={GRANT_MINUTES_MIN}
+          max={GRANT_MINUTES_MAX}
+          value={grantCustomMode ? grantMinutes : ""}
+          placeholder={`${GRANT_MINUTES_MIN}–${GRANT_MINUTES_MAX}`}
+          onChange={(event) => {
+            setGrantCustomMode(true);
+            const next = Number.parseInt(event.target.value, 10);
+            setGrantMinutes(Number.isFinite(next) ? next : 0);
+          }}
+          onFocus={() => setGrantCustomMode(true)}
+          disabled={grantBusy}
+          className="max-w-[10rem]"
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Bonus expires at the end of today and unlocks all of {child.displayName}
+        &apos;s devices.
+      </p>
+    </div>
+  );
+
+  const grantBonusFooter = (
+    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={closeGrantBonus}
+        disabled={grantBusy}
+      >
+        Cancel
+      </Button>
+      <Button
+        type="button"
+        onClick={confirmGrantBonus}
+        disabled={
+          grantBusy ||
+          grantMinutes < GRANT_MINUTES_MIN ||
+          grantMinutes > GRANT_MINUTES_MAX
+        }
+      >
+        <ClockPlus className="mr-1.5 h-4 w-4" />
+        {grantBusy ? "Granting…" : `Grant +${grantMinutes} min`}
+      </Button>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -89,6 +230,29 @@ export default function DemoChildDetailPage() {
                   {evaluation.bonusMinutes > 0 &&
                     ` (+${evaluation.bonusMinutes} bonus)`}
                 </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs max-md:min-h-9"
+                  onClick={openGrantBonus}
+                  disabled={grantBusy}
+                >
+                  <ClockPlus className="mr-1 h-3.5 w-3.5" />
+                  {grantBusy ? "Granting…" : "Grant bonus"}
+                </Button>
+                {evaluation.bonusMinutes > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={requestClearBonus}
+                    disabled={clearBusy}
+                  >
+                    {clearBusy ? "Clearing…" : "Clear bonus"}
+                  </Button>
+                )}
               </div>
               <div className="mt-3 max-w-md space-y-2">
                 <PolicyWindowRemainingPrimary evaluation={evaluation} />
@@ -277,6 +441,13 @@ export default function DemoChildDetailPage() {
         </Card>
       </div>
 
+      <VisibleAppsCard
+        devices={child.devices}
+        blockedProcessNames={child.blockedProcessNames}
+        onBlock={(processName) => blockApp(childId, processName)}
+        onUnblock={(processName) => unblockApp(childId, processName)}
+      />
+
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Recent activity</h2>
         <RecentActivityCard
@@ -285,6 +456,40 @@ export default function DemoChildDetailPage() {
           emptyDescription="Nudges, lockdowns, captures, and policy changes for this child will show here"
         />
       </section>
+
+      {isDesktop ? (
+        <Modal
+          open={grantBonusOpen}
+          onClose={closeGrantBonus}
+          title="Grant bonus screen time"
+          description={`Add extra minutes for ${child.displayName} today`}
+          className="w-[min(24rem,calc(100vw-2rem))]"
+          footer={grantBonusFooter}
+        >
+          {grantBonusForm}
+        </Modal>
+      ) : (
+        <BottomSheet
+          open={grantBonusOpen}
+          onClose={closeGrantBonus}
+          title="Grant bonus screen time"
+          description={`Add extra minutes for ${child.displayName} today`}
+          showDone={false}
+          footer={grantBonusFooter}
+        >
+          {grantBonusForm}
+        </BottomSheet>
+      )}
+
+      <ConfirmDialog
+        open={clearBonusOpen}
+        onClose={() => setClearBonusOpen(false)}
+        title="Clear bonus minutes?"
+        description={`Clear +${evaluation.bonusMinutes} bonus minutes for ${child.displayName}? Their daily limit returns to ${evaluation.dailyLimitMinutes} min. If they've already used more than that, devices will lock.`}
+        confirmLabel="Clear bonus"
+        busy={clearBusy}
+        onConfirm={confirmClearBonus}
+      />
     </div>
   );
 }

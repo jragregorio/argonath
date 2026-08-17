@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { DemoProvider } from "@/lib/demo/demo-provider";
 import { DemoShell } from "@/components/demo/demo-shell";
+import { dashboardThemeFoucScript } from "@/components/dashboard-theme-constants";
+import { DashboardThemeProvider } from "@/components/dashboard-theme";
 
 export const metadata: Metadata = {
   title: "Demo dashboard — Warden",
@@ -14,8 +16,13 @@ export default function DemoLayout({
   children: React.ReactNode;
 }) {
   return (
-    <DemoProvider>
-      <DemoShell>{children}</DemoShell>
-    </DemoProvider>
+    <>
+      <script dangerouslySetInnerHTML={{ __html: dashboardThemeFoucScript }} />
+      <DashboardThemeProvider>
+        <DemoProvider>
+          <DemoShell>{children}</DemoShell>
+        </DemoProvider>
+      </DashboardThemeProvider>
+    </>
   );
 }

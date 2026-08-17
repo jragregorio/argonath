@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { DEFAULT_NUDGE_MESSAGE } from "@warden/shared";
+import { DEFAULT_NUDGE_MESSAGE, sanitizeBlockedProcessNames } from "@warden/shared";
 import type { RecentActivityItem } from "@/components/recent-activity-card";
 import {
   createInitialDemoState,
@@ -55,6 +55,10 @@ type DemoContextValue = {
   denyExtension: (requestId: string) => void;
   sendNudge: (deviceId: string, message?: string) => void;
   setAdminLock: (deviceId: string, locked: boolean) => void;
+  blockApp: (childId: string, processName: string) => void;
+  unblockApp: (childId: string, processName: string) => void;
+  grantBonus: (childId: string, minutes: number) => void;
+  clearBonus: (childId: string) => void;
   dismissFeedback: () => void;
   getChildById: (childId: string) => DemoState["overview"]["children"][number] | undefined;
 };
@@ -488,6 +492,195 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     ]
   );
 
+  const blockApp = useCallback(
+    (childId: string, processName: string) => {
+      setState((prev) => {
+        const child = prev.overview.children.find((c) => c.id === childId);
+        if (!child) return prev;
+
+        const blockedProcessNames = sanitizeBlockedProcessNames([
+          ...child.blockedProcessNames,
+          processName,
+        ]);
+
+        const nextChildren = prev.overview.children.map((c) => {
+          if (c.id !== childId) return c;
+          return {
+            ...c,
+            blockedProcessNames,
+            devices: c.devices.map((device) => ({
+              ...device,
+              runningApps: device.runningApps?.filter(
+                (app) =>
+                  app.processName.toLowerCase() !== processName.toLowerCase()
+              ),
+            })),
+          };
+        });
+
+        const activityItem: RecentActivityItem = {
+          id: newActivityId(),
+          action: "app_blocked",
+          createdAt: new Date(),
+          childName: child.displayName,
+          metadata: { processName },
+        };
+
+        return {
+          ...prev,
+          overview: { ...prev.overview, children: nextChildren },
+          activity: [activityItem, ...prev.activity],
+        };
+      });
+      const child = state.overview.children.find((c) => c.id === childId);
+      showFeedback(
+        `${processName} blocked on ${child?.displayName ?? "child"}'s PCs.`,
+        "success"
+      );
+      recordInteractiveAction();
+    },
+    [recordInteractiveAction, showFeedback, state.overview.children]
+  );
+
+  const unblockApp = useCallback(
+    (childId: string, processName: string) => {
+      setState((prev) => {
+        const child = prev.overview.children.find((c) => c.id === childId);
+        if (!child) return prev;
+
+        const lower = processName.toLowerCase();
+        const blockedProcessNames = child.blockedProcessNames.filter(
+          (name) => name.toLowerCase() !== lower
+        );
+
+        const nextChildren = prev.overview.children.map((c) => {
+          if (c.id !== childId) return c;
+          return { ...c, blockedProcessNames };
+        });
+
+        const activityItem: RecentActivityItem = {
+          id: newActivityId(),
+          action: "app_unblocked",
+          createdAt: new Date(),
+          childName: child.displayName,
+          metadata: { processName },
+        };
+
+        return {
+          ...prev,
+          overview: { ...prev.overview, children: nextChildren },
+          activity: [activityItem, ...prev.activity],
+        };
+      });
+      showFeedback(`${processName} unblocked.`, "success");
+      recordInteractiveAction();
+    },
+    [recordInteractiveAction, showFeedback]
+  );
+
+  const grantBonus = useCallback(
+    (childId: string, minutes: number) => {
+      setState((prev) => {
+        const child = prev.overview.children.find((c) => c.id === childId);
+        if (!child) return prev;
+
+        const nextChildren = prev.overview.children.map((c) => {
+          if (c.id !== childId) return c;
+          const evaluation = c.evaluation;
+          const bonusMinutes = evaluation.bonusMinutes + minutes;
+          const dailyRemainingMinutes =
+            evaluation.dailyRemainingMinutes + minutes;
+          return {
+            ...c,
+            devices: c.devices.map((device) => ({
+              ...device,
+              adminLock: false,
+              isLocked: false,
+            })),
+            evaluation: {
+              ...evaluation,
+              bonusMinutes,
+              dailyRemainingMinutes,
+              remainingMinutes: Math.min(
+                evaluation.remainingMinutes + minutes,
+                dailyRemainingMinutes
+              ),
+            },
+          };
+        });
+
+        const activityItem: RecentActivityItem = {
+          id: newActivityId(),
+          action: "bonus_granted",
+          createdAt: new Date(),
+          childName: child.displayName,
+          metadata: { minutes },
+        };
+
+        return {
+          ...prev,
+          overview: { ...prev.overview, children: nextChildren },
+          activity: [activityItem, ...prev.activity],
+        };
+      });
+      const child = state.overview.children.find((c) => c.id === childId);
+      showFeedback(
+        `Granted +${minutes} min to ${child?.displayName ?? "child"}.`,
+        "success"
+      );
+      recordInteractiveAction();
+    },
+    [recordInteractiveAction, showFeedback, state.overview.children]
+  );
+
+  const clearBonus = useCallback(
+    (childId: string) => {
+      setState((prev) => {
+        const child = prev.overview.children.find((c) => c.id === childId);
+        if (!child || child.evaluation.bonusMinutes <= 0) return prev;
+
+        const cleared = child.evaluation.bonusMinutes;
+
+        const nextChildren = prev.overview.children.map((c) => {
+          if (c.id !== childId) return c;
+          const evaluation = c.evaluation;
+          return {
+            ...c,
+            evaluation: {
+              ...evaluation,
+              bonusMinutes: 0,
+              dailyRemainingMinutes: Math.max(
+                0,
+                evaluation.dailyRemainingMinutes - cleared
+              ),
+              remainingMinutes: Math.max(
+                0,
+                evaluation.remainingMinutes - cleared
+              ),
+            },
+          };
+        });
+
+        const activityItem: RecentActivityItem = {
+          id: newActivityId(),
+          action: "bonus_cleared",
+          createdAt: new Date(),
+          childName: child.displayName,
+          metadata: { minutes: cleared },
+        };
+
+        return {
+          ...prev,
+          overview: { ...prev.overview, children: nextChildren },
+          activity: [activityItem, ...prev.activity],
+        };
+      });
+      showFeedback("Bonus minutes cleared.", "success");
+      recordInteractiveAction();
+    },
+    [recordInteractiveAction, showFeedback]
+  );
+
   const getChildById = useCallback(
     (childId: string) =>
       state.overview.children.find((child) => child.id === childId),
@@ -520,17 +713,25 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       denyExtension,
       sendNudge,
       setAdminLock,
+      blockApp,
+      unblockApp,
+      grantBonus,
+      clearBonus,
       dismissFeedback,
       getChildById,
     }),
     [
       approveExtension,
+      blockApp,
+      clearBonus,
       denyExtension,
       dismissFeedback,
       dismissSignupPrompt,
       getChildById,
+      grantBonus,
       sendNudge,
       setAdminLock,
+      unblockApp,
       state.activity,
       state.feedback,
       state.nudgeByDevice,

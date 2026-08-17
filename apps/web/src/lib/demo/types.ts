@@ -1,4 +1,4 @@
-import type { AllowedWindow, PolicyEvaluation } from "@warden/shared";
+import type { AllowedWindow, PolicyEvaluation, RunningApp } from "@warden/shared";
 import type { RecentActivityItem } from "@/components/recent-activity-card";
 
 export type DemoDevice = {
@@ -10,6 +10,8 @@ export type DemoDevice = {
   adminLock: boolean;
   isPaired: boolean;
   agentVersion: string | null;
+  runningApps?: RunningApp[] | null;
+  runningAppsAt?: Date | null;
 };
 
 export type DemoChild = {
@@ -20,6 +22,7 @@ export type DemoChild = {
   dailyLimitMinutes: number;
   allowedWindows: AllowedWindow[];
   policyActive: boolean;
+  blockedProcessNames: string[];
 };
 
 export type DemoExtensionRequest = {

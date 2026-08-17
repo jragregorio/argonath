@@ -11,6 +11,7 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DashboardThemePicker } from "@/components/dashboard-theme-picker";
 
 export default function DemoSettingsPage() {
   return (
@@ -51,6 +52,31 @@ export default function DemoSettingsPage() {
               className="max-w-md"
             />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Appearance</CardTitle>
+          <CardDescription>Choose the dashboard color theme</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <DashboardThemePicker />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Notifications</CardTitle>
+          <CardDescription>
+            Push alerts require a real account
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Extension requests, device online/offline alerts, and other
+            notifications are available after you sign up.
+          </p>
         </CardContent>
       </Card>
 

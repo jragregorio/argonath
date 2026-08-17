@@ -22,6 +22,10 @@ export const DEMO_IDS = {
  */
 export const DEMO_FIXTURE_ANCHOR_MS = Date.parse("2026-08-06T16:00:00.000Z");
 
+function minutesAgo(nowMs: number, minutes: number) {
+  return new Date(nowMs - minutes * 60 * 1000);
+}
+
 function hoursAgo(nowMs: number, hours: number) {
   return new Date(nowMs - hours * 60 * 60 * 1000);
 }
@@ -64,48 +68,67 @@ function samEvaluation(): PolicyEvaluation {
   };
 }
 
-export const demoChildren: DemoChild[] = [
-  {
-    id: DEMO_IDS.alex,
-    displayName: "Alex",
-    dailyLimitMinutes: 120,
-    allowedWindows: alexAllowedWindows,
-    policyActive: true,
-    evaluation: alexEvaluation(),
-    devices: [
-      {
-        id: DEMO_IDS.alexDevice,
-        displayName: "Alex's PC",
-        machineName: "ALEX-DESKTOP",
-        isOnline: true,
-        isLocked: false,
-        adminLock: false,
-        isPaired: true,
-        agentVersion: "0.6.8",
-      },
-    ],
-  },
-  {
-    id: DEMO_IDS.sam,
-    displayName: "Sam",
-    dailyLimitMinutes: 90,
-    allowedWindows: [],
-    policyActive: true,
-    evaluation: samEvaluation(),
-    devices: [
-      {
-        id: DEMO_IDS.samDevice,
-        displayName: null,
-        machineName: "SAM-LAPTOP",
-        isOnline: true,
-        isLocked: false,
-        adminLock: false,
-        isPaired: true,
-        agentVersion: "0.6.8",
-      },
-    ],
-  },
-];
+function buildDemoChildren(nowMs: number): DemoChild[] {
+  return [
+    {
+      id: DEMO_IDS.alex,
+      displayName: "Alex",
+      dailyLimitMinutes: 120,
+      allowedWindows: alexAllowedWindows,
+      policyActive: true,
+      blockedProcessNames: ["Roblox"],
+      evaluation: alexEvaluation(),
+      devices: [
+        {
+          id: DEMO_IDS.alexDevice,
+          displayName: "Alex's PC",
+          machineName: "ALEX-DESKTOP",
+          isOnline: true,
+          isLocked: false,
+          adminLock: false,
+          isPaired: true,
+          agentVersion: "0.6.26",
+          runningApps: [
+            { processName: "chrome", title: "YouTube", isForeground: true },
+            { processName: "Discord", title: "Discord", isForeground: false },
+            {
+              processName: "explorer",
+              title: "File Explorer",
+              isForeground: false,
+            },
+          ],
+          runningAppsAt: minutesAgo(nowMs, 2),
+        },
+      ],
+    },
+    {
+      id: DEMO_IDS.sam,
+      displayName: "Sam",
+      dailyLimitMinutes: 90,
+      allowedWindows: [],
+      policyActive: true,
+      blockedProcessNames: [],
+      evaluation: samEvaluation(),
+      devices: [
+        {
+          id: DEMO_IDS.samDevice,
+          displayName: null,
+          machineName: "SAM-LAPTOP",
+          isOnline: false,
+          isLocked: false,
+          adminLock: false,
+          isPaired: true,
+          agentVersion: "0.6.26",
+        },
+      ],
+    },
+  ];
+}
+
+/** @deprecated Use buildDemoChildren via createInitialDemoState */
+export const demoChildren: DemoChild[] = buildDemoChildren(
+  DEMO_FIXTURE_ANCHOR_MS
+);
 
 function buildPendingExtensions(nowMs: number): DemoExtensionRequest[] {
   return [
@@ -141,6 +164,13 @@ function buildActivitySeed(nowMs: number): RecentActivityItem[] {
       deviceName: "Alex's PC",
     },
     {
+      id: "demo-act-2b",
+      action: "app_blocked",
+      createdAt: hoursAgo(nowMs, 2),
+      childName: "Alex",
+      metadata: { processName: "Roblox" },
+    },
+    {
       id: "demo-act-3",
       action: "nudge_sent",
       createdAt: hoursAgo(nowMs, 3),
@@ -166,7 +196,7 @@ function buildActivitySeed(nowMs: number): RecentActivityItem[] {
     },
     {
       id: "demo-act-6",
-      action: "device_online",
+      action: "device_offline",
       createdAt: hoursAgo(nowMs, 0.5),
       childName: "Sam",
       deviceName: "SAM-LAPTOP",
@@ -186,7 +216,7 @@ export function createInitialDemoState(
 ): DemoState {
   const pendingExtensions = buildPendingExtensions(nowMs);
   return {
-    overview: buildOverview(structuredClone(demoChildren), pendingExtensions.length),
+    overview: buildOverview(structuredClone(buildDemoChildren(nowMs)), pendingExtensions.length),
     pendingExtensions,
     activity: buildActivitySeed(nowMs),
     nudgeByDevice: {},
