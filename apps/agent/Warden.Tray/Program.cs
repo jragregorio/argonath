@@ -54,6 +54,11 @@ static class Program
     private static AttentionWindow? _activeTimeWarningWindow;
     /// <summary>Drop late time-warning dispatcher work after a bonus notice (race with Tick).</summary>
     private static DateTime _suppressTimeWarningUiUntil = DateTime.MinValue;
+    private static readonly Dictionary<string, DateTime> _lastBlockedNoticeUtcByProcess =
+        new(StringComparer.OrdinalIgnoreCase);
+    private static string? _blockedNoticeActiveOrQueued;
+    private const int BlockedNoticeThrottleSeconds = 30;
+    private const int BlockedNoticeAutoDismissSeconds = 3;
 
     private enum AttentionItemKind
     {
@@ -305,6 +310,21 @@ static class Program
                     catch (Exception ex)
                     {
                         WardenLog.Warn("Extension", "ExtensionApprovedNotice UI enqueue failed", ex);
+                    }
+                });
+            };
+
+            _engine.AppBlockedNoticeRequested += processName =>
+            {
+                _ = app.Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        TryShowAppBlockedNotice(processName);
+                    }
+                    catch (Exception ex)
+                    {
+                        WardenLog.Warn("BlockedApps", "AppBlockedNotice UI enqueue failed", ex);
                     }
                 });
             };
@@ -1027,6 +1047,78 @@ static class Program
         window.Closed += (_, _) => ReleaseAttentionSlot();
         window.Show();
         WardenLog.Info("Extension", $"Showing Extra time UI for +{extraMinutes}m");
+    }
+
+    private static void TryShowAppBlockedNotice(string processName)
+    {
+        if (string.IsNullOrWhiteSpace(processName))
+            return;
+        if (_engine == null || _engine.IsLocked)
+            return;
+
+        var now = DateTime.UtcNow;
+        if (
+            _lastBlockedNoticeUtcByProcess.TryGetValue(processName, out var last)
+            && (now - last).TotalSeconds < BlockedNoticeThrottleSeconds
+        )
+        {
+            return;
+        }
+
+        lock (_attentionLock)
+        {
+            if (
+                _blockedNoticeActiveOrQueued != null
+                && string.Equals(
+                    _blockedNoticeActiveOrQueued,
+                    processName,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                return;
+            }
+
+            if (_blockedNoticeActiveOrQueued != null)
+                return;
+
+            _blockedNoticeActiveOrQueued = processName;
+        }
+
+        EnqueueAttention(() => ShowAppBlockedNotice(processName));
+    }
+
+    private static void ShowAppBlockedNotice(string processName)
+    {
+        if (_engine == null || _engine.IsLocked)
+        {
+            ClearBlockedNoticeSlot();
+            ReleaseAttentionSlot();
+            return;
+        }
+
+        _lastBlockedNoticeUtcByProcess[processName] = DateTime.UtcNow;
+        var window = new AttentionWindow(
+            "App blocked",
+            $"{processName} isn't allowed on this PC.",
+            okDelaySeconds: 0,
+            autoDismissSeconds: BlockedNoticeAutoDismissSeconds
+        );
+        window.Closed += (_, _) =>
+        {
+            ClearBlockedNoticeSlot();
+            ReleaseAttentionSlot();
+        };
+        window.Show();
+        WardenLog.Info("BlockedApps", $"Showing App blocked UI for {processName}");
+    }
+
+    private static void ClearBlockedNoticeSlot()
+    {
+        lock (_attentionLock)
+        {
+            _blockedNoticeActiveOrQueued = null;
+        }
     }
 
     private static void ReleaseAttentionSlot()

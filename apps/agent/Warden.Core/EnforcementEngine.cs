@@ -63,6 +63,7 @@ public class EnforcementEngine
     public event Action<NudgePayload>? NudgeRequested;
     public event Action<TimeWarningPayload>? TimeWarningRequested;
     public event Action<ExtensionPayload>? ExtensionApprovedNoticeRequested;
+    public event Action<string>? AppBlockedNoticeRequested;
 
     public bool IsLocked => _isLocked;
     public bool IsAdminLocked => _currentPolicy?.AdminLock ?? false;
@@ -924,7 +925,12 @@ public class EnforcementEngine
             _ = NotifyLockedAsync(false);
         }
 
-        _blockedAppEnforcer.Enforce(_currentPolicy.Policy.BlockedProcessNames);
+        var closed = _blockedAppEnforcer.Enforce(_currentPolicy.Policy.BlockedProcessNames);
+        if (!_isLocked)
+        {
+            foreach (var processName in closed)
+                AppBlockedNoticeRequested?.Invoke(processName);
+        }
     }
 
     private void LogOutsideWindowDiagnostics(string transition, PolicyEvaluation evaluation)

@@ -10,12 +10,13 @@ using WpfHorizontalAlignment = System.Windows.HorizontalAlignment;
 namespace Warden.Tray;
 
 /// <summary>
-/// Topmost attention card with delayed OK (no auto-dismiss).
-/// Used for parent nudges and local time-remaining warnings.
+/// Topmost attention card with delayed OK. Optional auto-dismiss (blocked-app notice).
+/// Used for parent nudges, time-remaining warnings, and blocked-app notices.
 /// </summary>
 public sealed class AttentionWindow : Window
 {
     private readonly DispatcherTimer? _okDelayTimer;
+    private readonly DispatcherTimer? _autoDismissTimer;
     private bool _closed;
     private bool _busy;
 
@@ -26,7 +27,8 @@ public sealed class AttentionWindow : Window
         string message,
         int okDelaySeconds,
         IReadOnlyList<int>? extensionMinutes = null,
-        Func<int, Task<bool>>? onExtensionRequest = null
+        Func<int, Task<bool>>? onExtensionRequest = null,
+        int autoDismissSeconds = 0
     )
     {
         Title = "Warden";
@@ -223,6 +225,23 @@ public sealed class AttentionWindow : Window
             _okDelayTimer.Start();
         }
 
+        var dismissAfter = Math.Max(0, autoDismissSeconds);
+        if (dismissAfter > 0)
+        {
+            _autoDismissTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(dismissAfter)
+            };
+            _autoDismissTimer.Tick += (_, _) =>
+            {
+                _autoDismissTimer.Stop();
+                if (!_closed && !_busy)
+                {
+                    CloseWithResponse("auto");
+                }
+            };
+        }
+
         stack.Children.Add(buttonArea);
         card.Child = stack;
         Content = card;
@@ -237,11 +256,17 @@ public sealed class AttentionWindow : Window
             {
                 // Sound is best-effort.
             }
+
+            if (_autoDismissTimer != null && !_closed)
+            {
+                _autoDismissTimer.Start();
+            }
         };
 
         Closed += (_, _) =>
         {
             _okDelayTimer?.Stop();
+            _autoDismissTimer?.Stop();
             _closed = true;
         };
     }
@@ -283,6 +308,7 @@ public sealed class AttentionWindow : Window
         if (_closed) return;
         Response = response;
         _okDelayTimer?.Stop();
+        _autoDismissTimer?.Stop();
         try
         {
             Close();

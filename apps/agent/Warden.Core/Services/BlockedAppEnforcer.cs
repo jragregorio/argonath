@@ -30,10 +30,17 @@ public sealed class BlockedAppEnforcer
 
     private const double LogThrottleSeconds = 10;
 
-    public void Enforce(IReadOnlyList<string>? blockedProcessNames)
+    /// <summary>
+    /// Closes matching processes. Returns distinct process names we attempted to close
+    /// this tick (for a child-facing notice). Never-kill names are omitted.
+    /// </summary>
+    public IReadOnlyList<string> Enforce(IReadOnlyList<string>? blockedProcessNames)
     {
         if (blockedProcessNames == null || blockedProcessNames.Count == 0)
-            return;
+            return Array.Empty<string>();
+
+        var closedNames = new List<string>();
+        var closedSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var currentPid = Environment.ProcessId;
         var now = DateTime.UtcNow;
@@ -66,6 +73,9 @@ public sealed class BlockedAppEnforcer
                         proc.CloseMainWindow();
                         if (!proc.HasExited)
                             proc.Kill(entireProcessTree: true);
+
+                        if (closedSet.Add(procName))
+                            closedNames.Add(procName);
                     }
                     catch (Exception ex)
                     {
@@ -92,6 +102,8 @@ public sealed class BlockedAppEnforcer
                 );
             }
         }
+
+        return closedNames;
     }
 
     private void LogThrottled(

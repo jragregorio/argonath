@@ -228,7 +228,7 @@ function Brand() {
  * Keep HARDCODED_DESKTOP_APP_VERSION in sync with apps/agent/Directory.Build.props.
  */
 const USE_AGENT_RELEASE_FOR_DESKTOP_VERSION = false;
-const HARDCODED_DESKTOP_APP_VERSION = "0.6.24";
+const HARDCODED_DESKTOP_APP_VERSION = "0.6.25";
 
 function VersionCredit({ className = "" }: { className?: string }) {
   const [open, setOpen] = useState(false);
