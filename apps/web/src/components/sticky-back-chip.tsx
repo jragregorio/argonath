@@ -34,16 +34,16 @@ function StickyBackChip({
     <Link
       href={href}
       className={cn(
-        "md:hidden fixed left-5 z-40 flex items-center gap-1",
-        "rounded-full border border-border/80 bg-card/95 px-3 py-1.5",
-        "text-sm font-medium text-foreground/80 shadow-lg backdrop-blur-md",
+        "md:hidden fixed left-5 z-40 flex min-h-11 items-center gap-1.5",
+        "rounded-full border border-primary/40 bg-primary/15 px-3.5 py-2",
+        "text-base font-medium text-primary shadow-lg backdrop-blur-md",
         "transition-opacity duration-200",
-        "hover:text-foreground",
+        "hover:bg-primary/20",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       )}
       style={{ top: "calc(0.5rem + env(safe-area-inset-top, 0px))" }}
     >
-      <ArrowLeft className="w-3.5 h-3.5 shrink-0" aria-hidden />
+      <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
       {label}
     </Link>
   );
@@ -68,11 +68,11 @@ export function InlineBackLink({
         ref={backRef}
         href={href}
         className={cn(
-          "text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm",
+          "text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 max-md:inline-flex max-md:min-h-11 max-md:items-center max-md:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm",
           className
         )}
       >
-        <ArrowLeft className="w-4 h-4 shrink-0" aria-hidden />
+        <ArrowLeft className="h-4 w-4 max-md:h-5 max-md:w-5 shrink-0" aria-hidden />
         {children}
       </Link>
       <StickyBackChip targetRef={backRef} href={href} label={chipLabel} />
