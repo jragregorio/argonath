@@ -30,6 +30,8 @@ import {
 } from "@/lib/policy-remaining-display";
 import {
   PolicyRemainingFooter,
+  PolicyRemainingMobileCaption,
+  PolicyRemainingMobileHero,
   PolicyWindowRemainingPrimary,
 } from "@/components/policy-remaining-status";
 import { cn } from "@warden/ui";
@@ -88,40 +90,34 @@ export default function DashboardOverviewPage() {
       <PageHeader
         title="Dashboard"
         description="Screen time, device status, and lockdowns at a glance"
+        hideDescriptionOnMobile
       />
 
       <PendingExtensionBanner count={pendingRequests} />
 
       {/* Mobile compact stats strip */}
-      <div
-        className={`md:hidden grid gap-2.5 ${pendingRequests > 0 ? "grid-cols-3" : "grid-cols-2"}`}
-      >
-        <Link href="/dashboard/children" className="block">
-          <Card className="h-full p-3.5">
-            <p className="text-xs text-muted-foreground truncate">Children</p>
-            <p className="text-xl font-semibold tabular-nums mt-0.5">
-              {children.length}
-            </p>
-          </Card>
+      <div className="md:hidden rounded-2xl border border-border px-4 py-3 text-base tabular-nums">
+        <Link
+          href="/dashboard/children"
+          className="font-semibold text-foreground hover:underline"
+        >
+          {children.length} {children.length === 1 ? "child" : "children"}
         </Link>
-        <Card className="h-full p-3.5">
-          <p className="text-xs text-muted-foreground truncate">Online</p>
-          <p className="text-xl font-semibold tabular-nums mt-0.5">
-            {onlineCount}
-            <span className="text-sm text-muted-foreground font-normal">
-              /{devices.length}
-            </span>
-          </p>
-        </Card>
+        <span className="text-muted-foreground"> · </span>
+        <span>
+          <span className="font-semibold">{onlineCount}</span>
+          <span className="text-muted-foreground">/{devices.length} online</span>
+        </span>
         {pendingRequests > 0 && (
-          <Link href="/dashboard/activity" className="block">
-            <Card className="h-full p-3.5">
-              <p className="text-xs text-muted-foreground truncate">Pending</p>
-              <p className="text-xl font-semibold tabular-nums mt-0.5">
-                {pendingRequests}
-              </p>
-            </Card>
-          </Link>
+          <>
+            <span className="text-muted-foreground"> · </span>
+            <Link
+              href="/dashboard/activity"
+              className="font-semibold text-foreground hover:underline"
+            >
+              {pendingRequests} pending
+            </Link>
+          </>
         )}
       </div>
 
@@ -159,7 +155,7 @@ export default function DashboardOverviewPage() {
           <h2 className="text-xl font-semibold">Children</h2>
           <Link
             href="/dashboard/children"
-            className="text-sm text-primary hover:underline"
+            className="inline-flex min-h-11 items-center rounded-full border border-border px-3.5 text-sm font-medium text-primary"
           >
             Manage
           </Link>
@@ -217,7 +213,7 @@ export default function DashboardOverviewPage() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <CardTitle className="truncate">
+                        <CardTitle className="truncate max-md:text-xl">
                           {child.displayName}
                         </CardTitle>
                         <CardDescription className="mt-1">
@@ -228,43 +224,60 @@ export default function DashboardOverviewPage() {
                               } online`}
                         </CardDescription>
                       </div>
-                      <Badge variant={evaluationStatusBadgeVariant(evaluation)}>
+                      <Badge
+                        variant={evaluationStatusBadgeVariant(evaluation)}
+                        className="max-md:text-sm max-md:px-3 max-md:py-1"
+                      >
                         {getEvaluationStatusLabel(evaluation)}
                       </Badge>
                     </div>
 
                     <div className="mt-4 space-y-2">
-                      <PolicyWindowRemainingPrimary evaluation={evaluation} />
-                      <div className="flex items-baseline justify-between gap-2 text-sm">
-                        <span className="text-muted-foreground">
-                          Today&apos;s screen time
-                        </span>
-                        <span
-                          className={cn(
-                            "tabular-nums",
-                            remainingDisplay.usedTodaySecondary
-                              ? "text-muted-foreground"
-                              : "font-medium"
-                          )}
-                        >
-                          {evaluation.usedMinutes} / {effectiveLimit} min
-                          {evaluation.bonusMinutes > 0 && (
-                            <span className="text-muted-foreground font-normal">
-                              {" "}
-                              (+{evaluation.bonusMinutes})
-                            </span>
-                          )}
-                        </span>
+                      <div className="md:hidden space-y-2">
+                        <PolicyRemainingMobileHero evaluation={evaluation} />
+                        <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-[width] ${progressBarClass(
+                              evaluation.status
+                            )}`}
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                        <PolicyRemainingMobileCaption evaluation={evaluation} />
                       </div>
-                      <div className="h-2.5 md:h-2 w-full rounded-full bg-muted overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-[width] ${progressBarClass(
-                            evaluation.status
-                          )}`}
-                          style={{ width: `${percent}%` }}
-                        />
+                      <div className="hidden md:block space-y-2">
+                        <PolicyWindowRemainingPrimary evaluation={evaluation} />
+                        <div className="flex items-baseline justify-between gap-2 text-sm">
+                          <span className="text-muted-foreground">
+                            Today&apos;s screen time
+                          </span>
+                          <span
+                            className={cn(
+                              "tabular-nums",
+                              remainingDisplay.usedTodaySecondary
+                                ? "text-muted-foreground"
+                                : "font-medium"
+                            )}
+                          >
+                            {evaluation.usedMinutes} / {effectiveLimit} min
+                            {evaluation.bonusMinutes > 0 && (
+                              <span className="text-muted-foreground font-normal">
+                                {" "}
+                                (+{evaluation.bonusMinutes})
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-[width] ${progressBarClass(
+                              evaluation.status
+                            )}`}
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                        <PolicyRemainingFooter evaluation={evaluation} />
                       </div>
-                      <PolicyRemainingFooter evaluation={evaluation} />
                     </div>
                   </CardHeader>
 
@@ -279,13 +292,6 @@ export default function DashboardOverviewPage() {
                       </p>
                     ) : (
                       <>
-                        <p className="flex items-center gap-1 text-xs font-medium text-primary/80 md:hidden">
-                          Tap a device to nudge or lock
-                          <ChevronRight
-                            className="h-3.5 w-3.5 shrink-0"
-                            aria-hidden
-                          />
-                        </p>
                         {child.devices.map((device) => {
                         const pendingLock = pendingLocks[device.id];
                         const effectiveAdminLock = getEffectiveAdminLock(device);
@@ -296,17 +302,31 @@ export default function DashboardOverviewPage() {
                               variant={
                                 device.isOnline ? "success" : "secondary"
                               }
+                              className="max-md:text-sm max-md:px-3 max-md:py-1"
                             >
                               {device.isOnline ? "Online" : "Offline"}
                             </Badge>
                             {device.isLocked && !effectiveAdminLock && (
-                              <Badge variant="secondary">Locked</Badge>
+                              <Badge
+                                variant="secondary"
+                                className="max-md:text-sm max-md:px-3 max-md:py-1"
+                              >
+                                Locked
+                              </Badge>
                             )}
                             {effectiveAdminLock && (
-                              <Badge variant="destructive">Locked down</Badge>
+                              <Badge
+                                variant="destructive"
+                                className="max-md:text-sm max-md:px-3 max-md:py-1"
+                              >
+                                Locked down
+                              </Badge>
                             )}
                             {pendingLock !== undefined && (
-                              <Badge variant="secondary">
+                              <Badge
+                                variant="secondary"
+                                className="max-md:text-sm max-md:px-3 max-md:py-1"
+                              >
                                 {pendingLock
                                   ? "Sending lock..."
                                   : "Waiting for unlock..."}
@@ -332,19 +352,19 @@ export default function DashboardOverviewPage() {
                           <div key={device.id} onClick={(e) => e.stopPropagation()}>
                             {/* Mobile: compact status row (header navigates to child detail) */}
                             <div
-                              className="md:hidden flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border border-border/60 px-3 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              className="md:hidden flex min-h-14 min-w-0 cursor-pointer items-center gap-2 rounded-lg border border-border/60 px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                               role="link"
                               tabIndex={0}
                               onClick={navigateToManageDevice}
                               onKeyDown={handleDeviceRowKeyDown}
                             >
-                              <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
-                              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                              <Monitor className="h-5 w-5 shrink-0 text-muted-foreground" />
+                              <span className="min-w-0 flex-1 truncate text-base font-medium">
                                 {getDeviceDisplayName(device)}
                               </span>
                               {deviceBadges}
                               <ChevronRight
-                                className="h-4 w-4 shrink-0 text-muted-foreground"
+                                className="h-5 w-5 shrink-0 text-muted-foreground"
                                 aria-hidden
                               />
                             </div>
@@ -451,7 +471,7 @@ export default function DashboardOverviewPage() {
           <h2 className="text-xl font-semibold">Recent activity</h2>
           <Link
             href="/dashboard/activity"
-            className="text-sm text-muted-foreground hover:text-foreground"
+            className="inline-flex min-h-11 items-center rounded-full border border-border px-3.5 text-sm font-medium text-muted-foreground"
           >
             View all →
           </Link>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { TimePicker } from "@/components/ui/time-picker";
 import { cn } from "@warden/ui";
 import { formatTimeRange12 } from "@/lib/time-format";
+import { useIsDesktopMd } from "@/lib/use-is-desktop-md";
 
 const DAYS = [
   { value: 1, label: "Mon" },
@@ -30,14 +31,16 @@ function dateToTimeString(date: Date): string {
 
 type Preset = {
   id: string;
-  label: string;
+  title: string;
+  timeRange?: string;
   windows: AllowedWindow[];
 };
 
 const PRESETS: Preset[] = [
   {
     id: "weekdays",
-    label: `Weekdays ${formatTimeRange12("15:00", "20:00")}`,
+    title: "Weekdays",
+    timeRange: formatTimeRange12("15:00", "20:00"),
     windows: [1, 2, 3, 4, 5].map((day) => ({
       day,
       start: "15:00",
@@ -46,7 +49,8 @@ const PRESETS: Preset[] = [
   },
   {
     id: "weekends",
-    label: `Weekends ${formatTimeRange12("09:00", "21:00")}`,
+    title: "Weekends",
+    timeRange: formatTimeRange12("09:00", "21:00"),
     windows: [6, 7].map((day) => ({
       day,
       start: "09:00",
@@ -55,7 +59,8 @@ const PRESETS: Preset[] = [
   },
   {
     id: "school-nights",
-    label: `School nights ${formatTimeRange12("15:00", "20:00")}`,
+    title: "School nights",
+    timeRange: formatTimeRange12("15:00", "20:00"),
     windows: [1, 2, 3, 4].map((day) => ({
       day,
       start: "15:00",
@@ -64,7 +69,7 @@ const PRESETS: Preset[] = [
   },
   {
     id: "clear",
-    label: "Any time",
+    title: "Any time",
     windows: [],
   },
 ];
@@ -117,6 +122,8 @@ export function AllowedWindowsEditor({
   onChange,
   timeZone,
 }: AllowedWindowsEditorProps) {
+  const isDesktopMd = useIsDesktopMd();
+  const minuteStep = isDesktopMd ? 1 : 5;
   const todayDay = getZonedTimeParts(
     new Date(),
     timeZone ?? DEFAULT_TIME_ZONE
@@ -180,20 +187,33 @@ export function AllowedWindowsEditor({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
         {PRESETS.map((preset) => (
           <button
             key={preset.id}
             type="button"
             onClick={() => applyPreset(preset)}
             className={cn(
-              "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "flex min-h-11 flex-col items-start justify-center rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "md:min-h-0 md:flex-row md:items-center md:rounded-full md:px-3 md:py-1.5 md:text-xs",
               activePresetId === preset.id
                 ? "border-primary bg-primary/20 text-primary"
                 : "border-border bg-secondary/40 text-muted-foreground hover:bg-secondary hover:text-foreground"
             )}
           >
-            {preset.label}
+            {preset.timeRange ? (
+              <>
+                <span className="font-medium md:hidden">{preset.title}</span>
+                <span className="hidden font-medium md:inline">
+                  {preset.title} {preset.timeRange}
+                </span>
+                <span className="text-xs font-normal text-muted-foreground md:hidden">
+                  {preset.timeRange}
+                </span>
+              </>
+            ) : (
+              <span className="font-medium">{preset.title}</span>
+            )}
           </button>
         ))}
       </div>
@@ -252,6 +272,7 @@ export function AllowedWindowsEditor({
                             aria-label={`${day.label} start time`}
                             use12HourFormat
                             modal
+                            minuteStep={minuteStep}
                             onChange={(date) =>
                               updateDayWindow(
                                 day.value,
@@ -269,6 +290,7 @@ export function AllowedWindowsEditor({
                             aria-label={`${day.label} end time`}
                             use12HourFormat
                             modal
+                            minuteStep={minuteStep}
                             onChange={(date) =>
                               updateDayWindow(
                                 day.value,
@@ -296,7 +318,7 @@ export function AllowedWindowsEditor({
                     <button
                       type="button"
                       onClick={() => addDayWindow(day.value)}
-                      className="text-xs text-primary hover:underline"
+                      className="text-xs text-primary hover:underline max-md:inline-flex max-md:min-h-11 max-md:items-center max-md:text-sm"
                     >
                       + Add another window
                     </button>

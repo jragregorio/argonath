@@ -24,9 +24,20 @@ type TimePickerProps = {
   hasError?: boolean;
   className?: string;
   "aria-label"?: string;
+  minuteStep?: number;
 };
 
-const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => i);
+function buildMinuteOptions(step: number, currentMinute: number): number[] {
+  const options: number[] = [];
+  for (let m = 0; m < 60; m += step) {
+    options.push(m);
+  }
+  if (!options.includes(currentMinute)) {
+    options.push(currentMinute);
+    options.sort((a, b) => a - b);
+  }
+  return options;
+}
 const HOUR_OPTIONS_24 = Array.from({ length: 24 }, (_, i) => i);
 const HOUR_OPTIONS_12 = Array.from({ length: 12 }, (_, i) => i + 1);
 const AMPM_OPTIONS: AmPm[] = ["AM", "PM"];
@@ -91,6 +102,7 @@ type TimeColumnProps = {
   onSelect: (value: string | number) => void;
   isOptionDisabled?: (option: string | number) => boolean;
   scrollOnOpen?: boolean;
+  listClassName?: string;
 };
 
 function TimeColumn({
@@ -100,6 +112,7 @@ function TimeColumn({
   onSelect,
   isOptionDisabled,
   scrollOnOpen,
+  listClassName,
 }: TimeColumnProps) {
   const selectedRef = useRef<HTMLButtonElement>(null);
   const listId = useId();
@@ -111,7 +124,7 @@ function TimeColumn({
 
   return (
     <div className="flex flex-col">
-      <div className="border-b border-border px-2 py-1.5 text-center text-xs font-medium text-muted-foreground">
+      <div className="border-b border-border px-2 py-1.5 text-center text-xs font-medium whitespace-nowrap text-muted-foreground max-md:text-sm">
         {label}
       </div>
       <div
@@ -119,7 +132,8 @@ function TimeColumn({
         role="listbox"
         aria-label={label}
         className={cn(
-          "flex h-48 w-14 flex-col overflow-y-auto overscroll-contain p-1",
+          "flex h-48 w-14 max-md:w-20 flex-col overflow-y-auto overscroll-contain p-1",
+          listClassName,
           "[scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent]",
           "[&::-webkit-scrollbar]:w-1.5",
           "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
@@ -144,6 +158,7 @@ function TimeColumn({
               onClick={() => onSelect(option)}
               className={cn(
                 "rounded-md px-2 py-1.5 text-sm tabular-nums transition-colors",
+                "max-md:min-h-11 max-md:py-2 max-md:text-base",
                 "hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 selected && "bg-primary text-primary-foreground hover:bg-primary",
                 optionDisabled && "pointer-events-none opacity-40"
@@ -169,6 +184,7 @@ export function TimePicker({
   hasError = false,
   className,
   "aria-label": ariaLabel,
+  minuteStep = 1,
 }: TimePickerProps) {
   const [open, setOpen] = useState(false);
   const initial = dateToParts(value, use12HourFormat);
@@ -220,6 +236,8 @@ export function TimePicker({
   const displayText = format(value, displayFormat);
 
   const hourOptions = use12HourFormat ? HOUR_OPTIONS_12 : HOUR_OPTIONS_24;
+  const minuteOptions = buildMinuteOptions(minuteStep, minute);
+  const steppedListClassName = minuteStep > 1 ? "h-44" : undefined;
 
   return (
     <Popover open={open} onOpenChange={setOpen} modal={modal}>
@@ -234,7 +252,7 @@ export function TimePicker({
             aria-expanded={open}
             onClick={() => setOpen((current) => !current)}
             className={cn(
-              "h-10 min-h-10 min-w-[7rem] justify-start gap-2 px-2 font-normal",
+              "min-h-12 min-w-[7rem] justify-start gap-2 px-2 font-normal md:h-10 md:min-h-10",
               hasError && "border-destructive",
               className
             )}
@@ -251,6 +269,7 @@ export function TimePicker({
             options={hourOptions}
             value={hour}
             scrollOnOpen={open}
+            listClassName={steppedListClassName}
             onSelect={(next) => {
               const nextHour = next as number;
               setHour(nextHour);
@@ -262,9 +281,10 @@ export function TimePicker({
           />
           <TimeColumn
             label="Min"
-            options={MINUTE_OPTIONS}
+            options={minuteOptions}
             value={minute}
             scrollOnOpen={open}
+            listClassName={steppedListClassName}
             onSelect={(next) => {
               const nextMinute = next as number;
               setMinute(nextMinute);
@@ -276,10 +296,11 @@ export function TimePicker({
           />
           {use12HourFormat ? (
             <TimeColumn
-              label=""
+              label="AM/PM"
               options={AMPM_OPTIONS}
               value={ampm}
               scrollOnOpen={open}
+              listClassName={steppedListClassName}
               onSelect={(next) => {
                 const nextAmpm = next as AmPm;
                 setAmpm(nextAmpm);

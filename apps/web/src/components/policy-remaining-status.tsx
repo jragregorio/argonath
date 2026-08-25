@@ -3,8 +3,29 @@
 import { cn } from "@warden/ui";
 import {
   getPolicyRemainingDisplay,
+  getUsableAfterHoursBonusMinutes,
   type PolicyRemainingDisplayInput,
 } from "@/lib/policy-remaining-display";
+
+/** Single mobile caption: used/limit today, optional bonus, optional after-hours suffix. */
+export function getPolicyRemainingMobileCaption(
+  evaluation: PolicyRemainingDisplayInput
+): string {
+  const effectiveLimit =
+    evaluation.dailyLimitMinutes + evaluation.bonusMinutes;
+  let caption = `${evaluation.usedMinutes} / ${effectiveLimit} min today`;
+  if (evaluation.bonusMinutes > 0) {
+    caption += ` (+${evaluation.bonusMinutes})`;
+  }
+  const display = getPolicyRemainingDisplay(evaluation);
+  if (display.afterHoursText) {
+    const afterHoursBonus = getUsableAfterHoursBonusMinutes(evaluation);
+    if (afterHoursBonus > 0) {
+      caption += ` · +${afterHoursBonus} after hours`;
+    }
+  }
+  return caption;
+}
 
 type PolicyRemainingStatusProps = {
   evaluation: PolicyRemainingDisplayInput;
@@ -64,4 +85,44 @@ export function PolicyRemainingFooter({
   }
 
   return <p className={cn(mutedClassName, className)}>{display.statusText}</p>;
+}
+
+/** Mobile hero: binding remaining at text-2xl, or status line at text-base when no primary. */
+export function PolicyRemainingMobileHero({
+  evaluation,
+  className,
+}: PolicyRemainingStatusProps) {
+  const display = getPolicyRemainingDisplay(evaluation);
+
+  if (display.primaryText) {
+    return (
+      <p
+        className={cn(
+          "text-2xl font-semibold tabular-nums",
+          display.primaryClassName,
+          className
+        )}
+      >
+        {display.primaryText}
+      </p>
+    );
+  }
+
+  return (
+    <p className={cn("text-base font-semibold", className)}>
+      {display.statusText}
+    </p>
+  );
+}
+
+/** Mobile single caption under hero (and optional bar). */
+export function PolicyRemainingMobileCaption({
+  evaluation,
+  className,
+}: PolicyRemainingStatusProps) {
+  return (
+    <p className={cn("text-sm tabular-nums text-muted-foreground", className)}>
+      {getPolicyRemainingMobileCaption(evaluation)}
+    </p>
+  );
 }

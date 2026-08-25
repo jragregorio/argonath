@@ -172,16 +172,23 @@ export function ChildPolicySection({ childId, policy }: ChildPolicySectionProps)
     return (
       <div className="space-y-4">
         {showActiveToggle && (
-          <div className="flex items-center gap-3">
+          <label
+            htmlFor={`${idPrefix}-active`}
+            className={
+              mode === "sheet"
+                ? "flex min-h-11 w-full cursor-pointer items-center gap-3"
+                : "flex cursor-pointer items-center gap-3"
+            }
+          >
             <input
               type="checkbox"
               id={`${idPrefix}-active`}
               checked={currentActive}
               onChange={(e) => setIsActive(e.target.checked)}
-              className="rounded"
+              className={mode === "sheet" ? "h-5 w-5 rounded" : "rounded"}
             />
-            <Label htmlFor={`${idPrefix}-active`}>Policy active</Label>
-          </div>
+            <span className="text-sm font-medium leading-none">Policy active</span>
+          </label>
         )}
 
         <div className="flex flex-wrap items-center gap-3">
@@ -208,7 +215,7 @@ export function ChildPolicySection({ childId, policy }: ChildPolicySectionProps)
                   e.preventDefault();
                 }
               }}
-              className="w-28 text-center tabular-nums"
+              className="w-28 text-center tabular-nums max-md:min-h-12 max-md:text-base"
               inputMode="numeric"
               pattern="[0-9]*"
               aria-describedby={`${idPrefix}-limit-unit`}
@@ -384,23 +391,25 @@ export function ChildPolicySection({ childId, policy }: ChildPolicySectionProps)
         showDone={false}
         footer={
           <div className="flex flex-col gap-2">
-            <Button
-              className="w-full"
-              onClick={handleSavePolicy}
-              disabled={updatePolicy.isPending || !policyDirty}
-            >
-              {updatePolicy.isPending ? "Saving..." : "Save policy"}
-            </Button>
             {policyDirty ? (
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full"
-                onClick={discardPolicyChanges}
-                disabled={updatePolicy.isPending}
-              >
-                Discard
-              </Button>
+              <>
+                <Button
+                  className="w-full"
+                  onClick={handleSavePolicy}
+                  disabled={updatePolicy.isPending}
+                >
+                  {updatePolicy.isPending ? "Saving..." : "Save policy"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={discardPolicyChanges}
+                  disabled={updatePolicy.isPending}
+                >
+                  Discard
+                </Button>
+              </>
             ) : (
               <Button
                 type="button"
@@ -414,18 +423,6 @@ export function ChildPolicySection({ childId, policy }: ChildPolicySectionProps)
           </div>
         }
       >
-        <div className="mb-4 rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
-          <p>
-            <span className="font-medium text-foreground">
-              {currentLimit} min/day
-            </span>
-            {currentActive ? "" : " · policy off"}
-          </p>
-          <AllowedWindowsSummary
-            windows={currentWindows}
-            className="mt-0.5"
-          />
-        </div>
         {renderPolicyEditor("sheet", "sheet")}
       </BottomSheet>
 

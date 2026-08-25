@@ -24,6 +24,8 @@ import {
 } from "@/lib/policy-remaining-display";
 import {
   PolicyRemainingFooter,
+  PolicyRemainingMobileCaption,
+  PolicyRemainingMobileHero,
   PolicyWindowRemainingPrimary,
 } from "@/components/policy-remaining-status";
 import { useIsDesktopMd } from "@/lib/use-is-desktop-md";
@@ -387,7 +389,7 @@ export function ChildUsageHeader({
                 </Badge>
                 <span
                   className={cn(
-                    "text-sm",
+                    "hidden text-sm md:inline",
                     remainingDisplay?.usedTodaySecondary
                       ? "text-muted-foreground"
                       : "text-foreground/90 md:text-muted-foreground"
@@ -423,16 +425,22 @@ export function ChildUsageHeader({
                 )}
               </div>
               <div className="mt-3 max-w-md space-y-2">
-                <PolicyWindowRemainingPrimary evaluation={evaluation} />
-                <div className="hidden h-2 w-full overflow-hidden rounded-full bg-muted md:block">
-                  <div
-                    className={`h-full rounded-full transition-[width] ${progressBarClass(
-                      evaluation.status
-                    )}`}
-                    style={{ width: `${remainingFraction * 100}%` }}
-                  />
+                <div className="space-y-1 md:hidden">
+                  <PolicyRemainingMobileHero evaluation={evaluation} />
+                  <PolicyRemainingMobileCaption evaluation={evaluation} />
                 </div>
-                <PolicyRemainingFooter evaluation={evaluation} />
+                <div className="hidden space-y-2 md:block">
+                  <PolicyWindowRemainingPrimary evaluation={evaluation} />
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full rounded-full transition-[width] ${progressBarClass(
+                        evaluation.status
+                      )}`}
+                      style={{ width: `${remainingFraction * 100}%` }}
+                    />
+                  </div>
+                  <PolicyRemainingFooter evaluation={evaluation} />
+                </div>
               </div>
             </div>
           </div>

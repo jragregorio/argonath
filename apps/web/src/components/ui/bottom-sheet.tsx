@@ -84,9 +84,6 @@ export function BottomSheet({
           aria-label="Dismiss"
         >
           <span className="h-1.5 w-12 rounded-full bg-muted" />
-          <span className="mt-1 text-[11px] text-muted-foreground">
-            Tap to close
-          </span>
         </button>
 
         <div className="flex items-start justify-between gap-3 px-4 pb-3">
