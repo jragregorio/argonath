@@ -244,7 +244,7 @@ export default function DemoOverviewPage() {
                     const nudgeBusy = Boolean(nudgeState?.nudgeId);
 
                     const deviceBadges = (
-                      <div className="flex shrink-0 flex-col items-end gap-1.5 md:flex-row md:items-center md:gap-2">
+                      <div className="flex shrink-0 flex-row flex-wrap items-center justify-end gap-1.5">
                         <Badge
                           variant={device.isOnline ? "success" : "secondary"}
                           className="max-md:text-sm max-md:px-3 max-md:py-1"
