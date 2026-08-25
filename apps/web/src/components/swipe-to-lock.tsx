@@ -11,6 +11,7 @@ import {
 } from "react";
 import { ChevronRight, Lock, Loader2 } from "lucide-react";
 import { cn } from "@warden/ui";
+import { useIsDesktopMd } from "@/lib/use-is-desktop-md";
 
 type SwipeToLockProps = {
   onConfirm: () => void;
@@ -24,6 +25,7 @@ type SwipeToLockProps = {
 const END_PAD = 4;
 const COMPLETE_RATIO = 0.88;
 const DEFAULT_THUMB = 36;
+const DEFAULT_LABEL = "Swipe to lock down";
 
 export function SwipeToLock({
   onConfirm,
@@ -31,8 +33,9 @@ export function SwipeToLock({
   pending = false,
   className,
   title,
-  label = "Swipe to lock down",
+  label = DEFAULT_LABEL,
 }: SwipeToLockProps) {
+  const isDesktop = useIsDesktopMd();
   const trackRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLButtonElement>(null);
   const draggingRef = useRef(false);
@@ -143,6 +146,13 @@ export function SwipeToLock({
     }
   };
 
+  const displayLabel =
+    label === DEFAULT_LABEL
+      ? isDesktop
+        ? DEFAULT_LABEL
+        : "Swipe to lock"
+      : label;
+
   const progress = maxTravel > 0 ? offset / maxTravel : 0;
   const fillWidth =
     progress >= 0.999
@@ -168,7 +178,7 @@ export function SwipeToLock({
 
       <div
         id={labelId}
-        className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 px-14 text-xs font-medium whitespace-nowrap text-foreground/80 md:px-11 md:text-sm"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 px-14 text-sm font-medium whitespace-nowrap text-foreground/80 md:px-11"
         style={{ opacity: Math.max(0, 1 - progress * 1.35) }}
         aria-hidden="true"
       >
@@ -179,7 +189,7 @@ export function SwipeToLock({
           </>
         ) : (
           <>
-            {label}
+            {displayLabel}
             <ChevronRight className="h-3.5 w-3.5 opacity-70" />
           </>
         )}

@@ -157,18 +157,18 @@ export function NudgeControls({
         <Button
           type="button"
           variant="attention"
-          className="min-w-0 flex-1 rounded-r-none"
+          className="min-w-0 flex-1 rounded-r-none max-md:text-base"
           onClick={sendDefault}
           disabled={disabled || isSending}
           title={title}
         >
-          <Bell className="mr-1.5 h-4 w-4" />
+          <Bell className="mr-1.5 h-4 w-4 max-md:h-5 max-md:w-5" />
           Nudge
         </Button>
         <Button
           type="button"
           variant="attention"
-          className="shrink-0 rounded-l-none border-l border-attention-foreground/20 px-2.5 max-md:min-w-11 max-md:px-3"
+          className="shrink-0 rounded-l-none border-l border-attention-foreground/20 px-2.5 max-md:min-w-11 max-md:px-3 max-md:text-base"
           onClick={openCompose}
           disabled={disabled || isSending}
           title="Send nudge with a custom message"
@@ -176,7 +176,7 @@ export function NudgeControls({
           aria-haspopup="dialog"
           aria-expanded={composeOpen}
         >
-          <ChevronDown className="h-4 w-4" />
+          <ChevronDown className="h-4 w-4 max-md:h-5 max-md:w-5" />
         </Button>
       </div>
 
