@@ -63,7 +63,7 @@ function RunningAppsList({
         const neverBlock = isNeverBlockProcessName(app.processName);
         const canBlock = !blocked && !neverBlock;
         const rowClass = cn(
-          "flex w-full items-center gap-2 px-2 py-2 text-left text-sm md:py-1.5 md:text-xs",
+          "flex w-full items-center gap-2 px-2 py-2 text-left text-sm max-md:px-3 md:py-1.5 md:text-xs",
           app.isForeground && "bg-primary/10 font-medium",
           canBlock &&
             "cursor-pointer hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-11"
@@ -71,13 +71,13 @@ function RunningAppsList({
 
         const inner = (
           <>
-            <span className="min-w-0 flex-1 truncate">
+            <span className="min-w-0 flex-1 truncate max-md:text-base max-md:font-medium">
               {app.title || app.processName}
             </span>
             {app.isForeground && (
               <Badge
                 variant="success"
-                className="shrink-0 text-[10px] uppercase tracking-wide"
+                className="shrink-0 text-[10px] max-md:text-xs uppercase tracking-wide"
               >
                 In use
               </Badge>
@@ -85,7 +85,7 @@ function RunningAppsList({
             {neverBlock && (
               <Badge
                 variant="secondary"
-                className="shrink-0 bg-brand/20 text-brand text-[10px] uppercase tracking-wide"
+                className="shrink-0 bg-brand/20 text-brand text-[10px] max-md:text-xs uppercase tracking-wide"
                 title="Warden keeps this process running"
               >
                 Protected
@@ -94,13 +94,13 @@ function RunningAppsList({
             {blocked && (
               <Badge
                 variant="destructive"
-                className="shrink-0 text-[10px] uppercase tracking-wide"
+                className="shrink-0 text-[10px] max-md:text-xs uppercase tracking-wide"
               >
                 Blocked
               </Badge>
             )}
             {showProcessName && app.title && (
-              <span className="shrink-0 text-muted-foreground">
+              <span className="shrink-0 text-muted-foreground max-md:text-sm">
                 {app.processName}
               </span>
             )}

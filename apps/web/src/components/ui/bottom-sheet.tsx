@@ -18,6 +18,10 @@ type BottomSheetProps = {
   showDone?: boolean;
   /** Extra class for the sheet panel */
   className?: string;
+  /** Extra class for the title */
+  titleClassName?: string;
+  /** Extra class for the description (default `text-xs`) */
+  descriptionClassName?: string;
 };
 
 const focusRing =
@@ -35,6 +39,8 @@ export function BottomSheet({
   footer,
   showDone = true,
   className,
+  titleClassName,
+  descriptionClassName,
 }: BottomSheetProps) {
   useEffect(() => {
     if (!open) return;
@@ -88,9 +94,14 @@ export function BottomSheet({
 
         <div className="flex items-start justify-between gap-3 px-4 pb-3">
           <div className="min-w-0">
-            <p className="font-semibold">{title}</p>
+            <p className={cn("font-semibold", titleClassName)}>{title}</p>
             {description && (
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p
+                className={cn(
+                  "mt-0.5 text-muted-foreground",
+                  descriptionClassName ?? "text-xs"
+                )}
+              >
                 {description}
               </p>
             )}

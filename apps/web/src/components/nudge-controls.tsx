@@ -46,7 +46,9 @@ function NudgeMessageForm({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor={inputId}>Message</Label>
+        <Label htmlFor={inputId} className="text-lg md:text-sm">
+          Message
+        </Label>
         <Input
           id={inputId}
           value={message}
@@ -60,8 +62,9 @@ function NudgeMessageForm({
             }
           }}
           disabled={disabled || isSending}
+          className="min-h-14 text-lg md:h-10 md:min-h-10 md:text-sm"
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-base text-muted-foreground md:text-xs">
           Leave blank for the default message · {message.length}/
           {MAX_MESSAGE_LENGTH}
         </p>
@@ -73,7 +76,7 @@ function NudgeMessageForm({
             type="button"
             disabled={disabled || isSending}
             onClick={() => onMessageChange(preset)}
-            className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+            className="min-h-12 rounded-lg border border-border px-3 py-2 text-base text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50 md:min-h-0 md:px-2.5 md:py-1.5 md:text-xs"
           >
             {preset}
           </button>
@@ -129,7 +132,7 @@ export function NudgeControls({
     />
   );
 
-  const footer = (
+  const desktopFooter = (
     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
       <Button
         type="button"
@@ -146,6 +149,30 @@ export function NudgeControls({
         disabled={disabled || isSending}
       >
         <Bell className="mr-1.5 h-4 w-4" />
+        {isSending ? "Sending…" : "Send nudge"}
+      </Button>
+    </div>
+  );
+
+  const mobileFooter = (
+    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <Button
+        type="button"
+        variant="ghost"
+        className="text-lg"
+        onClick={closeCompose}
+        disabled={isSending}
+      >
+        Cancel
+      </Button>
+      <Button
+        type="button"
+        variant="attention"
+        className="text-lg"
+        onClick={sendCustom}
+        disabled={disabled || isSending}
+      >
+        <Bell className="mr-1.5 h-5 w-5" />
         {isSending ? "Sending…" : "Send nudge"}
       </Button>
     </div>
@@ -187,7 +214,7 @@ export function NudgeControls({
           title="Nudge with a message"
           description="Shows briefly on the child's screen"
           className="w-[min(24rem,calc(100vw-2rem))]"
-          footer={footer}
+          footer={desktopFooter}
         >
           {form}
         </Modal>
@@ -197,8 +224,10 @@ export function NudgeControls({
           onClose={closeCompose}
           title="Nudge with a message"
           description="Shows briefly on the child's screen"
+          titleClassName="text-xl"
+          descriptionClassName="text-base leading-relaxed"
           showDone={false}
-          footer={footer}
+          footer={mobileFooter}
         >
           {form}
         </BottomSheet>

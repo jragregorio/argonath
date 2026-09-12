@@ -92,9 +92,9 @@ function NavLinks({
 function NavFooter({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="space-y-3 border-t border-border pt-4">
-      <div className="rounded-lg border border-border bg-secondary px-3 py-3 text-sm">
+      <div className="rounded-lg border border-border bg-secondary px-3 py-3 text-lg md:text-sm">
         <div className="font-medium">Demo family</div>
-        <div className="mt-0.5 text-xs text-muted-foreground">
+        <div className="mt-0.5 text-base text-muted-foreground md:text-xs">
           Sample data — approve extensions, or try nudge/lock on Overview
           (desktop) or child detail (mobile)
         </div>
@@ -102,16 +102,16 @@ function NavFooter({ onNavigate }: { onNavigate?: () => void }) {
       <Link
         href="/sign-up"
         onClick={onNavigate}
-        className={`flex min-h-11 items-center justify-center rounded-lg bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground hover:bg-accent ${focusRing}`}
+        className={`flex min-h-14 items-center justify-center rounded-lg bg-primary px-3 py-2.5 text-lg font-medium text-primary-foreground hover:bg-accent md:min-h-11 md:text-sm ${focusRing}`}
       >
         Create free account
       </Link>
       <Link
         href="/"
         onClick={onNavigate}
-        className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-secondary px-3 py-3 text-sm font-medium text-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive ${focusRing}`}
+        className={`flex min-h-14 w-full items-center justify-center gap-2 rounded-lg border border-border bg-secondary px-3 py-3 text-lg font-medium text-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive md:min-h-11 md:text-sm ${focusRing}`}
       >
-        <LogOut className="h-4 w-4" />
+        <LogOut className="h-5 w-5 md:h-4 md:w-4" />
         Exit demo
       </Link>
     </div>
@@ -236,8 +236,10 @@ function MobileMoreSheet({
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <p className="font-semibold">More</p>
-            <p className="text-xs text-muted-foreground">Account &amp; settings</p>
+            <p className="text-xl font-semibold">More</p>
+            <p className="text-base leading-relaxed text-muted-foreground">
+              Account &amp; settings
+            </p>
           </div>
           <button
             type="button"
@@ -252,15 +254,15 @@ function MobileMoreSheet({
         <Link
           href="/demo/settings"
           onClick={onClose}
-          className={`mb-2 flex min-h-11 items-center gap-3 rounded-lg px-3 py-3 text-sm hover:bg-secondary ${focusRing}`}
+          className={`mb-2 flex min-h-14 items-center gap-3 rounded-lg px-3 py-3 text-lg hover:bg-secondary ${focusRing}`}
         >
-          <Settings className="h-5 w-5 text-primary" />
+          <Settings className="h-6 w-6 text-primary" />
           <span className="font-medium">Settings</span>
         </Link>
 
         <NavFooter onNavigate={onClose} />
 
-        <p className="pt-4 text-center text-[11px] text-muted-foreground/70">
+        <p className="pt-4 text-center text-sm text-muted-foreground/70">
           Demo · v{APP_VERSION}
         </p>
       </div>

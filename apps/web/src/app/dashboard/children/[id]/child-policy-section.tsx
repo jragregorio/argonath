@@ -25,6 +25,7 @@ import {
   formatReachAdvisory,
   windowsEqual,
 } from "./child-detail-helpers";
+import { cn } from "@warden/ui";
 
 const AllowedWindowsEditor = dynamic(
   () =>
@@ -187,7 +188,14 @@ export function ChildPolicySection({ childId, policy }: ChildPolicySectionProps)
               onChange={(e) => setIsActive(e.target.checked)}
               className={mode === "sheet" ? "h-5 w-5 rounded" : "rounded"}
             />
-            <span className="text-sm font-medium leading-none">Policy active</span>
+            <span
+              className={cn(
+                "font-medium leading-none",
+                mode === "sheet" ? "text-base" : "text-sm"
+              )}
+            >
+              Policy active
+            </span>
           </label>
         )}
 
@@ -352,9 +360,9 @@ export function ChildPolicySection({ childId, policy }: ChildPolicySectionProps)
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground md:hidden">
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-3 text-sm text-muted-foreground md:hidden">
             <p>
-              <span className="text-foreground font-medium">
+              <span className="text-base font-semibold text-foreground">
                 {currentLimit} min/day
               </span>
               {currentActive ? "" : " · policy off"}
@@ -368,7 +376,7 @@ export function ChildPolicySection({ childId, policy }: ChildPolicySectionProps)
           <Button
             type="button"
             variant="outline"
-            className="w-full md:hidden"
+            className="w-full text-base md:hidden"
             onClick={() => setPolicyEditorOpen(true)}
           >
             <ChevronDown className="w-4 h-4 mr-2" />

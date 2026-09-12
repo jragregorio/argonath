@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { format, setHours, setMinutes, setSeconds, setMilliseconds } from "date-fns";
 import { Clock } from "lucide-react";
 import { cn } from "@warden/ui";
@@ -10,6 +11,7 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from "@/components/ui/popover";
+import { useIsDesktopMd } from "@/lib/use-is-desktop-md";
 
 type AmPm = "AM" | "PM";
 
@@ -103,6 +105,7 @@ type TimeColumnProps = {
   isOptionDisabled?: (option: string | number) => boolean;
   scrollOnOpen?: boolean;
   listClassName?: string;
+  size?: "compact" | "comfortable";
 };
 
 function TimeColumn({
@@ -113,9 +116,11 @@ function TimeColumn({
   isOptionDisabled,
   scrollOnOpen,
   listClassName,
+  size = "compact",
 }: TimeColumnProps) {
   const selectedRef = useRef<HTMLButtonElement>(null);
   const listId = useId();
+  const comfortable = size === "comfortable";
 
   useEffect(() => {
     if (!scrollOnOpen) return;
@@ -123,8 +128,13 @@ function TimeColumn({
   }, [value, scrollOnOpen]);
 
   return (
-    <div className="flex flex-col">
-      <div className="border-b border-border px-2 py-1.5 text-center text-xs font-medium whitespace-nowrap text-muted-foreground max-md:text-sm">
+    <div className={cn("flex flex-col", comfortable && "min-w-0 flex-1")}>
+      <div
+        className={cn(
+          "border-b border-border text-center font-medium whitespace-nowrap text-muted-foreground",
+          comfortable ? "px-3 py-2.5 text-base" : "px-2 py-1.5 text-xs"
+        )}
+      >
         {label}
       </div>
       <div
@@ -132,7 +142,8 @@ function TimeColumn({
         role="listbox"
         aria-label={label}
         className={cn(
-          "flex h-48 w-14 max-md:w-20 flex-col overflow-y-auto overscroll-contain p-1",
+          "flex flex-col overflow-y-auto overscroll-contain p-1",
+          comfortable ? "h-80 w-full" : "h-48 w-14",
           listClassName,
           "[scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent]",
           "[&::-webkit-scrollbar]:w-1.5",
@@ -157,8 +168,10 @@ function TimeColumn({
               disabled={optionDisabled}
               onClick={() => onSelect(option)}
               className={cn(
-                "rounded-md px-2 py-1.5 text-sm tabular-nums transition-colors",
-                "max-md:min-h-11 max-md:py-2 max-md:text-base",
+                "rounded-md tabular-nums transition-colors",
+                comfortable
+                  ? "min-h-[4.5rem] px-3 py-3 text-2xl font-medium"
+                  : "px-2 py-1.5 text-sm",
                 "hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 selected && "bg-primary text-primary-foreground hover:bg-primary",
                 optionDisabled && "pointer-events-none opacity-40"
@@ -186,6 +199,7 @@ export function TimePicker({
   "aria-label": ariaLabel,
   minuteStep = 1,
 }: TimePickerProps) {
+  const isDesktop = useIsDesktopMd();
   const [open, setOpen] = useState(false);
   const initial = dateToParts(value, use12HourFormat);
   const [hour, setHour] = useState(initial.hour);
@@ -237,82 +251,135 @@ export function TimePicker({
 
   const hourOptions = use12HourFormat ? HOUR_OPTIONS_12 : HOUR_OPTIONS_24;
   const minuteOptions = buildMinuteOptions(minuteStep, minute);
-  const steppedListClassName = minuteStep > 1 ? "h-44" : undefined;
+  const columnSize = isDesktop ? "compact" : "comfortable";
+  const steppedListClassName =
+    isDesktop && minuteStep > 1 ? "h-44" : undefined;
+
+  useEffect(() => {
+    if (!open || isDesktop) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, isDesktop]);
+
+  const pickerColumns = (
+    <div className={cn("flex divide-x divide-border", !isDesktop && "w-full")}>
+      <TimeColumn
+        label="Hour"
+        options={hourOptions}
+        value={hour}
+        size={columnSize}
+        scrollOnOpen={open}
+        listClassName={steppedListClassName}
+        onSelect={(next) => {
+          const nextHour = next as number;
+          setHour(nextHour);
+          commitTime(nextHour, minute, ampm);
+        }}
+        isOptionDisabled={(option) =>
+          isCandidateDisabled(option as number, minute, ampm)
+        }
+      />
+      <TimeColumn
+        label="Min"
+        options={minuteOptions}
+        value={minute}
+        size={columnSize}
+        scrollOnOpen={open}
+        listClassName={steppedListClassName}
+        onSelect={(next) => {
+          const nextMinute = next as number;
+          setMinute(nextMinute);
+          commitTime(hour, nextMinute, ampm);
+        }}
+        isOptionDisabled={(option) =>
+          isCandidateDisabled(hour, option as number, ampm)
+        }
+      />
+      {use12HourFormat ? (
+        <TimeColumn
+          label="AM/PM"
+          options={AMPM_OPTIONS}
+          value={ampm}
+          size={columnSize}
+          scrollOnOpen={open}
+          listClassName={steppedListClassName}
+          onSelect={(next) => {
+            const nextAmpm = next as AmPm;
+            setAmpm(nextAmpm);
+            commitTime(hour, minute, nextAmpm);
+          }}
+          isOptionDisabled={(option) =>
+            isCandidateDisabled(hour, minute, option as AmPm)
+          }
+        />
+      ) : null}
+    </div>
+  );
+
+  const trigger = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={disabled}
+      aria-label={ariaLabel}
+      aria-expanded={open}
+      onClick={() => setOpen((current) => !current)}
+      className={cn(
+        "min-h-12 min-w-[7rem] justify-start gap-2 px-2 font-normal md:h-10 md:min-h-10",
+        "border-foreground/25 bg-background md:border-border md:bg-transparent",
+        hasError && "border-destructive",
+        className
+      )}
+    >
+      <Clock className="hidden h-4 w-4 shrink-0 opacity-50 md:block" />
+      <span className="tabular-nums text-lg md:text-sm">{displayText}</span>
+    </Button>
+  );
+
+  if (isDesktop) {
+    return (
+      <Popover open={open} onOpenChange={setOpen} modal={modal}>
+        <PopoverAnchor asChild>
+          <span className="inline-flex">{trigger}</span>
+        </PopoverAnchor>
+        <PopoverContent className="w-auto p-0" align="start">
+          {pickerColumns}
+        </PopoverContent>
+      </Popover>
+    );
+  }
+
+  const mobileDialog =
+    open && typeof document !== "undefined"
+      ? createPortal(
+          <>
+            <button
+              type="button"
+              aria-label="Dismiss time picker"
+              className="fixed inset-0 z-[80] bg-black/50"
+              onClick={() => setOpen(false)}
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={ariaLabel ?? "Choose time"}
+              className="fixed inset-x-4 top-1/2 z-[80] -translate-y-1/2 rounded-xl border border-border bg-card p-3 shadow-xl"
+            >
+              {pickerColumns}
+            </div>
+          </>,
+          document.body
+        )
+      : null;
 
   return (
-    <Popover open={open} onOpenChange={setOpen} modal={modal}>
-      <PopoverAnchor asChild>
-        <span className="inline-flex">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled}
-            aria-label={ariaLabel}
-            aria-expanded={open}
-            onClick={() => setOpen((current) => !current)}
-            className={cn(
-              "min-h-12 min-w-[7rem] justify-start gap-2 px-2 font-normal md:h-10 md:min-h-10",
-              hasError && "border-destructive",
-              className
-            )}
-          >
-            <Clock className="h-4 w-4 shrink-0 opacity-50" />
-            <span className="tabular-nums">{displayText}</span>
-          </Button>
-        </span>
-      </PopoverAnchor>
-      <PopoverContent className="w-auto p-0" align="start">
-        <div className="flex divide-x divide-border">
-          <TimeColumn
-            label="Hour"
-            options={hourOptions}
-            value={hour}
-            scrollOnOpen={open}
-            listClassName={steppedListClassName}
-            onSelect={(next) => {
-              const nextHour = next as number;
-              setHour(nextHour);
-              commitTime(nextHour, minute, ampm);
-            }}
-            isOptionDisabled={(option) =>
-              isCandidateDisabled(option as number, minute, ampm)
-            }
-          />
-          <TimeColumn
-            label="Min"
-            options={minuteOptions}
-            value={minute}
-            scrollOnOpen={open}
-            listClassName={steppedListClassName}
-            onSelect={(next) => {
-              const nextMinute = next as number;
-              setMinute(nextMinute);
-              commitTime(hour, nextMinute, ampm);
-            }}
-            isOptionDisabled={(option) =>
-              isCandidateDisabled(hour, option as number, ampm)
-            }
-          />
-          {use12HourFormat ? (
-            <TimeColumn
-              label="AM/PM"
-              options={AMPM_OPTIONS}
-              value={ampm}
-              scrollOnOpen={open}
-              listClassName={steppedListClassName}
-              onSelect={(next) => {
-                const nextAmpm = next as AmPm;
-                setAmpm(nextAmpm);
-                commitTime(hour, minute, nextAmpm);
-              }}
-              isOptionDisabled={(option) =>
-                isCandidateDisabled(hour, minute, option as AmPm)
-              }
-            />
-          ) : null}
-        </div>
-      </PopoverContent>
-    </Popover>
+    <>
+      <span className="inline-flex w-full">{trigger}</span>
+      {mobileDialog}
+    </>
   );
 }

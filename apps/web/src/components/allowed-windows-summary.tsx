@@ -21,7 +21,7 @@ export function AllowedWindowsSummary({
   if (windows.length === 0) {
     return (
       <p
-        className={cn("text-sm text-muted-foreground", className)}
+        className={cn("text-base text-muted-foreground md:text-sm", className)}
         aria-live={ariaLive}
       >
         {ALLOWED_ANY_TIME_MESSAGE}
@@ -33,7 +33,10 @@ export function AllowedWindowsSummary({
 
   return (
     <ul
-      className={cn("space-y-1 text-sm text-muted-foreground", className)}
+      className={cn(
+        "space-y-2 text-base text-muted-foreground md:space-y-1 md:text-sm",
+        className
+      )}
       aria-live={ariaLive}
     >
       {groups.map(({ days, start, end }) => (

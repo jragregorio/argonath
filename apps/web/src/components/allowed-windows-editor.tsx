@@ -203,7 +203,9 @@ export function AllowedWindowsEditor({
           >
             {preset.timeRange ? (
               <>
-                <span className="font-medium md:hidden">{preset.title}</span>
+                <span className="font-medium max-md:text-base md:hidden">
+                  {preset.title}
+                </span>
                 <span className="hidden font-medium md:inline">
                   {preset.title} {preset.timeRange}
                 </span>
@@ -241,16 +243,40 @@ export function AllowedWindowsEditor({
                 enabled ? "bg-card" : "bg-muted/10"
               )}
             >
-              <div className="flex items-start gap-3">
-                <label className="flex min-w-[3.5rem] cursor-pointer items-start gap-2 pt-1">
+              <div
+                className={cn(
+                  "flex gap-3",
+                  enabled
+                    ? "flex-col max-md:gap-3 md:flex-row md:items-start"
+                    : "items-start"
+                )}
+              >
+                <label
+                  className={cn(
+                    "flex cursor-pointer gap-2",
+                    enabled
+                      ? "max-md:min-h-11 max-md:w-full max-md:items-center md:min-w-[3.5rem] md:items-start md:pt-1"
+                      : "min-w-[3.5rem] items-start pt-1"
+                  )}
+                >
                   <input
                     type="checkbox"
                     checked={enabled}
                     onChange={(e) => toggleDay(day.value, e.target.checked)}
-                    className="mt-0.5 rounded"
+                    className={cn(
+                      "rounded",
+                      enabled ? "max-md:h-5 max-md:w-5 md:mt-0.5" : "mt-0.5"
+                    )}
                   />
                   <span className="flex flex-col leading-tight">
-                    <span className="text-sm font-medium">{day.label}</span>
+                    <span
+                      className={cn(
+                        "font-medium",
+                        enabled ? "max-md:text-base text-sm" : "text-sm"
+                      )}
+                    >
+                      {day.label}
+                    </span>
                     {isToday ? (
                       <span className="text-[10px] font-normal text-muted-foreground">
                         Today
@@ -260,19 +286,22 @@ export function AllowedWindowsEditor({
                 </label>
 
                 {enabled ? (
-                  <div className="min-w-0 flex-1 space-y-2">
+                  <div className="min-w-0 flex-1 space-y-2 max-md:w-full">
                     {dayWindows.map((window, index) => (
                       <div
                         key={`${day.value}-${index}`}
                         className="space-y-1.5"
                       >
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div
+                          className="flex flex-col gap-2 max-md:w-full md:flex-row md:flex-wrap md:items-center md:gap-2"
+                        >
                           <TimePicker
                             value={timeStringToDate(window.start)}
                             aria-label={`${day.label} start time`}
                             use12HourFormat
                             modal
                             minuteStep={minuteStep}
+                            className="max-md:w-full max-md:min-h-14"
                             onChange={(date) =>
                               updateDayWindow(
                                 day.value,
@@ -282,7 +311,9 @@ export function AllowedWindowsEditor({
                               )
                             }
                           />
-                          <span className="text-sm text-muted-foreground">
+                          <span
+                            className="text-base text-muted-foreground max-md:text-center md:text-sm"
+                          >
                             to
                           </span>
                           <TimePicker
@@ -291,6 +322,7 @@ export function AllowedWindowsEditor({
                             use12HourFormat
                             modal
                             minuteStep={minuteStep}
+                            className="max-md:w-full max-md:min-h-14"
                             onChange={(date) =>
                               updateDayWindow(
                                 day.value,
@@ -324,7 +356,9 @@ export function AllowedWindowsEditor({
                     </button>
                   </div>
                 ) : (
-                  <p className="flex-1 pt-1 text-xs text-muted-foreground">
+                  <p
+                    className="flex-1 pt-1 text-xs text-muted-foreground max-md:text-sm"
+                  >
                     {windows.length === 0
                       ? "Follows any-time policy"
                       : "No access this day"}

@@ -228,7 +228,7 @@ export function ChildUsageHeader({
               setGrantCustomMode(false);
             }}
             className={cn(
-              "rounded-lg border px-3 py-2 text-sm transition-colors disabled:pointer-events-none disabled:opacity-50 max-md:min-h-11",
+              "min-h-12 rounded-lg border px-3 py-2 text-base transition-colors disabled:pointer-events-none disabled:opacity-50 md:min-h-0 md:px-2.5 md:py-1.5 md:text-xs",
               !grantCustomMode && grantMinutes === preset
                 ? "border-primary bg-primary/10 text-foreground"
                 : "border-border text-muted-foreground hover:bg-secondary hover:text-foreground"
@@ -239,7 +239,9 @@ export function ChildUsageHeader({
         ))}
       </div>
       <div className="space-y-2">
-        <Label htmlFor={grantInputId}>Custom minutes</Label>
+        <Label htmlFor={grantInputId} className="text-lg md:text-sm">
+          Custom minutes
+        </Label>
         <Input
           id={grantInputId}
           type="number"
@@ -255,17 +257,17 @@ export function ChildUsageHeader({
           }}
           onFocus={() => setGrantCustomMode(true)}
           disabled={grantBonus.isPending}
-          className="max-w-[10rem]"
+          className="max-w-[10rem] min-h-14 text-lg md:h-10 md:min-h-10 md:text-sm"
         />
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-base text-muted-foreground md:text-xs">
         Bonus expires at the end of today and unlocks all of {child.displayName}
         &apos;s devices.
       </p>
     </div>
   );
 
-  const grantBonusFooter = (
+  const desktopFooter = (
     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
       <Button
         type="button"
@@ -285,6 +287,33 @@ export function ChildUsageHeader({
         }
       >
         <ClockPlus className="mr-1.5 h-4 w-4" />
+        {grantBonus.isPending ? "Granting…" : `Grant +${grantMinutes} min`}
+      </Button>
+    </div>
+  );
+
+  const mobileFooter = (
+    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <Button
+        type="button"
+        variant="ghost"
+        className="text-lg"
+        onClick={closeGrantBonus}
+        disabled={grantBonus.isPending}
+      >
+        Cancel
+      </Button>
+      <Button
+        type="button"
+        className="text-lg"
+        onClick={confirmGrantBonus}
+        disabled={
+          grantBonus.isPending ||
+          grantMinutes < GRANT_MINUTES_MIN ||
+          grantMinutes > GRANT_MINUTES_MAX
+        }
+      >
+        <ClockPlus className="mr-1.5 h-5 w-5" />
         {grantBonus.isPending ? "Granting…" : `Grant +${grantMinutes} min`}
       </Button>
     </div>
@@ -502,7 +531,7 @@ export function ChildUsageHeader({
           title="Grant bonus screen time"
           description={`Add extra minutes for ${child.displayName} today`}
           className="w-[min(24rem,calc(100vw-2rem))]"
-          footer={grantBonusFooter}
+          footer={desktopFooter}
         >
           {grantBonusForm}
         </Modal>
@@ -512,8 +541,10 @@ export function ChildUsageHeader({
           onClose={closeGrantBonus}
           title="Grant bonus screen time"
           description={`Add extra minutes for ${child.displayName} today`}
+          titleClassName="text-xl"
+          descriptionClassName="text-base leading-relaxed"
           showDone={false}
-          footer={grantBonusFooter}
+          footer={mobileFooter}
         >
           {grantBonusForm}
         </BottomSheet>

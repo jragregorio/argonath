@@ -54,12 +54,19 @@ export function ConfirmDialog({
 
   const mobileFooter = (
     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-      <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
+      <Button
+        type="button"
+        variant="ghost"
+        className="text-base"
+        onClick={onClose}
+        disabled={busy}
+      >
         Cancel
       </Button>
       <Button
         type="button"
         variant={variant === "destructive" ? "destructive" : "default"}
+        className="text-base"
         onClick={onConfirm}
         disabled={busy}
       >
@@ -87,10 +94,11 @@ export function ConfirmDialog({
       open={open}
       onClose={onClose}
       title={title}
+      titleClassName="text-lg"
       showDone={false}
       footer={mobileFooter}
     >
-      <p className="text-sm text-muted-foreground">{description}</p>
+      <p className="text-base leading-relaxed text-muted-foreground">{description}</p>
     </BottomSheet>
   );
 }

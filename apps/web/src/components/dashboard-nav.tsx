@@ -140,7 +140,7 @@ function NavFooter() {
   if (devAuthBypassEnabled) {
     return (
       <div className="pt-4 border-t border-border space-y-3">
-        <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
+        <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-base text-muted-foreground md:text-sm">
           Dev auth bypass enabled
         </div>
       </div>
@@ -157,10 +157,10 @@ function NavFooter() {
     "Account";
 
   const profileCard = (
-    <div className="rounded-lg border border-border bg-secondary px-3 py-3 text-sm">
-      <div className="font-medium truncate">{displayName}</div>
-      <div className="text-xs text-muted-foreground truncate">{activeFamily}</div>
-      <div className="text-xs text-muted-foreground truncate mt-0.5">
+    <div className="rounded-lg border border-border bg-secondary px-3 py-3 text-lg md:text-sm">
+      <div className="truncate font-medium">{displayName}</div>
+      <div className="truncate text-base text-muted-foreground md:text-xs">{activeFamily}</div>
+      <div className="mt-0.5 truncate text-base text-muted-foreground md:text-xs">
         {meQuery.data?.role ?? "…"}
         {meQuery.data?.user.email ? ` · ${meQuery.data.user.email}` : ""}
       </div>
@@ -173,10 +173,10 @@ function NavFooter() {
         <div className="space-y-2">
           {profileCard}
           <label className="block space-y-1">
-            <span className="text-xs text-muted-foreground px-1">Family</span>
+            <span className="block px-1 text-base text-muted-foreground md:text-xs">Family</span>
             <div className="relative">
               <select
-                className="w-full appearance-none rounded-lg border border-border bg-secondary px-3 py-3 pr-8 text-sm min-h-11"
+                className="min-h-14 w-full appearance-none rounded-lg border border-border bg-secondary px-3 py-3 pr-8 text-lg md:min-h-11 md:text-sm"
                 value={meQuery.data?.familyId ?? ""}
                 disabled={switching || meQuery.isLoading}
                 onChange={(e) => switchFamily(e.target.value)}
@@ -199,9 +199,9 @@ function NavFooter() {
         type="button"
         onClick={logout}
         disabled={loggingOut}
-        className={`flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-secondary px-3 py-3 text-sm font-medium text-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40 min-h-11 ${focusRing}`}
+        className={`flex min-h-14 w-full items-center justify-center gap-2 rounded-lg border border-border bg-secondary px-3 py-3 text-lg font-medium text-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive md:min-h-11 md:text-sm ${focusRing}`}
       >
-        <LogOut className="w-4 h-4" />
+        <LogOut className="h-5 w-5 md:h-4 md:w-4" />
         {loggingOut ? "Signing out…" : "Sign out"}
       </button>
     </div>
@@ -304,7 +304,7 @@ function VersionCredit({ className = "" }: { className?: string }) {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className={`mx-auto block w-full rounded-md px-2 py-1.5 text-center text-[11px] text-muted-foreground/70 underline-offset-2 transition-colors hover:text-muted-foreground hover:underline ${focusRing}`}
+        className={`mx-auto block w-full rounded-md px-2 py-1.5 text-center text-sm text-muted-foreground/70 underline-offset-2 transition-colors hover:text-muted-foreground hover:underline md:text-[11px] ${focusRing}`}
         aria-expanded={open}
         aria-controls={panelId}
       >
@@ -421,8 +421,8 @@ function MobileMoreSheet({
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />
         <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="font-semibold">More</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xl font-semibold">More</p>
+            <p className="text-base leading-relaxed text-muted-foreground">
               Account &amp; settings
             </p>
           </div>
@@ -439,9 +439,9 @@ function MobileMoreSheet({
         <Link
           href="/dashboard/settings"
           onClick={onClose}
-          className={`flex items-center gap-3 rounded-lg px-3 py-3 min-h-11 text-sm hover:bg-secondary mb-2 ${focusRing}`}
+          className={`mb-2 flex min-h-14 items-center gap-3 rounded-lg px-3 py-3 text-lg hover:bg-secondary ${focusRing}`}
         >
-          <Settings className="w-5 h-5 text-primary" />
+          <Settings className="h-6 w-6 text-primary" />
           <span className="font-medium">Settings</span>
         </Link>
 
