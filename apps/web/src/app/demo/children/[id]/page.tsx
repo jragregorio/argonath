@@ -59,6 +59,7 @@ export default function DemoChildDetailPage() {
     setAdminLock,
     blockApp,
     unblockApp,
+    unblockAllApps,
     grantBonus,
     clearBonus,
   } = useDemo();
@@ -475,6 +476,7 @@ export default function DemoChildDetailPage() {
         blockedProcessNames={child.blockedProcessNames}
         onBlock={(processName) => blockApp(childId, processName)}
         onUnblock={(processName) => unblockApp(childId, processName)}
+        onUnblockAll={() => unblockAllApps(childId)}
       />
 
       <section className="space-y-3">

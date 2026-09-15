@@ -33,6 +33,7 @@ const ACTION_LABELS: Record<string, string> = {
   policy_updated: "Updated screen time policy",
   app_blocked: "Blocked an app",
   app_unblocked: "Unblocked an app",
+  apps_unblocked: "Unblocked all apps",
   child_created: "Added a child",
   child_renamed: "Renamed a child",
   child_deleted: "Removed a child",
@@ -56,6 +57,7 @@ const ACTION_ICONS: Record<string, LucideIcon> = {
   policy_updated: Clock,
   app_blocked: Ban,
   app_unblocked: Ban,
+  apps_unblocked: Ban,
   admin_lock: Lock,
   admin_unlock: Unlock,
   device_online: Wifi,
@@ -167,6 +169,13 @@ export function formatActivityDetail(item: ActivityItemLike) {
     const processName = item.metadata?.processName;
     if (typeof processName === "string" && processName.trim()) {
       parts.push(processName.trim());
+    }
+  }
+
+  if (item.action === "apps_unblocked") {
+    const count = item.metadata?.count;
+    if (typeof count === "number") {
+      parts.push(`${count} app${count === 1 ? "" : "s"}`);
     }
   }
 

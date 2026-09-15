@@ -752,6 +752,58 @@ export const policyRouter = router({
       return policy;
     }),
 
+  unblockAllApps: parentProcedure
+    .input(z.object({ childId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const family = await getFamilyForUser(ctx);
+      const child = await getChildForFamily(input.childId, family.id);
+      const existing = child.policies[0];
+
+      const current = existing
+        ? sanitizeBlockedProcessNames(existing.blockedProcessNames)
+        : [];
+
+      if (current.length === 0) {
+        if (existing) {
+          return existing;
+        }
+        return prisma.screenTimePolicy.create({
+          data: {
+            childId: child.id,
+            blockedProcessNames: [],
+          },
+        });
+      }
+
+      const policy = existing
+        ? await prisma.screenTimePolicy.update({
+            where: { id: existing.id },
+            data: { blockedProcessNames: [] },
+          })
+        : await prisma.screenTimePolicy.create({
+            data: {
+              childId: child.id,
+              blockedProcessNames: [],
+            },
+          });
+
+      await logAudit(family.id, ctx.userId, "apps_unblocked", {
+        childId: child.id,
+        processNames: current,
+        count: current.length,
+      });
+
+      for (const device of child.devices) {
+        void broadcastToDevice(device.id, {
+          type: "policy:updated",
+          deviceId: device.id,
+          timestamp: new Date().toISOString(),
+        }).catch(() => {});
+      }
+
+      return policy;
+    }),
+
   getEvaluation: protectedProcedure
     .input(z.object({ childId: z.string() }))
     .query(async ({ ctx, input }) => {

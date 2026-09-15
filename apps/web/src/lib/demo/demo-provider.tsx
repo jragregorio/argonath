@@ -57,6 +57,7 @@ type DemoContextValue = {
   setAdminLock: (deviceId: string, locked: boolean) => void;
   blockApp: (childId: string, processName: string) => void;
   unblockApp: (childId: string, processName: string) => void;
+  unblockAllApps: (childId: string) => void;
   grantBonus: (childId: string, minutes: number) => void;
   clearBonus: (childId: string) => void;
   dismissFeedback: () => void;
@@ -578,6 +579,48 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     [recordInteractiveAction, showFeedback]
   );
 
+  const unblockAllApps = useCallback(
+    (childId: string) => {
+      const child = state.overview.children.find((c) => c.id === childId);
+      if (!child || child.blockedProcessNames.length === 0) return;
+
+      const processNames = [...child.blockedProcessNames];
+      const count = processNames.length;
+
+      setState((prev) => {
+        const prevChild = prev.overview.children.find((c) => c.id === childId);
+        if (!prevChild || prevChild.blockedProcessNames.length === 0) {
+          return prev;
+        }
+
+        const nextChildren = prev.overview.children.map((c) => {
+          if (c.id !== childId) return c;
+          return { ...c, blockedProcessNames: [] };
+        });
+
+        const activityItem: RecentActivityItem = {
+          id: newActivityId(),
+          action: "apps_unblocked",
+          createdAt: new Date(),
+          childName: prevChild.displayName,
+          metadata: { processNames, count },
+        };
+
+        return {
+          ...prev,
+          overview: { ...prev.overview, children: nextChildren },
+          activity: [activityItem, ...prev.activity],
+        };
+      });
+      showFeedback(
+        count === 1 ? "Unblocked all apps." : `${count} apps unblocked.`,
+        "success"
+      );
+      recordInteractiveAction();
+    },
+    [recordInteractiveAction, showFeedback, state.overview.children]
+  );
+
   const grantBonus = useCallback(
     (childId: string, minutes: number) => {
       setState((prev) => {
@@ -715,6 +758,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       setAdminLock,
       blockApp,
       unblockApp,
+      unblockAllApps,
       grantBonus,
       clearBonus,
       dismissFeedback,
@@ -732,6 +776,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       sendNudge,
       setAdminLock,
       unblockApp,
+      unblockAllApps,
       state.activity,
       state.feedback,
       state.nudgeByDevice,

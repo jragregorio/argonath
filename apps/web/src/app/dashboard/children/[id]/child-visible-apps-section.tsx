@@ -32,14 +32,19 @@ export function ChildVisibleAppsSection({
     onSuccess: invalidate,
   });
 
+  const unblockAllApps = trpc.policy.unblockAllApps.useMutation({
+    onSuccess: invalidate,
+  });
+
   return (
     <VisibleAppsCard
       devices={devices}
       blockedProcessNames={blockedProcessNames}
       onBlock={(processName) => blockApp.mutate({ childId, processName })}
       onUnblock={(processName) => unblockApp.mutate({ childId, processName })}
+      onUnblockAll={() => unblockAllApps.mutate({ childId })}
       blockBusy={blockApp.isPending}
-      unblockBusy={unblockApp.isPending}
+      unblockBusy={unblockApp.isPending || unblockAllApps.isPending}
     />
   );
 }

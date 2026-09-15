@@ -20,6 +20,7 @@ import {
   isNeverBlockProcessName,
   type RunningApp,
 } from "@warden/shared";
+import { Button } from "@/components/ui/button";
 import { AppWindow, X } from "lucide-react";
 
 export type VisibleAppsDevice = {
@@ -131,19 +132,33 @@ function RunningAppsList({
 function BlockedAppsChips({
   blockedProcessNames,
   onUnblock,
+  onRequestUnblockAll,
   unblockBusy,
 }: {
   blockedProcessNames: string[];
   onUnblock: (processName: string) => void;
+  onRequestUnblockAll: () => void;
   unblockBusy: boolean;
 }) {
   if (blockedProcessNames.length === 0) return null;
 
   return (
     <div className="mt-3 space-y-1.5">
-      <p className="text-sm font-medium text-foreground md:text-xs">
-        Blocked apps
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium text-foreground md:text-xs">
+          Blocked apps
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive md:h-9 md:text-xs max-md:min-h-11"
+          disabled={unblockBusy}
+          onClick={onRequestUnblockAll}
+        >
+          Unblock all
+        </Button>
+      </div>
       <div className="flex flex-wrap gap-2">
         {blockedProcessNames.map((name) => (
           <Badge
@@ -246,6 +261,7 @@ export type VisibleAppsCardProps = {
   blockedProcessNames: string[];
   onBlock: (processName: string) => void;
   onUnblock: (processName: string) => void;
+  onUnblockAll: () => void;
   blockBusy?: boolean;
   unblockBusy?: boolean;
 };
@@ -255,10 +271,12 @@ export function VisibleAppsCard({
   blockedProcessNames,
   onBlock,
   onUnblock,
+  onUnblockAll,
   blockBusy = false,
   unblockBusy = false,
 }: VisibleAppsCardProps) {
   const [pendingBlock, setPendingBlock] = useState<string | null>(null);
+  const [pendingUnblockAll, setPendingUnblockAll] = useState(false);
 
   if (devices.length === 0) {
     return null;
@@ -271,6 +289,11 @@ export function VisibleAppsCard({
       onBlock(pendingBlock);
       setPendingBlock(null);
     }
+  };
+
+  const handleConfirmUnblockAll = () => {
+    onUnblockAll();
+    setPendingUnblockAll(false);
   };
 
   return (
@@ -310,6 +333,7 @@ export function VisibleAppsCard({
           <BlockedAppsChips
             blockedProcessNames={blockedProcessNames}
             onUnblock={onUnblock}
+            onRequestUnblockAll={() => setPendingUnblockAll(true)}
             unblockBusy={unblockBusy}
           />
         </CardContent>
@@ -330,6 +354,17 @@ export function VisibleAppsCard({
         variant="destructive"
         busy={blockBusy}
         onConfirm={handleConfirmBlock}
+      />
+
+      <ConfirmDialog
+        open={pendingUnblockAll}
+        onClose={() => setPendingUnblockAll(false)}
+        title="Unblock all apps?"
+        description="Warden will stop blocking these apps on this child’s PCs."
+        confirmLabel="Unblock all"
+        variant="default"
+        busy={unblockBusy}
+        onConfirm={handleConfirmUnblockAll}
       />
     </>
   );
