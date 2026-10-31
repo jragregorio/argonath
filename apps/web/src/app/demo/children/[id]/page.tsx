@@ -21,7 +21,6 @@ import { NudgeControls } from "@/components/nudge-controls";
 import { SwipeToLock } from "@/components/swipe-to-lock";
 import { RecentActivityCard } from "@/components/recent-activity-card";
 import { AllowedWindowsSummary } from "@/components/allowed-windows-summary";
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Modal } from "@/components/ui/modal";
 import { VisibleAppsCard } from "@/components/visible-apps-card";
@@ -35,6 +34,7 @@ import {
   evaluationStatusBadgeVariant,
   getBindingRemainingPercent,
   getPolicyRemainingDisplay,
+  getRemainingBonusMinutes,
 } from "@/lib/policy-remaining-display";
 import {
   PolicyRemainingFooter,
@@ -46,6 +46,9 @@ import { cn } from "@warden/ui";
 const GRANT_PRESETS = [15, 30, 60] as const;
 const GRANT_MINUTES_MIN = 1;
 const GRANT_MINUTES_MAX = 240;
+
+const CLEAR_BONUS_RANGE_INPUT_CLASS =
+  "w-full cursor-pointer appearance-none bg-transparent accent-primary h-14 min-h-14 md:h-8 md:min-h-0 [&::-webkit-slider-runnable-track]:h-3 md:[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-muted [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-8 [&::-webkit-slider-thumb]:w-8 md:[&::-webkit-slider-thumb]:h-4 md:[&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:border-0 [&::-moz-range-track]:h-3 md:[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-muted [&::-moz-range-thumb]:h-8 [&::-moz-range-thumb]:w-8 md:[&::-moz-range-thumb]:h-4 md:[&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-primary";
 
 export default function DemoChildDetailPage() {
   const params = useParams();
@@ -78,12 +81,14 @@ export default function DemoChildDetailPage() {
   const remainingDisplay = getPolicyRemainingDisplay(evaluation);
   const isDesktop = useIsDesktopMd();
   const grantInputId = useId();
+  const clearInputId = useId();
 
   const [grantBonusOpen, setGrantBonusOpen] = useState(false);
   const [grantMinutes, setGrantMinutes] = useState(15);
   const [grantCustomMode, setGrantCustomMode] = useState(false);
   const [grantBusy, setGrantBusy] = useState(false);
   const [clearBonusOpen, setClearBonusOpen] = useState(false);
+  const [clearMinutes, setClearMinutes] = useState(5);
   const [clearBusy, setClearBusy] = useState(false);
 
   const openGrantBonus = () => {
@@ -117,15 +122,46 @@ export default function DemoChildDetailPage() {
 
   const requestClearBonus = () => {
     if (evaluation.bonusMinutes <= 0) return;
+    setClearMinutes(5);
     setClearBonusOpen(true);
   };
 
-  const confirmClearBonus = () => {
+  const closeClearBonus = () => {
+    if (clearBusy) return;
+    setClearBonusOpen(false);
+  };
+
+  const confirmClearBonusPartial = () => {
+    if (clearBusy) return;
+    if (
+      clearMinutes < 5 ||
+      clearMinutes > getRemainingBonusMinutes(evaluation) ||
+      clearMinutes % 5 !== 0
+    ) {
+      return;
+    }
+    setClearBusy(true);
+    clearBonus(childId, clearMinutes);
+    setClearBusy(false);
+    setClearBonusOpen(false);
+    setClearMinutes(5);
+  };
+
+  const confirmClearBonusAll = () => {
+    if (clearBusy || evaluation.bonusMinutes <= 0) return;
     setClearBusy(true);
     clearBonus(childId);
     setClearBusy(false);
     setClearBonusOpen(false);
+    setClearMinutes(5);
   };
+
+  const remainingBonus = getRemainingBonusMinutes(evaluation);
+  const clearSliderMax = Math.floor(remainingBonus / 5) * 5;
+  const clearBonusHintGrantedSuffix =
+    remainingBonus !== evaluation.bonusMinutes
+      ? ` (of +${evaluation.bonusMinutes} granted)`
+      : "";
 
   const grantBonusForm = (
     <div className="space-y-4">
@@ -227,6 +263,117 @@ export default function DemoChildDetailPage() {
       >
         <ClockPlus className="mr-1.5 h-5 w-5" />
         {grantBusy ? "Granting…" : `Grant +${grantMinutes} min`}
+      </Button>
+    </div>
+  );
+
+  const clearBonusForm = (
+    <div className="space-y-4">
+      {clearSliderMax >= 5 && (
+        <div className="space-y-2">
+          <div className="flex items-baseline justify-between gap-2">
+            <Label htmlFor={clearInputId} className="text-lg md:text-sm">
+              Minutes to clear
+            </Label>
+            <span className="text-lg text-muted-foreground md:text-sm">
+              −{clearMinutes} min
+            </span>
+          </div>
+          <input
+            id={clearInputId}
+            type="range"
+            min={5}
+            step={5}
+            max={clearSliderMax}
+            value={clearMinutes}
+            disabled={clearBusy}
+            onChange={(event) => {
+              setClearMinutes(Number(event.target.value));
+            }}
+            onInput={(event) => {
+              setClearMinutes(Number(event.currentTarget.value));
+            }}
+            className={CLEAR_BONUS_RANGE_INPUT_CLASS}
+          />
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>5</span>
+            <span>{clearSliderMax}</span>
+          </div>
+        </div>
+      )}
+      <p className="text-base text-muted-foreground md:text-xs">
+        {child.displayName} has {remainingBonus} min of bonus left
+        {clearBonusHintGrantedSuffix}. Their daily limit returns toward{" "}
+        {evaluation.dailyLimitMinutes} min. If they&apos;ve already used more
+        than that, devices may lock.
+      </p>
+    </div>
+  );
+
+  const clearPartialDisabled =
+    clearBusy ||
+    clearSliderMax < 5 ||
+    clearMinutes < 5 ||
+    clearMinutes > remainingBonus ||
+    clearMinutes % 5 !== 0;
+
+  const clearDesktopFooter = (
+    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={closeClearBonus}
+        disabled={clearBusy}
+      >
+        Cancel
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={confirmClearBonusAll}
+        disabled={clearBusy || evaluation.bonusMinutes <= 0}
+      >
+        {clearBusy ? "Clearing…" : "Clear all"}
+      </Button>
+      <Button
+        type="button"
+        variant="destructive"
+        onClick={confirmClearBonusPartial}
+        disabled={clearPartialDisabled}
+      >
+        {clearBusy ? "Clearing…" : `Clear −${clearMinutes} min`}
+      </Button>
+    </div>
+  );
+
+  const clearMobileFooter = (
+    <div className="flex flex-col gap-2">
+      <Button
+        type="button"
+        variant="destructive"
+        className="w-full text-lg"
+        onClick={confirmClearBonusPartial}
+        disabled={clearPartialDisabled}
+      >
+        {clearBusy ? "Clearing…" : `Clear −${clearMinutes} min`}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full text-lg"
+        onClick={confirmClearBonusAll}
+        disabled={clearBusy || evaluation.bonusMinutes <= 0}
+      >
+        {clearBusy ? "Clearing…" : "Clear all"}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        className="w-full text-lg"
+        onClick={closeClearBonus}
+        disabled={clearBusy}
+      >
+        Cancel
       </Button>
     </div>
   );
@@ -514,15 +661,31 @@ export default function DemoChildDetailPage() {
         </BottomSheet>
       )}
 
-      <ConfirmDialog
-        open={clearBonusOpen}
-        onClose={() => setClearBonusOpen(false)}
-        title="Clear bonus minutes?"
-        description={`Clear +${evaluation.bonusMinutes} bonus minutes for ${child.displayName}? Their daily limit returns to ${evaluation.dailyLimitMinutes} min. If they've already used more than that, devices will lock.`}
-        confirmLabel="Clear bonus"
-        busy={clearBusy}
-        onConfirm={confirmClearBonus}
-      />
+      {isDesktop ? (
+        <Modal
+          open={clearBonusOpen}
+          onClose={closeClearBonus}
+          title="Clear bonus screen time"
+          description={`Remove extra minutes from ${child.displayName} today`}
+          className="w-[min(24rem,calc(100vw-2rem))]"
+          footer={clearDesktopFooter}
+        >
+          {clearBonusForm}
+        </Modal>
+      ) : (
+        <BottomSheet
+          open={clearBonusOpen}
+          onClose={closeClearBonus}
+          title="Clear bonus screen time"
+          description={`Remove extra minutes from ${child.displayName} today`}
+          titleClassName="text-xl"
+          descriptionClassName="text-base leading-relaxed"
+          showDone={false}
+          footer={clearMobileFooter}
+        >
+          {clearBonusForm}
+        </BottomSheet>
+      )}
     </div>
   );
 }

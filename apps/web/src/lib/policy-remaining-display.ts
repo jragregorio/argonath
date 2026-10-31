@@ -84,6 +84,20 @@ export function getUsableAfterHoursBonusMinutes(
   });
 }
 
+/** Unused bonus minutes the parent can still claw back (partial clear cap). */
+export function getRemainingBonusMinutes(
+  evaluation: PolicyRemainingDisplayInput
+): number {
+  if (evaluation.bonusMinutes <= 0) return 0;
+  if (isAfterHoursBonusActive(evaluation)) {
+    return evaluation.remainingMinutes;
+  }
+  if (evaluation.inWindow === false) {
+    return 0;
+  }
+  return getUsableAfterHoursBonusMinutes(evaluation);
+}
+
 /**
  * Progress fill for the binding constraint (option D):
  * - window binding → access left / today's window capacity

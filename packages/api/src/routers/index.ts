@@ -1357,14 +1357,19 @@ export const extensionRouter = router({
     }),
 
   clearBonus: parentProcedure
-    .input(z.object({ childId: z.string() }))
+    .input(
+      z.object({
+        childId: z.string(),
+        minutes: z.number().int().min(1).max(240).optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const family = await getFamilyForUser(ctx);
       const child = await getChildForFamily(input.childId, family.id);
       const now = new Date();
 
       const activeOverrides = child.extensionOverrides;
-      const clearedMinutes = activeOverrides.reduce(
+      const total = activeOverrides.reduce(
         (sum, o) => sum + o.extraMinutes,
         0
       );
@@ -1373,18 +1378,59 @@ export const extensionRouter = router({
         return { ok: true, clearedMinutes: 0, clearedCount: 0 };
       }
 
-      await prisma.extensionOverride.updateMany({
-        where: {
-          childId: child.id,
-          expiresAt: { gt: now },
-        },
-        data: { expiresAt: now },
-      });
+      const clearAll =
+        input.minutes === undefined || input.minutes >= total;
+
+      let clearedMinutes: number;
+      let clearedCount: number;
+
+      if (clearAll) {
+        clearedMinutes = total;
+        clearedCount = activeOverrides.length;
+
+        await prisma.extensionOverride.updateMany({
+          where: {
+            childId: child.id,
+            expiresAt: { gt: now },
+          },
+          data: { expiresAt: now },
+        });
+      } else {
+        let remaining = input.minutes!;
+        clearedMinutes = 0;
+        clearedCount = 0;
+
+        const sorted = [...activeOverrides].sort(
+          (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+        );
+
+        for (const override of sorted) {
+          if (remaining <= 0) break;
+
+          if (override.extraMinutes <= remaining) {
+            await prisma.extensionOverride.update({
+              where: { id: override.id },
+              data: { expiresAt: now },
+            });
+            clearedMinutes += override.extraMinutes;
+            clearedCount += 1;
+            remaining -= override.extraMinutes;
+          } else {
+            await prisma.extensionOverride.update({
+              where: { id: override.id },
+              data: { extraMinutes: override.extraMinutes - remaining },
+            });
+            clearedMinutes += remaining;
+            clearedCount += 1;
+            remaining = 0;
+          }
+        }
+      }
 
       await logAudit(family.id, ctx.userId, "bonus_cleared", {
         childId: child.id,
         minutes: clearedMinutes,
-        count: activeOverrides.length,
+        count: clearedCount,
       });
 
       // Best-effort: tray polls agent.getPolicy and also handles policy:updated.
@@ -1399,7 +1445,7 @@ export const extensionRouter = router({
       return {
         ok: true,
         clearedMinutes,
-        clearedCount: activeOverrides.length,
+        clearedCount,
       };
     }),
 

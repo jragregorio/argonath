@@ -59,7 +59,7 @@ type DemoContextValue = {
   unblockApp: (childId: string, processName: string) => void;
   unblockAllApps: (childId: string) => void;
   grantBonus: (childId: string, minutes: number) => void;
-  clearBonus: (childId: string) => void;
+  clearBonus: (childId: string, minutes?: number) => void;
   dismissFeedback: () => void;
   getChildById: (childId: string) => DemoState["overview"]["children"][number] | undefined;
 };
@@ -677,12 +677,15 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   );
 
   const clearBonus = useCallback(
-    (childId: string) => {
+    (childId: string, minutes?: number) => {
       setState((prev) => {
         const child = prev.overview.children.find((c) => c.id === childId);
         if (!child || child.evaluation.bonusMinutes <= 0) return prev;
 
-        const cleared = child.evaluation.bonusMinutes;
+        const currentBonus = child.evaluation.bonusMinutes;
+        const clearAll = minutes === undefined || minutes >= currentBonus;
+        const cleared = clearAll ? currentBonus : minutes;
+        const newBonus = clearAll ? 0 : Math.max(0, currentBonus - cleared);
 
         const nextChildren = prev.overview.children.map((c) => {
           if (c.id !== childId) return c;
@@ -691,7 +694,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
             ...c,
             evaluation: {
               ...evaluation,
-              bonusMinutes: 0,
+              bonusMinutes: newBonus,
               dailyRemainingMinutes: Math.max(
                 0,
                 evaluation.dailyRemainingMinutes - cleared
