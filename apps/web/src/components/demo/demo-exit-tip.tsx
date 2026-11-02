@@ -57,7 +57,7 @@ export function DemoExitTip() {
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] z-[55] flex justify-end px-4 md:hidden"
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(6rem+env(safe-area-inset-bottom,0px))] z-[55] flex justify-end px-4 md:hidden"
     >
       <div
         className={cn(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,10 @@ import { useRouter } from "next/navigation";
 import { cn } from "@warden/ui";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  ChildRosterList,
+  type ChildRosterItem,
+} from "@/components/child-roster-list";
 
 type DeleteConfirmState = {
   childId: string;
@@ -34,6 +38,29 @@ export default function ChildrenPage() {
     // Online badges / usage follow heartbeats; Realtime covers lock/policy/extension
     refetchInterval: POLL_HEARTBEAT_MS,
   });
+  const { data: overview } = trpc.dashboard.overview.useQuery(undefined, {
+    refetchInterval: POLL_HEARTBEAT_MS,
+  });
+
+  const rosterItems: ChildRosterItem[] = useMemo(() => {
+    if (!children) return [];
+    const evaluationByChildId = new Map(
+      (overview?.children ?? []).map((c) => [c.id, c.evaluation] as const)
+    );
+    return children.map((child) => ({
+      id: child.id,
+      displayName: child.displayName,
+      href: `/dashboard/children/${child.id}`,
+      devices: child.devices.map((device) => ({
+        id: device.id,
+        displayName: device.displayName,
+        machineName: device.machineName,
+        isOnline: device.isOnline,
+        lastSeenAt: device.lastSeenAt,
+      })),
+      evaluation: evaluationByChildId.get(child.id),
+    }));
+  }, [children, overview?.children]);
   const createChild = trpc.children.create.useMutation({
     onSuccess: () => {
       utils.children.list.invalidate();
@@ -107,7 +134,9 @@ export default function ChildrenPage() {
       {isLoading ? (
         <ChildrenListSkeleton />
       ) : children && children.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <>
+        <ChildRosterList items={rosterItems} className="md:hidden" />
+        <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {children.map((child) => {
             const isEditing = editingId === child.id;
             const manageHref = `/dashboard/children/${child.id}`;
@@ -243,6 +272,7 @@ export default function ChildrenPage() {
             );
           })}
         </div>
+        </>
       ) : (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">

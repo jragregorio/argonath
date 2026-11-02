@@ -13,7 +13,7 @@ export function DemoFeedback() {
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] z-[55] flex justify-center px-4 md:bottom-8"
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(6rem+env(safe-area-inset-bottom,0px))] z-[55] flex justify-center px-4 md:bottom-8"
     >
       <div
         className={cn(

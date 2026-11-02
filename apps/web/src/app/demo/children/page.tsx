@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 import { User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,6 +13,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
+import {
+  ChildRosterList,
+  type ChildRosterItem,
+} from "@/components/child-roster-list";
 import { getDeviceDisplayName } from "@warden/shared";
 import { cn } from "@warden/ui";
 import { useDemo } from "@/lib/demo/demo-provider";
@@ -20,6 +25,23 @@ export default function DemoChildrenPage() {
   const router = useRouter();
   const { overview } = useDemo();
   const children = overview.children;
+
+  const rosterItems: ChildRosterItem[] = useMemo(
+    () =>
+      children.map((child) => ({
+        id: child.id,
+        displayName: child.displayName,
+        href: `/demo/children/${child.id}`,
+        devices: child.devices.map((device) => ({
+          id: device.id,
+          displayName: device.displayName,
+          machineName: device.machineName,
+          isOnline: device.isOnline,
+        })),
+        evaluation: child.evaluation,
+      })),
+    [children]
+  );
 
   return (
     <div className="space-y-8">
@@ -34,7 +56,9 @@ export default function DemoChildrenPage() {
         or each child&apos;s detail page (mobile).
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <ChildRosterList items={rosterItems} className="md:hidden" />
+
+      <div className="hidden md:grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {children.map((child) => {
           const manageHref = `/demo/children/${child.id}`;
 

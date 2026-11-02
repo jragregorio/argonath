@@ -45,23 +45,36 @@ export function OverviewSkeleton() {
 
 export function ChildrenListSkeleton() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {[0, 1, 2].map((i) => (
-        <Card key={i}>
-          <CardHeader>
-            <Skeleton className="h-6 w-36" />
-            <Skeleton className="h-4 w-28 mt-2" />
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex gap-2">
-              <Skeleton className="h-5 w-20 rounded-full" />
-              <Skeleton className="h-5 w-16 rounded-full" />
-            </div>
-            <Skeleton className="h-4 w-32" />
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+    <>
+      <div className="space-y-2 md:hidden">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="min-h-14 rounded-2xl border border-border px-4 py-3"
+          >
+            <Skeleton className="h-5 w-36" />
+            <Skeleton className="mt-2 h-4 w-48" />
+          </div>
+        ))}
+      </div>
+      <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[0, 1, 2].map((i) => (
+          <Card key={i}>
+            <CardHeader>
+              <Skeleton className="h-6 w-36" />
+              <Skeleton className="h-4 w-28 mt-2" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-2">
+                <Skeleton className="h-5 w-20 rounded-full" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </div>
+              <Skeleton className="h-4 w-32" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </>
   );
 }
 

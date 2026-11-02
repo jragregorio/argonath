@@ -367,7 +367,7 @@ function MobileBottomTabs({
       className="md:hidden fixed bottom-0 inset-x-0 z-50 pointer-events-none"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      <div className="pointer-events-auto px-3 pb-2 pt-1">
+      <div className="pointer-events-auto px-3 pb-4 pt-1">
         <InteractiveMenu
           items={menuItems}
           activeIndex={activeIndex}
