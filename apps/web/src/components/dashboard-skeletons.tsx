@@ -8,7 +8,6 @@ export function OverviewSkeleton() {
         <Skeleton className="h-9 w-48" />
         <Skeleton className="h-5 w-80 max-w-full" />
       </div>
-      <Skeleton className="h-16 w-full rounded-xl md:hidden" />
       <div className="hidden md:grid md:grid-cols-2 gap-4">
         {[0, 1].map((i) => (
           <Card key={i}>
@@ -21,7 +20,23 @@ export function OverviewSkeleton() {
       </div>
       <div>
         <Skeleton className="h-7 w-28 mb-4" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="space-y-2 md:hidden">
+          <div className="space-y-3 rounded-2xl border border-border px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <Skeleton className="h-7 w-36" />
+              <Skeleton className="h-6 w-24 rounded-full" />
+            </div>
+            <Skeleton className="h-8 w-40" />
+            <Skeleton className="h-3.5 w-full rounded-full" />
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-4 w-full" />
+          </div>
+          <div className="min-h-14 rounded-2xl border border-border px-4 py-3">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="mt-2 h-4 w-40" />
+          </div>
+        </div>
+        <div className="hidden md:grid md:grid-cols-1 lg:grid-cols-2 gap-4">
           {[0, 1].map((i) => (
             <Card key={i}>
               <CardHeader>

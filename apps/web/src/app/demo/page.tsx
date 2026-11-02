@@ -16,7 +16,8 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { NudgeControls } from "@/components/nudge-controls";
 import { SwipeToLock } from "@/components/swipe-to-lock";
-import { RecentActivityCard } from "@/components/recent-activity-card";
+import { RecentActivityCard, type RecentActivityItem } from "@/components/recent-activity-card";
+import { OverviewMobileChildList } from "@/components/overview-mobile-child-list";
 import {
   getDeviceDisplayName,
   getEvaluationStatusLabel,
@@ -35,6 +36,22 @@ import {
   PolicyWindowRemainingPrimary,
 } from "@/components/policy-remaining-status";
 import { cn } from "@warden/ui";
+
+function filterActivityForMobile(
+  items: RecentActivityItem[] | undefined
+): RecentActivityItem[] | undefined {
+  if (!items?.length) return items;
+  const now = new Date();
+  const startOfDay = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+  const todayItems = items.filter(
+    (item) => new Date(item.createdAt) >= startOfDay
+  );
+  return todayItems.length > 0 ? todayItems : items;
+}
 
 export default function DemoOverviewPage() {
   const router = useRouter();
@@ -64,31 +81,6 @@ export default function DemoOverviewPage() {
         count={pendingRequests}
         href="/demo/activity"
       />
-
-      <div className="md:hidden rounded-2xl border border-border px-4 py-3 text-base tabular-nums">
-        <Link
-          href="/demo/children"
-          className="font-semibold text-foreground hover:underline"
-        >
-          {children.length} {children.length === 1 ? "child" : "children"}
-        </Link>
-        <span className="text-muted-foreground"> · </span>
-        <span>
-          <span className="font-semibold">{onlineCount}</span>
-          <span className="text-muted-foreground">/{devices.length} online</span>
-        </span>
-        {pendingRequests > 0 && (
-          <>
-            <span className="text-muted-foreground"> · </span>
-            <Link
-              href="/demo/activity"
-              className="font-semibold text-foreground hover:underline"
-            >
-              {pendingRequests} pending
-            </Link>
-          </>
-        )}
-      </div>
 
       <div className="hidden gap-4 md:grid md:grid-cols-2">
         <Link href="/demo/children" className="group block">
@@ -129,7 +121,27 @@ export default function DemoOverviewPage() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 max-md:gap-5 lg:grid-cols-2">
+        <div className="md:hidden">
+          <OverviewMobileChildList
+            items={children.map((child) => ({
+              id: child.id,
+              displayName: child.displayName,
+              href: `/demo/children/${child.id}`,
+              evaluation: child.evaluation,
+              devices: child.devices.map((device) => ({
+                id: device.id,
+                displayName: device.displayName,
+                machineName: device.machineName,
+                isOnline: device.isOnline,
+                isLocked: device.isLocked,
+                adminLock: device.adminLock,
+                runningApps: device.runningApps,
+              })),
+            }))}
+          />
+        </div>
+
+        <div className="hidden md:grid md:grid-cols-1 gap-4 lg:grid-cols-2">
           {children.map((child) => {
             const { evaluation } = child;
             const effectiveLimit =
@@ -389,7 +401,16 @@ export default function DemoOverviewPage() {
             View all →
           </Link>
         </div>
-        <RecentActivityCard items={activity} />
+        <div className="md:hidden">
+          <RecentActivityCard
+            items={filterActivityForMobile(activity)}
+            initialVisible={3}
+            enableShowMore={false}
+          />
+        </div>
+        <div className="hidden md:block">
+          <RecentActivityCard items={activity} />
+        </div>
       </div>
     </div>
   );

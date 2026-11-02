@@ -15,7 +15,11 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { NudgeControls } from "@/components/nudge-controls";
 import { SwipeToLock } from "@/components/swipe-to-lock";
-import { RecentActivityCard } from "@/components/recent-activity-card";
+import {
+  RecentActivityCard,
+  type RecentActivityItem,
+} from "@/components/recent-activity-card";
+import { OverviewMobileChildList } from "@/components/overview-mobile-child-list";
 import {
   getDeviceDisplayName,
   getEvaluationStatusLabel,
@@ -40,6 +44,22 @@ function progressBarClass(status: PolicyStatus) {
   if (status === "blocked") return "bg-destructive";
   if (status === "outside_window") return "bg-yellow-500";
   return "bg-primary";
+}
+
+function filterActivityForMobile(
+  items: RecentActivityItem[] | undefined
+): RecentActivityItem[] | undefined {
+  if (!items?.length) return items;
+  const now = new Date();
+  const startOfDay = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+  const todayItems = items.filter(
+    (item) => new Date(item.createdAt) >= startOfDay
+  );
+  return todayItems.length > 0 ? todayItems : items;
 }
 
 export default function DashboardOverviewPage() {
@@ -95,32 +115,6 @@ export default function DashboardOverviewPage() {
 
       <PendingExtensionBanner count={pendingRequests} />
 
-      {/* Mobile compact stats strip */}
-      <div className="md:hidden rounded-2xl border border-border px-4 py-3 text-base tabular-nums">
-        <Link
-          href="/dashboard/children"
-          className="font-semibold text-foreground hover:underline"
-        >
-          {children.length} {children.length === 1 ? "child" : "children"}
-        </Link>
-        <span className="text-muted-foreground"> · </span>
-        <span>
-          <span className="font-semibold">{onlineCount}</span>
-          <span className="text-muted-foreground">/{devices.length} online</span>
-        </span>
-        {pendingRequests > 0 && (
-          <>
-            <span className="text-muted-foreground"> · </span>
-            <Link
-              href="/dashboard/activity"
-              className="font-semibold text-foreground hover:underline"
-            >
-              {pendingRequests} pending
-            </Link>
-          </>
-        )}
-      </div>
-
       {/* Desktop summary cards */}
       <div className="hidden md:grid md:grid-cols-2 gap-4">
         <Link href="/dashboard/children" className="block group">
@@ -175,7 +169,27 @@ export default function DashboardOverviewPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-md:gap-5">
+          <>
+            <div className="md:hidden">
+              <OverviewMobileChildList
+                items={children.map((child) => ({
+                  id: child.id,
+                  displayName: child.displayName,
+                  href: `/dashboard/children/${child.id}`,
+                  evaluation: child.evaluation,
+                  devices: child.devices.map((device) => ({
+                    id: device.id,
+                    displayName: device.displayName,
+                    machineName: device.machineName,
+                    isOnline: device.isOnline,
+                    isLocked: device.isLocked,
+                    adminLock: device.adminLock,
+                    runningApps: device.runningApps,
+                  })),
+                }))}
+              />
+            </div>
+            <div className="hidden md:grid md:grid-cols-1 lg:grid-cols-2 gap-4">
             {children.map((child) => {
               const { evaluation } = child;
               const effectiveLimit =
@@ -462,7 +476,8 @@ export default function DashboardOverviewPage() {
                 </Card>
               );
             })}
-          </div>
+            </div>
+          </>
         )}
       </div>
 
@@ -479,7 +494,18 @@ export default function DashboardOverviewPage() {
         {activity === undefined && activityLoading ? (
           <ActivityFeedSkeleton />
         ) : (
-          <RecentActivityCard items={activity} />
+          <>
+            <div className="md:hidden">
+              <RecentActivityCard
+                items={filterActivityForMobile(activity)}
+                initialVisible={3}
+                enableShowMore={false}
+              />
+            </div>
+            <div className="hidden md:block">
+              <RecentActivityCard items={activity} />
+            </div>
+          </>
         )}
       </div>
     </div>

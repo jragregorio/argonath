@@ -1618,6 +1618,7 @@ export const dashboardRouter = router({
               adminLock: device.adminLock,
               isPaired: device.isPaired,
               agentVersion: device.agentVersion,
+              runningApps: device.runningApps,
             })),
           };
         })

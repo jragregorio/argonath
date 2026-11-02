@@ -37,6 +37,8 @@ type RecentActivityCardProps = {
   /** Denser rows (timestamp always under detail, including desktop). */
   compact?: boolean;
   initialVisible?: number;
+  /** When false, omit the expand footer (still respects initialVisible). */
+  enableShowMore?: boolean;
   emptyDescription?: string;
 };
 
@@ -45,6 +47,7 @@ export function RecentActivityCard({
   hideChildName = false,
   compact = false,
   initialVisible = 5,
+  enableShowMore = true,
   emptyDescription = "Lockdowns, captures, nudges, and policy changes will show here",
 }: RecentActivityCardProps) {
   const [showAll, setShowAll] = useState(false);
@@ -177,7 +180,7 @@ export function RecentActivityCard({
           );
         })}
       </ul>
-      {activityItems.length > initialVisible && (
+      {enableShowMore && activityItems.length > initialVisible && (
         <div className="border-t border-border p-3">
           <Button
             variant="ghost"
