@@ -78,3 +78,20 @@ Run `npm run db:push` **before** the web deploy. `auth.me` selects `notifyChildM
 3. Send again within 30 s → the tray says to wait N s.
 4. Activity → **Reply** → "On my way" → the child's PC shows the nudge overlay. The child can answer as usual, the row shows "Replied", and the nudge row reads "Replied to a message".
 5. Settings → "Messages from children" off → no push (toast still shows in-app).
+
+## Bugfix: no toast or push in production (2026-11-24, web 0.8.26)
+
+**Symptom:** a message from the tray saved and showed in Activity, but neither the dashboard toast nor the phone push arrived.
+
+**Evidence:** the message row saved at 17:52 UTC, the family's only parent had `notifyChildMessages = true` and one Android `PushToken` (17:01). So the recipients were fine. The broadcast and the FCM send were both fire-and-forget (`void …`) and ran right before `return`. On Vercel the function can be frozen once the response is sent. The realtime send first subscribes the device channel (up to 800 ms when cold), so both were likely cut off. This can't be reproduced on the local dev server, which never freezes. No Vercel log access was available to confirm it directly.
+
+**Fix:** `sendMessage` and the `ackNudge` seen path now `await Promise.allSettled([broadcast, push])` before responding. Errors are logged (`[realtime]` / `[fcm]`) and never fail the child's send. The push result is logged (`[fcm] child message notify { sent, failed }`) so Vercel logs show the outcome.
+
+| Command | Exit |
+|---|---|
+| `npm run typecheck -w @warden/api -w @warden/web` | 0 |
+| `npm run lint -w @warden/web` | 0 |
+| `npm run test` | 0 (78) |
+| `npm run check:boundaries` | 0 |
+
+Version: web 0.8.25 → **0.8.26**. Agent unchanged (server-only fix).

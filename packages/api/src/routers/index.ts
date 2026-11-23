@@ -2594,32 +2594,43 @@ export const agentRouter = router({
         ...(message.quick ? { quick: message.quick } : {}),
       });
 
-      void broadcastToDevice(ctx.device.id, {
-        type: "message:received",
-        deviceId: ctx.device.id,
-        payload: {
-          messageId: message.id,
-          childId: ctx.device.childId,
-          childName: child.displayName,
-          text,
-        },
-        timestamp: now.toISOString(),
-      }).catch(() => {});
-
-      void notifyFamilyParents(child.familyId, "child_message", {
-        title: `Message from ${child.displayName}`,
-        body: text,
-        androidTag: childMessagePushTag(message.id),
-        data: {
-          type: CHILD_MESSAGE_PUSH_TYPE,
-          messageId: message.id,
+      // Await both before responding: on Vercel the function can be frozen
+      // once the response is sent, which dropped fire-and-forget sends (the
+      // realtime channel subscribe alone can take up to ~800ms when cold).
+      // Failures are logged and never fail the child's send.
+      await Promise.allSettled([
+        broadcastToDevice(ctx.device.id, {
+          type: "message:received",
           deviceId: ctx.device.id,
-          childId: ctx.device.childId,
-          path: "/dashboard/activity",
-        },
-      }).catch((error) => {
-        console.error("[fcm] child message notify failed", error);
-      });
+          payload: {
+            messageId: message.id,
+            childId: ctx.device.childId,
+            childName: child.displayName,
+            text,
+          },
+          timestamp: now.toISOString(),
+        }).catch((error) => {
+          console.error("[realtime] child message broadcast failed", error);
+        }),
+        notifyFamilyParents(child.familyId, "child_message", {
+          title: `Message from ${child.displayName}`,
+          body: text,
+          androidTag: childMessagePushTag(message.id),
+          data: {
+            type: CHILD_MESSAGE_PUSH_TYPE,
+            messageId: message.id,
+            deviceId: ctx.device.id,
+            childId: ctx.device.childId,
+            path: "/dashboard/activity",
+          },
+        })
+          .then((result) => {
+            console.info("[fcm] child message notify", result);
+          })
+          .catch((error) => {
+            console.error("[fcm] child message notify failed", error);
+          }),
+      ]);
 
       return { ok: true, id: message.id };
     }),
@@ -2907,44 +2918,53 @@ export const agentRouter = router({
             )?.displayName ?? "Your child")
           : null;
 
-        void broadcastToDevice(ctx.device.id, {
-          type: "nudge:seen",
-          deviceId: ctx.device.id,
-          payload: {
-            nudgeId: updated.id,
-            response: updated.response,
-            responseText: updated.responseText,
-            requestedBy: updated.requestedBy,
-            childName,
-          },
-          timestamp: new Date().toISOString(),
-        }).catch(() => {});
-
-        if (meaningful && childName) {
-          void notifyParentUser(
-            updated.requestedBy,
-            updated.familyId,
-            "nudge_reply",
-            {
-              title: "Nudge reply",
-              body: formatNudgeReplyMessage(
-                childName,
-                updated.response,
-                updated.responseText
-              ),
-              androidTag: nudgeReplyPushTag(updated.id),
-              data: {
-                type: NUDGE_REPLY_PUSH_TYPE,
-                nudgeId: updated.id,
-                deviceId: ctx.device.id,
-                childId: updated.childId,
-                path: "/dashboard/activity",
-              },
-            }
-          ).catch((error) => {
-            console.error("[fcm] nudge reply notify failed", error);
-          });
-        }
+        // Await before responding (see sendMessage): Vercel may freeze the
+        // function after the response, dropping un-awaited sends.
+        await Promise.allSettled([
+          broadcastToDevice(ctx.device.id, {
+            type: "nudge:seen",
+            deviceId: ctx.device.id,
+            payload: {
+              nudgeId: updated.id,
+              response: updated.response,
+              responseText: updated.responseText,
+              requestedBy: updated.requestedBy,
+              childName,
+            },
+            timestamp: new Date().toISOString(),
+          }).catch((error) => {
+            console.error("[realtime] nudge:seen broadcast failed", error);
+          }),
+          meaningful && childName
+            ? notifyParentUser(
+                updated.requestedBy,
+                updated.familyId,
+                "nudge_reply",
+                {
+                  title: "Nudge reply",
+                  body: formatNudgeReplyMessage(
+                    childName,
+                    updated.response,
+                    updated.responseText
+                  ),
+                  androidTag: nudgeReplyPushTag(updated.id),
+                  data: {
+                    type: NUDGE_REPLY_PUSH_TYPE,
+                    nudgeId: updated.id,
+                    deviceId: ctx.device.id,
+                    childId: updated.childId,
+                    path: "/dashboard/activity",
+                  },
+                }
+              )
+                .then((result) => {
+                  console.info("[fcm] nudge reply notify", result);
+                })
+                .catch((error) => {
+                  console.error("[fcm] nudge reply notify failed", error);
+                })
+            : Promise.resolve(),
+        ]);
 
         return {
           ok: true,
