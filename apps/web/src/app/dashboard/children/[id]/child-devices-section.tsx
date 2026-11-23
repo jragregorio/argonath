@@ -537,15 +537,17 @@ export function ChildDevicesSection({
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-2 max-md:gap-3">
+                  <div className="@container flex flex-col gap-2 max-md:gap-3">
                     {nudgeByDevice[device.id]?.label && (
                       <span className="block break-words text-sm text-muted-foreground md:text-xs">
                         {nudgeByDevice[device.id].label}
                       </span>
                     )}
-                    <div className="flex flex-col gap-2 max-md:gap-3 sm:flex-row sm:items-stretch">
+                    {/* Row only when the device card is wide enough for Nudge +
+                        a readable swipe track + the ⋯ menu (container, not viewport). */}
+                    <div className="flex flex-col gap-2 max-md:gap-3 @lg:flex-row @lg:items-stretch">
                       <NudgeControls
-                        className="w-full sm:w-52 sm:shrink-0"
+                        className="w-full @lg:w-52 @lg:shrink-0"
                         disabled={
                           !device.isPaired ||
                           !device.isOnline ||
@@ -569,7 +571,7 @@ export function ChildDevicesSection({
                           })
                         }
                       />
-                      <div className="flex w-full min-w-0 items-stretch gap-2 max-md:gap-3 sm:flex-1">
+                      <div className="flex w-full min-w-0 items-stretch gap-2 max-md:gap-3 @lg:flex-1">
                         {effectiveAdminLock ? (
                           <Button
                             variant="outline"

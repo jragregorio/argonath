@@ -17,7 +17,7 @@ When the schedule window is the binding limit, the UI leads with `used / dailyLi
 | Surfaces | Real dashboard: `child-usage-header.tsx`, `overview-client.tsx`. Demo parity: `demo/page.tsx`, `demo/children/[id]/page.tsx`. |
 | Shared helper | Prefer one small shared helper under `apps/web/src/` (e.g. `lib/policy-remaining-display.ts` + optional tiny presentational component) so copy/urgency stay consistent. Do not invent new packages. |
 | Window-binding primary copy | `{N} min left today` (keep minutes; optional `Xh Ym` only if already natural — prefer simple `N min` for consistency with existing UI). |
-| Window-binding secondary | `Allowed hours ending · {dailyRemaining} min of daily budget left` |
+| Window-binding secondary | ~~`Allowed hours ending · {dailyRemaining} min of daily budget left`~~ → `Allowed hours end before the daily limit is reached` (2026-11-24: the budget figure is always larger than the primary and read as a contradiction). After-hours secondary → `After-hours bonus · {bonus} min granted today`; outside-window status drops the "N min of today's budget left" suffix. |
 | Used today | Keep visible but secondary when window is binding (muted / not competing with primary). |
 | Urgency thresholds | Window binding + `remainingMinutes <= 60` → warning/attention color (use existing theme tokens, e.g. yellow/warning — match nearby patterns). Window binding + `> 60` → `text-foreground` + `font-medium` (not muted). Non-window cases unchanged hierarchy. |
 | Absolute end clock | Do **not** add “ends at 7:00 PM” unless already available on evaluation without new API fields. |

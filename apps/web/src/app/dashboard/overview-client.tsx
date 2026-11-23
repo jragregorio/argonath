@@ -393,15 +393,18 @@ export default function DashboardOverviewPage() {
                                 {deviceBadges}
                               </div>
 
-                              <div className="space-y-2">
+                              <div className="@container space-y-2">
                                 {nudgeByDevice[device.id]?.label && (
                                   <span className="block break-words text-xs text-muted-foreground">
                                     {nudgeByDevice[device.id].label}
                                   </span>
                                 )}
-                                <div className="flex flex-row items-stretch gap-2">
+                                {/* Stack when the card itself is narrow (e.g. two
+                                    cards side by side on a ~800px window), so the
+                                    swipe track never collapses to a sliver. */}
+                                <div className="flex flex-col items-stretch gap-2 @sm:flex-row">
                                   <NudgeControls
-                                    className="w-52 shrink-0"
+                                    className="w-full @sm:w-52 @sm:shrink-0"
                                     disabled={
                                       !device.isPaired ||
                                       !device.isOnline ||
@@ -429,7 +432,7 @@ export default function DashboardOverviewPage() {
                                   {effectiveAdminLock ? (
                                     <Button
                                       variant="outline"
-                                      className="min-w-0 flex-1"
+                                      className="min-w-0 @sm:flex-1"
                                       onClick={() =>
                                         setAdminLock.mutate({
                                           deviceId: device.id,
@@ -442,7 +445,7 @@ export default function DashboardOverviewPage() {
                                     </Button>
                                   ) : (
                                     <SwipeToLock
-                                      className="min-w-0 flex-1"
+                                      className="min-w-0 @sm:flex-1"
                                       onConfirm={() =>
                                         setAdminLock.mutate({
                                           deviceId: device.id,

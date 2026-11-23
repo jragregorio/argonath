@@ -30,22 +30,30 @@ function StickyBackChip({
 
   if (!visible) return null;
 
+  // Opaque full-width bar rather than a translucent floating pill: content
+  // scrolls *under a header* instead of showing through a chip on top of cards.
   return (
-    <Link
-      href={href}
+    <div
       className={cn(
-        "md:hidden fixed left-5 z-40 flex min-h-11 items-center gap-1.5",
-        "rounded-full border border-primary/40 bg-primary/15 px-3.5 py-2",
-        "text-base font-medium text-primary shadow-lg backdrop-blur-md",
-        "transition-opacity duration-200",
-        "hover:bg-primary/20",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        "md:hidden fixed inset-x-0 top-0 z-40",
+        "border-b border-border/60 bg-background/95 shadow-sm backdrop-blur-md",
+        "supports-[backdrop-filter]:bg-background/85"
       )}
-      style={{ top: "calc(0.5rem + env(safe-area-inset-top, 0px))" }}
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
-      <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
-      {label}
-    </Link>
+      <Link
+        href={href}
+        className={cn(
+          "mx-3 my-1 inline-flex min-h-11 items-center gap-1.5 rounded-md px-2",
+          "text-base font-medium text-primary",
+          "hover:bg-primary/10",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        )}
+      >
+        <ArrowLeft className="h-5 w-5 shrink-0" aria-hidden />
+        {label}
+      </Link>
+    </div>
   );
 }
 

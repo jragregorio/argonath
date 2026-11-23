@@ -337,15 +337,15 @@ export default function DemoOverviewPage() {
                             {deviceBadges}
                           </div>
 
-                          <div className="space-y-2">
+                          <div className="@container space-y-2">
                             {nudgeState?.label && (
                               <span className="text-xs text-muted-foreground">
                                 {nudgeState.label}
                               </span>
                             )}
-                            <div className="flex flex-row items-stretch gap-2">
+                            <div className="flex flex-col items-stretch gap-2 @sm:flex-row">
                               <NudgeControls
-                                className="w-52 shrink-0"
+                                className="w-full @sm:w-52 @sm:shrink-0"
                                 disabled={
                                   !device.isPaired ||
                                   !device.isOnline ||
@@ -359,7 +359,7 @@ export default function DemoOverviewPage() {
                               {effectiveAdminLock ? (
                                 <Button
                                   variant="outline"
-                                  className="min-w-0 flex-1"
+                                  className="min-w-0 @sm:flex-1"
                                   onClick={() =>
                                     setAdminLock(device.id, false)
                                   }
@@ -370,7 +370,7 @@ export default function DemoOverviewPage() {
                                 </Button>
                               ) : (
                                 <SwipeToLock
-                                  className="min-w-0 flex-1"
+                                  className="min-w-0 @sm:flex-1"
                                   onConfirm={() =>
                                     setAdminLock(device.id, true)
                                   }

@@ -503,22 +503,22 @@ export default function DemoChildDetailPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-2 max-md:gap-3">
+                  <div className="@container flex flex-col gap-2 max-md:gap-3">
                     {nudgeState?.label && (
                       <span className="text-sm text-muted-foreground md:text-xs">
                         {nudgeState.label}
                       </span>
                     )}
-                    <div className="flex flex-col gap-2 max-md:gap-3 sm:flex-row sm:items-stretch">
+                    <div className="flex flex-col gap-2 max-md:gap-3 @lg:flex-row @lg:items-stretch">
                       <NudgeControls
-                        className="w-full sm:w-52 sm:shrink-0"
+                        className="w-full @lg:w-52 @lg:shrink-0"
                         disabled={
                           !device.isPaired || !device.isOnline || nudgeBusy
                         }
                         isSending={nudgeState?.label === "Sending…"}
                         onSend={(message) => sendNudge(device.id, message)}
                       />
-                      <div className="flex w-full min-w-0 items-stretch sm:flex-1">
+                      <div className="flex w-full min-w-0 items-stretch @lg:flex-1">
                         {effectiveAdminLock ? (
                           <Button
                             variant="outline"

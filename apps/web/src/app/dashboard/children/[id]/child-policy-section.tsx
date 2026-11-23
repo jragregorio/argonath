@@ -373,6 +373,24 @@ export function ChildPolicySection({ childId, policy }: ChildPolicySectionProps)
             />
           </div>
 
+          {/* Mobile: the full advisory + fix button live in the Edit limits
+              sheet, but the mismatch itself must be visible without opening it. */}
+          {showReachAdvisory && (
+            <div
+              className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground md:hidden"
+              role="note"
+            >
+              {formatReachAdvisory(
+                policyReach.constrainedDays,
+                policyReach.byDay,
+                currentLimit
+              )}{" "}
+              <span className="text-muted-foreground">
+                Open Edit limits to adjust.
+              </span>
+            </div>
+          )}
+
           <Button
             type="button"
             variant="outline"

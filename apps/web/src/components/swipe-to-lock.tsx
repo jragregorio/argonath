@@ -11,7 +11,6 @@ import {
 } from "react";
 import { ChevronRight, Lock, Loader2 } from "lucide-react";
 import { cn } from "@warden/ui";
-import { useIsDesktopMd } from "@/lib/use-is-desktop-md";
 
 type SwipeToLockProps = {
   onConfirm: () => void;
@@ -26,6 +25,10 @@ const END_PAD = 4;
 const COMPLETE_RATIO = 0.88;
 const DEFAULT_THUMB = 36;
 const DEFAULT_LABEL = "Swipe to lock down";
+const SHORT_LABEL = "Swipe to lock";
+/** Track widths (px) at which the default label still fits beside the thumb. */
+const FULL_LABEL_MIN_WIDTH = 210;
+const SHORT_LABEL_MIN_WIDTH = 160;
 
 export function SwipeToLock({
   onConfirm,
@@ -35,7 +38,6 @@ export function SwipeToLock({
   title,
   label = DEFAULT_LABEL,
 }: SwipeToLockProps) {
-  const isDesktop = useIsDesktopMd();
   const trackRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLButtonElement>(null);
   const draggingRef = useRef(false);
@@ -46,6 +48,7 @@ export function SwipeToLock({
   const [dragging, setDragging] = useState(false);
   const [maxTravel, setMaxTravel] = useState(0);
   const [thumbSize, setThumbSize] = useState(DEFAULT_THUMB);
+  const [trackWidth, setTrackWidth] = useState(0);
   const labelId = useId();
 
   const inactive = disabled || pending;
@@ -56,6 +59,7 @@ export function SwipeToLock({
     if (!el) return;
     const thumbW = thumb?.offsetWidth ?? DEFAULT_THUMB;
     setThumbSize(thumbW);
+    setTrackWidth(el.clientWidth);
     setMaxTravel(Math.max(0, el.clientWidth - thumbW - END_PAD * 2));
   }, []);
 
@@ -146,12 +150,17 @@ export function SwipeToLock({
     }
   };
 
+  // Pick the label from the track's own width, not the viewport: the same
+  // control sits in narrow cards on wide screens. Below the short-label width
+  // only the chevron hint is shown; the accessible name stays the full label.
   const displayLabel =
-    label === DEFAULT_LABEL
-      ? isDesktop
+    label !== DEFAULT_LABEL || trackWidth === 0
+      ? label
+      : trackWidth >= FULL_LABEL_MIN_WIDTH
         ? DEFAULT_LABEL
-        : "Swipe to lock"
-      : label;
+        : trackWidth >= SHORT_LABEL_MIN_WIDTH
+          ? SHORT_LABEL
+          : null;
 
   const progress = maxTravel > 0 ? offset / maxTravel : 0;
   const fillWidth =
@@ -176,9 +185,11 @@ export function SwipeToLock({
         aria-hidden="true"
       />
 
+      <span id={labelId} className="sr-only">
+        {pending ? "Locking…" : label}
+      </span>
       <div
-        id={labelId}
-        className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 px-14 text-sm font-medium whitespace-nowrap text-foreground/80 md:px-11"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 overflow-hidden pr-3 pl-14 text-sm font-medium whitespace-nowrap text-foreground/80 md:pl-12"
         style={{ opacity: Math.max(0, 1 - progress * 1.35) }}
         aria-hidden="true"
       >
@@ -190,7 +201,7 @@ export function SwipeToLock({
         ) : (
           <>
             {displayLabel}
-            <ChevronRight className="h-3.5 w-3.5 opacity-70" />
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" />
           </>
         )}
       </div>

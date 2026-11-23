@@ -169,10 +169,12 @@ function buildDefaultStatusText(
     return "Limits paused";
   }
   if (evaluation.status === "outside_window") {
+    // No "N min of today's budget left" here: before hours start that figure
+    // ignores the window cap (840 left vs a 780-min window), and after hours
+    // end today's budget no longer applies. Used/limit is shown separately.
     const next = evaluation.nextWindowStart;
-    const daily = evaluation.dailyRemainingMinutes;
-    if (next && daily > 0) {
-      return `Available again: ${formatClockInText(next)} — ${daily} min of today's budget left`;
+    if (next && evaluation.dailyRemainingMinutes > 0) {
+      return `Available again: ${formatClockInText(next)}`;
     }
     return formatClockInText(
       evaluation.message ?? getPolicyStatusLabel(evaluation.status)
@@ -197,7 +199,9 @@ export function getPolicyRemainingDisplay(
       layout: "window_binding",
       statusText,
       primaryText: `${evaluation.remainingMinutes} min left today`,
-      secondaryText: `Allowed hours ending · ${evaluation.dailyRemainingMinutes} min of daily budget left`,
+      // The window ends before the daily limit is hit, so the daily-budget
+      // figure (always larger) would contradict the primary "N min left today".
+      secondaryText: "Allowed hours end before the daily limit is reached",
       afterHoursText:
         afterHoursBonus > 0
           ? `+${afterHoursBonus} min allowed after hours end`
@@ -214,7 +218,9 @@ export function getPolicyRemainingDisplay(
       layout: "after_hours",
       statusText,
       primaryText: `${evaluation.remainingMinutes} min left today`,
-      secondaryText: `After-hours bonus · ${evaluation.dailyRemainingMinutes} min of daily budget left`,
+      // Outside allowed hours only the bonus pool counts; the daily budget
+      // remaining is irrelevant and conflicted with "N min left today".
+      secondaryText: `After-hours bonus · ${evaluation.bonusMinutes} min granted today`,
       afterHoursText: null,
       primaryClassName: getWindowBindingPrimaryClassName(
         evaluation.remainingMinutes
