@@ -1,5 +1,6 @@
+extern alias ca;
 using System.Xml.Linq;
-using Warden.Installer.CA;
+using ca::Warden.Installer.CA;
 using Xunit;
 
 namespace Warden.Tests;

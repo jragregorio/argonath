@@ -8,68 +8,49 @@ internal static class Program
 {
     private const string MutexName = @"Global\WardenUpdater";
 
-    private static readonly string DataRoot = Path.Combine(
+    /// <summary>Read by the tray (as the child), so it lives in the shared data folder.</summary>
+    internal static string StatusPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-        "Warden"
+        "Warden",
+        "update-status.json"
     );
 
-    internal static string StatusPath => Path.Combine(DataRoot, "update-status.json");
-
-    private static async Task<int> Main()
+    // Synchronous on purpose: the mutex must be released on the thread that acquired it, and an
+    // async Main would resume on a thread-pool thread after the first await.
+    private static int Main()
     {
-        if (!SingleRun.TryAcquire(MutexName, out var handle))
+        bool acquired;
+        IDisposable? handle;
+        try
+        {
+            acquired = SingleRun.TryAcquire(MutexName, out handle);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return 1; // mutex name squatted with a hostile DACL; nothing safe to do
+        }
+
+        if (!acquired)
         {
             return 0; // an update is already running
         }
 
         using (handle)
         {
-            var updaterRoot = Path.Combine(DataRoot, "updater");
-            var logsDir = Path.Combine(updaterRoot, "logs");
-            var downloadsDir = Path.Combine(updaterRoot, "downloads");
-            var logPath = Path.Combine(logsDir, $"updater-{DateTime.Now:yyyyMMdd}.log");
-
-            using var env = new SystemUpdaterEnvironment(AppContext.BaseDirectory, logPath);
+            var paths = UpdaterPaths.ForCurrentAccount();
+            var logPath = Path.Combine(paths.LogsDir, $"updater-{DateTime.Now:yyyyMMdd}.log");
             try
             {
-                EnsureLogsDirectory(env, updaterRoot, logsDir);
+                Directory.CreateDirectory(paths.LogsDir);
             }
             catch
             {
                 // continue without a log file
             }
 
-            var status = await new UpdaterRunner(env, StatusPath, downloadsDir).RunAsync();
+            using var env = new SystemUpdaterEnvironment(AppContext.BaseDirectory, logPath);
+            var status = new UpdaterRunner(env, StatusPath, paths.DownloadsDir).RunAsync().GetAwaiter().GetResult();
             return status.Result == "failed" ? 1 : 0;
         }
-    }
-
-    /// <summary>
-    /// The protected updater root is created once (SYSTEM/Administrators only) and keeps its
-    /// logs across runs; downloads\ is recreated by the runner on each install.
-    /// </summary>
-    private static void EnsureLogsDirectory(SystemUpdaterEnvironment env, string updaterRoot, string logsDir)
-    {
-        if (!IsProtectedByAdmins(updaterRoot))
-        {
-            env.PrepareSecureDirectory(updaterRoot);
-        }
-
-        Directory.CreateDirectory(logsDir);
-    }
-
-    private static bool IsProtectedByAdmins(string path)
-    {
-        if (!Directory.Exists(path))
-        {
-            return false;
-        }
-
-        var owner = new DirectoryInfo(path)
-            .GetAccessControl()
-            .GetOwner(typeof(System.Security.Principal.SecurityIdentifier));
-        return owner is System.Security.Principal.SecurityIdentifier sid
-            && (sid.IsWellKnown(System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid)
-                || sid.IsWellKnown(System.Security.Principal.WellKnownSidType.LocalSystemSid));
     }
 }

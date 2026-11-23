@@ -58,13 +58,14 @@ public sealed class UpdaterRunner(IUpdaterEnvironment env, string statusPath, st
             return Make(Failed, installed, release.Version, null, "Download URL not allowed.");
         }
 
-        env.PrepareSecureDirectory(updatesDir);
+        env.EnsureWorkDirectory(updatesDir);
         // Version is strict X.Y.Z (IsNewer checked it), so it is safe in a file name.
         var msiPath = Path.Combine(updatesDir, $"Warden-{release.Version}-x64.msi");
         var logPath = Path.Combine(updatesDir, $"msiexec-{release.Version}.log");
 
         try
         {
+            TryDelete(msiPath); // leftover from an interrupted run
             env.Log("Downloading " + url);
             await env.DownloadAsync(url.AbsoluteUri, msiPath);
 

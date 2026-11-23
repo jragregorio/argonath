@@ -333,7 +333,7 @@
 
     <InstallExecuteSequence>
       <Custom Action="CreateWardenUpdaterTask" After="CreateWardenTask" Condition="NOT REMOVE" />
-      <Custom Action="DeleteWardenUpdaterTask" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot;" />
+      <Custom Action="DeleteWardenUpdaterTask" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
       <Custom Action="CreateWardenTask" After="InstallFiles" Condition="NOT REMOVE" />
       <!-- Rollback scheduling only; Execute=rollback means it does not run on success. -->
       <Custom Action="RollbackWardenTask" Before="CreateWardenTask" Condition="NOT REMOVE" />

@@ -1,8 +1,6 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
-using System.Security.AccessControl;
-using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 
@@ -61,32 +59,7 @@ internal sealed class SystemUpdaterEnvironment : IUpdaterEnvironment, IDisposabl
         return value!;
     }
 
-    /// <summary>
-    /// (Re)creates <paramref name="path"/> owned by Administrators with only SYSTEM and
-    /// Administrators allowed. An existing folder is removed first because a standard user
-    /// could have pre-created it (and, as owner, could change its ACL later).
-    /// </summary>
-    public void PrepareSecureDirectory(string path)
-    {
-        SafeDirectory.RemoveExisting(path);
-
-        var security = new DirectorySecurity();
-        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-        var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
-        var admins = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
-        foreach (var sid in new[] { system, admins })
-        {
-            security.AddAccessRule(new FileSystemAccessRule(
-                sid,
-                FileSystemRights.FullControl,
-                InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
-                PropagationFlags.None,
-                AccessControlType.Allow));
-        }
-
-        security.SetOwner(admins);
-        new DirectoryInfo(path).Create(security);
-    }
+    public void EnsureWorkDirectory(string path) => Directory.CreateDirectory(path);
 
     public async Task DownloadAsync(string url, string dest)
     {

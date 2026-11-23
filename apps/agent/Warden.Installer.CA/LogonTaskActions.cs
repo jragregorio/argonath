@@ -219,19 +219,11 @@ public class LogonTaskActions
     {
         try
         {
-            if (!Directory.Exists(InstallLogDir))
-            {
-                Directory.CreateDirectory(InstallLogDir);
-            }
-
             var line = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
                        + " [Task] "
                        + message
                        + Environment.NewLine;
-            File.AppendAllText(
-                Path.Combine(InstallLogDir, InstallLogFile),
-                line,
-                Encoding.UTF8);
+            InstallLogGuard.TryAppend(InstallLogDir, InstallLogFile, line);
         }
         catch
         {

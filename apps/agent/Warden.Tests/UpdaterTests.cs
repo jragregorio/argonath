@@ -238,44 +238,6 @@ public class UpdaterTests : IDisposable
         Assert.False(second);
     }
 
-    // ---- SafeDirectory ----
-
-    [Fact]
-    public void RemoveExisting_Junction_RemovesLinkButNotTarget()
-    {
-        var target = Path.Combine(_root, "target");
-        Directory.CreateDirectory(target);
-        var precious = Path.Combine(target, "precious.txt");
-        File.WriteAllText(precious, "keep");
-        var junction = Path.Combine(_root, "junction");
-        var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-            "cmd.exe", $"/c mklink /J \"{junction}\" \"{target}\"")
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-        })!;
-        mklink.WaitForExit();
-        Assert.True(Directory.Exists(junction));
-
-        SafeDirectory.RemoveExisting(junction);
-
-        Assert.False(Directory.Exists(junction));
-        Assert.True(File.Exists(precious));
-    }
-
-    [Fact]
-    public void RemoveExisting_RealDirectory_RemovesContents()
-    {
-        var dir = Path.Combine(_root, "real");
-        Directory.CreateDirectory(Path.Combine(dir, "sub"));
-        File.WriteAllText(Path.Combine(dir, "sub", "a.msi"), "x");
-
-        SafeDirectory.RemoveExisting(dir);
-
-        Assert.False(Directory.Exists(dir));
-    }
-
     // ---- helpers ----
 
     private UpdaterRunner Runner(FakeEnv env) => new(env, StatusPath, UpdatesDir);
@@ -316,7 +278,7 @@ public class UpdaterTests : IDisposable
         public Task<ReleaseInfo?> FetchLatestAsync() =>
             FetchThrows ? throw new HttpRequestException("offline") : Task.FromResult(Release);
 
-        public void PrepareSecureDirectory(string path) => Directory.CreateDirectory(path);
+        public void EnsureWorkDirectory(string path) => Directory.CreateDirectory(path);
 
         public Task DownloadAsync(string url, string dest)
         {

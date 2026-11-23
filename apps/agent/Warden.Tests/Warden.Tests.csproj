@@ -27,7 +27,9 @@
     <ProjectReference Include="..\Warden.Updater\Warden.Updater.csproj" />
     <ProjectReference Include="..\Warden.Tray\Warden.Tray.csproj" />
     <!-- net48 custom-action library: only its pure XML builders are exercised here. -->
-    <ProjectReference Include="..\Warden.Installer.CA\Warden.Installer.CA.csproj" />
+    <ProjectReference Include="..\Warden.Installer.CA\Warden.Installer.CA.csproj" Aliases="ca" />
+    <!-- Compiled here too: the net48 copy's ACL calls cannot JIT on the net8 test host. -->
+    <Compile Include="..\Warden.Installer.CA\InstallLogGuard.cs" Link="Linked\InstallLogGuard.cs" />
   </ItemGroup>
 
   <PropertyGroup>

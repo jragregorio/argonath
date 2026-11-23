@@ -9,8 +9,11 @@ public interface IUpdaterEnvironment
     /// <summary>Latest stable release from the server, or null when none is published.</summary>
     Task<ReleaseInfo?> FetchLatestAsync();
 
-    /// <summary>Creates <paramref name="path"/> writable only by SYSTEM and Administrators.</summary>
-    void PrepareSecureDirectory(string path);
+    /// <summary>
+    /// Creates <paramref name="path"/> if missing. Callers only pass folders under the updater
+    /// account's own LocalAppData (see <see cref="UpdaterPaths"/>), so no ACL work is needed.
+    /// </summary>
+    void EnsureWorkDirectory(string path);
 
     Task DownloadAsync(string url, string dest);
 
