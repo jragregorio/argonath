@@ -41,6 +41,11 @@ public class MainWindow : Window
     private readonly StackPanel _messagePanel;
     private readonly IReadOnlyList<WpfButton> _quickMessageButtons;
     private readonly WpfTextBox _messageBox;
+    private readonly UpdateBanner _updateBanner;
+    private readonly DispatcherTimer _updateStatusTimer;
+    private UpdatePhase _updatePhase = UpdatePhase.Idle;
+    private DateTimeOffset? _updateStartedAt;
+    private static readonly TimeSpan UpdateStatusPollLimit = TimeSpan.FromMinutes(20);
     private readonly WpfButton _messageSendBtn;
     private readonly TextBlock _messageStatusLine;
     private readonly TextBlock _messageErrorLine;
@@ -80,6 +85,10 @@ public class MainWindow : Window
         UiTheme.ApplyWindowChrome(this);
 
         var root = new StackPanel { Margin = new Thickness(24) };
+
+        _updateBanner = new UpdateBanner();
+        _updateBanner.UpdateClicked += StartUpdate;
+        root.Children.Add(_updateBanner);
 
         var header = new StackPanel { Margin = new Thickness(0, 0, 0, 20) };
         header.Children.Add(
@@ -420,6 +429,13 @@ public class MainWindow : Window
 
         UiTheme.WithCustomTitleBar(this, root, "Warden");
 
+        _engine.UpdateAvailabilityChanged += _ => Dispatcher.BeginInvoke(RefreshUpdateBanner);
+        _engine.LockRequired += () => Dispatcher.BeginInvoke(RefreshUpdateBanner);
+        _engine.UnlockRequired += () => Dispatcher.BeginInvoke(RefreshUpdateBanner);
+        _updateStatusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        _updateStatusTimer.Tick += (_, _) => PollUpdateStatus();
+        RefreshUpdateBanner();
+
         Closing += (_, e) =>
         {
             if (_allowClose) return;
@@ -448,6 +464,54 @@ public class MainWindow : Window
             _uiTimer.Start();
         };
         Closed += (_, _) => _uiTimer.Stop();
+    }
+
+    private void RefreshUpdateBanner()
+    {
+        var view = UpdateBannerModel.Compute(new UpdateBannerInput(
+            AgentVersionInfo.Current,
+            _engine.AvailableUpdate?.Version,
+            UpdaterLauncher.ReadLastResult(),
+            _engine.IsLocked || _engine.IsAdminLocked,
+            _updatePhase,
+            _updateStartedAt
+        ));
+        _updateBanner.Render(view);
+    }
+
+    private void StartUpdate()
+    {
+        _updateStartedAt = DateTimeOffset.UtcNow;
+        _updatePhase = UpdatePhase.Starting;
+        RefreshUpdateBanner();
+
+        if (UpdaterLauncher.TryStart())
+        {
+            // On success msiexec closes this process and the updater relaunches Warden.
+            // Poll the status file so a failure before install (e.g. hash mismatch) is shown.
+            _updateStatusTimer.Start();
+        }
+        else
+        {
+            _updatePhase = UpdatePhase.StartFailed;
+        }
+
+        RefreshUpdateBanner();
+    }
+
+    private void PollUpdateStatus()
+    {
+        var last = UpdaterLauncher.ReadLastResult();
+        var reported = last is not null && _updateStartedAt is { } started && last.At > started;
+        var gaveUp = _updateStartedAt is { } s && DateTimeOffset.UtcNow - s > UpdateStatusPollLimit;
+        if (reported || gaveUp)
+        {
+            _updateStatusTimer.Stop();
+            _updatePhase = UpdatePhase.Idle;
+            _updateStartedAt = null;
+        }
+
+        RefreshUpdateBanner();
     }
 
     public void ShowFromTray()

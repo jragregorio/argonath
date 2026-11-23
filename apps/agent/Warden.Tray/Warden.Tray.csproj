@@ -13,6 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Warden.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Warden.Core\Warden.Core.csproj" />
     <ProjectReference Include="..\Warden.LockUI\Warden.LockUI.csproj" />
   </ItemGroup>
