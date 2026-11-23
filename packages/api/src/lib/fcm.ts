@@ -17,7 +17,8 @@ export type NotificationCategory =
   | "extension"
   | "device_online"
   | "device_offline"
-  | "nudge_reply";
+  | "nudge_reply"
+  | "child_message";
 
 const CATEGORY_PREF_FIELD: Record<
   NotificationCategory,
@@ -25,11 +26,13 @@ const CATEGORY_PREF_FIELD: Record<
   | "notifyDeviceOnline"
   | "notifyDeviceOffline"
   | "notifyNudgeReplies"
+  | "notifyChildMessages"
 > = {
   extension: "notifyExtensionRequests",
   device_online: "notifyDeviceOnline",
   device_offline: "notifyDeviceOffline",
   nudge_reply: "notifyNudgeReplies",
+  child_message: "notifyChildMessages",
 };
 
 function readServiceAccount(): ServiceAccount | null {

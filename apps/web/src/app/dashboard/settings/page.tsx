@@ -471,6 +471,11 @@ export default function SettingsPage() {
                 label: "Nudge replies",
                 description: "When a child replies to a nudge you sent",
               },
+              {
+                key: "notifyChildMessages" as const,
+                label: "Messages from children",
+                description: "When a child sends a message from their PC",
+              },
             ] as const
           ).map(({ key, label, description }) => {
             const checked = me?.user?.[key] ?? true;

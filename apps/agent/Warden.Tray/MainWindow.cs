@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Warden.Core;
+using Warden.Core.Models;
 using Warden.Core.Services;
 using Brush = System.Windows.Media.Brush;
 using FontFamily = System.Windows.Media.FontFamily;
@@ -36,14 +37,33 @@ public class MainWindow : Window
     private readonly WpfButton _customSendBtn;
     private readonly TextBlock _requestStatusLine;
     private readonly TextBlock _requestValidationLine;
+    private readonly WpfButton _messageToggleBtn;
+    private readonly StackPanel _messagePanel;
+    private readonly IReadOnlyList<WpfButton> _quickMessageButtons;
+    private readonly WpfTextBox _messageBox;
+    private readonly WpfButton _messageSendBtn;
+    private readonly TextBlock _messageStatusLine;
+    private readonly TextBlock _messageErrorLine;
     private bool _allowClose;
     private bool _requestExpanded;
     private bool _requestBusy;
+    private bool _messageExpanded;
+    private bool _messageBusy;
     private double _remainingFraction = 1;
 
     private const int ExtensionMinMinutes = 1;
     private const int ExtensionMaxMinutes = 120;
     private static readonly int[] ExtensionPresets = [15, 30, 60];
+
+    private const int MessageMaxLength = 200;
+
+    /// <summary>Quick-button key (stored server-side) and short caption for the 3-up row.</summary>
+    private static readonly (string Key, string Caption)[] QuickMessages =
+    [
+        ("come_here", "Come here?"),
+        ("done", "I'm done"),
+        ("need_help", "Need help")
+    ];
 
     public MainWindow(
         EnforcementEngine engine,
@@ -184,10 +204,23 @@ public class MainWindow : Window
 
         var requestSection = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
 
+        var toggleRow = new Grid();
+        toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
+        toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
         _requestToggleBtn = UiTheme.GoldButton("Request");
         _requestToggleBtn.Margin = new Thickness(0, 0, 0, 0);
         _requestToggleBtn.Click += (_, _) => ToggleRequestPanel();
-        requestSection.Children.Add(_requestToggleBtn);
+        Grid.SetColumn(_requestToggleBtn, 0);
+        toggleRow.Children.Add(_requestToggleBtn);
+
+        _messageToggleBtn = UiTheme.SecondaryButton("Message");
+        _messageToggleBtn.Click += (_, _) => ToggleMessagePanel();
+        Grid.SetColumn(_messageToggleBtn, 2);
+        toggleRow.Children.Add(_messageToggleBtn);
+
+        requestSection.Children.Add(toggleRow);
 
         _requestPanel = new StackPanel
         {
@@ -262,6 +295,87 @@ public class MainWindow : Window
         _requestPanel.Children.Add(_requestValidationLine);
 
         requestSection.Children.Add(_requestPanel);
+
+        _messagePanel = new StackPanel
+        {
+            Margin = new Thickness(0, 10, 0, 0),
+            Visibility = Visibility.Collapsed
+        };
+
+        _messagePanel.Children.Add(new TextBlock
+        {
+            Text = "Send a message to your parent",
+            FontSize = 12,
+            Foreground = UiTheme.MutedBrush,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var quickRow = new Grid();
+        var quickButtons = new List<WpfButton>();
+        for (var i = 0; i < QuickMessages.Length; i++)
+        {
+            quickRow.ColumnDefinitions.Add(
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+            );
+            var (key, caption) = QuickMessages[i];
+            var quickBtn = UiTheme.SecondaryButton(caption);
+            quickBtn.Margin = new Thickness(i == 0 ? 0 : 8, 0, 0, 0);
+            quickBtn.Click += async (_, _) => await SendMessageAsync(key, null);
+            Grid.SetColumn(quickBtn, i);
+            quickRow.Children.Add(quickBtn);
+            quickButtons.Add(quickBtn);
+        }
+
+        _quickMessageButtons = quickButtons;
+        _messagePanel.Children.Add(quickRow);
+
+        var typedRow = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+        typedRow.ColumnDefinitions.Add(
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+        );
+        typedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
+        typedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        _messageBox = UiTheme.TextField(placeholder: "Type a message…");
+        _messageBox.MaxLength = MessageMaxLength;
+        _messageBox.KeyDown += async (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                await SendTypedMessageAsync();
+            }
+        };
+        Grid.SetColumn(_messageBox, 0);
+        typedRow.Children.Add(_messageBox);
+
+        _messageSendBtn = UiTheme.PrimaryButton("Send");
+        _messageSendBtn.Padding = new Thickness(16, 10, 16, 10);
+        _messageSendBtn.Click += async (_, _) => await SendTypedMessageAsync();
+        Grid.SetColumn(_messageSendBtn, 2);
+        typedRow.Children.Add(_messageSendBtn);
+
+        _messagePanel.Children.Add(typedRow);
+
+        _messageStatusLine = new TextBlock
+        {
+            FontSize = 12,
+            Foreground = UiTheme.MutedBrush,
+            Margin = new Thickness(0, 10, 0, 0),
+            TextWrapping = TextWrapping.Wrap
+        };
+        _messageErrorLine = new TextBlock
+        {
+            FontSize = 12,
+            Foreground = UiTheme.DangerBrush,
+            Margin = new Thickness(0, 4, 0, 0),
+            TextWrapping = TextWrapping.Wrap
+        };
+        _messagePanel.Children.Add(_messageStatusLine);
+        _messagePanel.Children.Add(_messageErrorLine);
+        _messageBox.TextChanged += (_, _) => _messageErrorLine.Text = "";
+
+        requestSection.Children.Add(_messagePanel);
         root.Children.Add(requestSection);
 
         var exitBtn = UiTheme.DangerButton("PARENT");
@@ -517,6 +631,11 @@ public class MainWindow : Window
     {
         if (_requestBusy) return;
 
+        if (!_requestExpanded && _messageExpanded && !_messageBusy)
+        {
+            CollapseMessagePanel();
+        }
+
         _requestExpanded = !_requestExpanded;
         _requestPanel.Visibility = _requestExpanded ? Visibility.Visible : Visibility.Collapsed;
         if (!_requestExpanded)
@@ -607,6 +726,114 @@ public class MainWindow : Window
 
         _customMinutesBox.IsEnabled = enabled;
         _customSendBtn.IsEnabled = enabled;
+    }
+
+    private void ToggleMessagePanel()
+    {
+        if (_messageBusy) return;
+
+        if (_messageExpanded)
+        {
+            CollapseMessagePanel();
+            return;
+        }
+
+        if (_requestExpanded && !_requestBusy)
+        {
+            ToggleRequestPanel();
+        }
+
+        _messageExpanded = true;
+        _messagePanel.Visibility = Visibility.Visible;
+        _messageBox.Focus();
+    }
+
+    private void CollapseMessagePanel()
+    {
+        _messageExpanded = false;
+        _messagePanel.Visibility = Visibility.Collapsed;
+        _messageStatusLine.Text = "";
+        _messageErrorLine.Text = "";
+        _messageBox.Text = "";
+    }
+
+    private async Task SendTypedMessageAsync()
+    {
+        if (_messageBusy) return;
+
+        var text = _messageBox.Text.Trim();
+        if (text.Length == 0)
+        {
+            _messageErrorLine.Text = "Type a message or tap a quick button.";
+            return;
+        }
+
+        await SendMessageAsync(null, text);
+    }
+
+    private async Task SendMessageAsync(string? quick, string? text)
+    {
+        if (_messageBusy) return;
+
+        _messageBusy = true;
+        SetMessageControlsEnabled(false);
+        _messageStatusLine.Text = "Sending…";
+        _messageErrorLine.Text = "";
+
+        ChildMessageSendResult result;
+        try
+        {
+            result = await _engine.SendMessageAsync(quick, text);
+        }
+        catch
+        {
+            result = ChildMessageSendResult.Failed();
+        }
+
+        if (!IsLoaded)
+        {
+            return;
+        }
+
+        if (result.Ok)
+        {
+            _messageStatusLine.Text = "Sent to your parent!";
+            _messageBox.Text = "";
+            await Task.Delay(1200);
+            if (!IsLoaded)
+            {
+                return;
+            }
+
+            CollapseMessagePanel();
+        }
+        else if (result.IsRateLimited)
+        {
+            _messageStatusLine.Text = "";
+            _messageErrorLine.Text = result.RetryAfterSeconds >= 120
+                ? $"Too many messages. Try again in {result.RetryAfterSeconds / 60} min."
+                : $"Please wait {result.RetryAfterSeconds}s before sending another message.";
+        }
+        else
+        {
+            _messageStatusLine.Text = "";
+            _messageErrorLine.Text = "Couldn't send. Try again.";
+        }
+
+        _messageBusy = false;
+        SetMessageControlsEnabled(true);
+    }
+
+    private void SetMessageControlsEnabled(bool enabled)
+    {
+        _messageToggleBtn.IsEnabled = enabled;
+        foreach (var btn in _quickMessageButtons)
+        {
+            btn.IsEnabled = enabled;
+        }
+
+        _messageBox.IsEnabled = enabled;
+        _messageSendBtn.IsEnabled = enabled;
     }
 
     private static void OnDigitsOnlyPreviewTextInput(object sender, TextCompositionEventArgs e)

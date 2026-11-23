@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Activity } from "lucide-react";
+import { Activity, Reply } from "lucide-react";
 import { cn } from "@warden/ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useChildMessageReply } from "@/components/child-message-reply";
 import {
   formatActivityDetail,
   getActivityIcon,
   getActivityLabel,
   getActivityMessage,
   getActivityReply,
+  getChildMessageReplyTarget,
 } from "@/lib/activity";
 import {
   formatAbsoluteTime,
@@ -52,6 +54,7 @@ export function RecentActivityCard({
 }: RecentActivityCardProps) {
   const [showAll, setShowAll] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const childMessageReply = useChildMessageReply();
   const activityItems = items ?? [];
   const visible = showAll
     ? activityItems
@@ -93,10 +96,16 @@ export function RecentActivityCard({
           });
           const message = getActivityMessage(item);
           const reply = getActivityReply(item);
+          const replyTarget = childMessageReply
+            ? getChildMessageReplyTarget(item)
+            : null;
+          // Child messages come from the child, not "Agent".
           const actorName =
-            item.actor?.name?.trim() ||
-            item.actor?.email ||
-            (item.actor ? null : "Agent");
+            item.action === "child_message"
+              ? null
+              : item.actor?.name?.trim() ||
+                item.actor?.email ||
+                (item.actor ? null : "Agent");
           const when = formatRelativeTime(item.createdAt);
           const whenTitle = formatAbsoluteTime(item.createdAt);
           const expanded = expandedId === item.id;
@@ -143,6 +152,29 @@ export function RecentActivityCard({
                     <p className="text-sm text-muted-foreground">
                       Replied: &ldquo;{reply}&rdquo;
                     </p>
+                  )}
+                  {replyTarget && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={replyTarget.replied ? "ghost" : "outline"}
+                        className="h-8 px-2.5 text-xs"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          childMessageReply?.openReply(replyTarget);
+                        }}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <Reply className="mr-1 h-3.5 w-3.5" />
+                        {replyTarget.replied ? "Reply again" : "Reply"}
+                      </Button>
+                      {replyTarget.replied && (
+                        <span className="text-xs text-muted-foreground">
+                          Replied
+                        </span>
+                      )}
+                    </div>
                   )}
                   <p className="text-sm text-muted-foreground">
                     {[detail, actorName ? `by ${actorName}` : null]

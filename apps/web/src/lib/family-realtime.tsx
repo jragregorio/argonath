@@ -46,6 +46,11 @@ function invalidateForEvent(
 
   // Nudge rows only — sendNudge/ackNudge do not touch children, policy, or devices.
   // Pages listen via useFamilyRealtimeEvent for label updates.
+  if (type === "message:received") {
+    void utils.dashboard.activity.invalidate();
+    return;
+  }
+
   if (type === "nudge:seen" || type === "nudge:show") {
     if (type === "nudge:seen") {
       void utils.dashboard.activity.invalidate();

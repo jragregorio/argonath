@@ -1,5 +1,6 @@
 "use client";
 
+import { ChildMessageReplyProvider } from "@/components/child-message-reply";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { DashboardThemeProvider } from "@/components/dashboard-theme";
 import { DashboardVisibilityRefresh } from "@/components/dashboard-visibility-refresh";
@@ -20,6 +21,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     <DashboardThemeProvider>
       <FamilyRealtimeProvider>
         <ToastProvider>
+          <ChildMessageReplyProvider>
           <PushTokenSync />
           <NudgeReplyToaster />
           <DashboardVisibilityRefresh />
@@ -39,6 +41,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               </main>
             </div>
           </PullToRefresh>
+          </ChildMessageReplyProvider>
         </ToastProvider>
       </FamilyRealtimeProvider>
     </DashboardThemeProvider>

@@ -182,6 +182,49 @@ public class WardenApiClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <summary>
+    /// Child → parent message from the tray. <paramref name="quick"/> is a quick-button key
+    /// (come_here / done / need_help) or null when <paramref name="text"/> is typed.
+    /// </summary>
+    public async Task<ChildMessageSendResult> SendMessageAsync(string? quick, string? text)
+    {
+        SetDeviceTokenHeader();
+        var config = _configStore.Load();
+
+        object body = string.IsNullOrWhiteSpace(text)
+            ? new { action = "sendMessage", quick }
+            : new { action = "sendMessage", text = text.Trim() };
+
+        var response = await _http.PostAsJsonAsync($"{config.ApiBaseUrl}/api/agent", body);
+
+        HandleUnpairedResponse(response);
+        if (response.IsSuccessStatusCode)
+        {
+            return ChildMessageSendResult.Sent();
+        }
+
+        if ((int)response.StatusCode == 429)
+        {
+            var retryAfter = 30;
+            if (response.Headers.RetryAfter?.Delta is { } delta)
+            {
+                retryAfter = Math.Max(1, (int)Math.Ceiling(delta.TotalSeconds));
+            }
+            else if (
+                response.Headers.TryGetValues("Retry-After", out var values)
+                && int.TryParse(values.FirstOrDefault(), out var seconds)
+            )
+            {
+                retryAfter = Math.Max(1, seconds);
+            }
+
+            return ChildMessageSendResult.RateLimited(retryAfter);
+        }
+
+        WardenLog.Warn("Api", $"sendMessage failed: HTTP {(int)response.StatusCode}");
+        return ChildMessageSendResult.Failed();
+    }
+
     public async Task<bool> ParentUnlockAsync(int extraMinutes)
     {
         SetDeviceTokenHeader();

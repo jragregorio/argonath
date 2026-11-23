@@ -1,9 +1,16 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { NUDGE_REPLY_PUSH_TYPE, nudgeReplyPushTag } from "@warden/shared";
 import {
+  CHILD_MESSAGE_PUSH_TYPE,
+  childMessagePushTag,
+  NUDGE_REPLY_PUSH_TYPE,
+  nudgeReplyPushTag,
+} from "@warden/shared";
+import {
+  CHILD_MESSAGE_PUSH_EVENT,
   NUDGE_REPLY_PUSH_EVENT,
+  type ChildMessagePushDetail,
   type NudgeReplyPushDetail,
 } from "@/components/nudge-reply-toaster";
 import { trpc } from "@/lib/trpc";
@@ -102,12 +109,38 @@ export function NativePushBootstrap() {
           console.error("[warden] Push registration error:", error);
         });
         // Foreground only: Android still posts a system notification while the
-        // app is open. For nudge replies, cancel it and show the in-app toast.
+        // app is open. For nudge replies and child messages, cancel it and
+        // show the in-app toast instead.
         await push.addListener("pushNotificationReceived", (payload) => {
-          const { data, body } = (payload ?? {}) as {
+          const { data, body, title } = (payload ?? {}) as {
             data?: Record<string, unknown>;
             body?: unknown;
+            title?: unknown;
           };
+          if (data?.type === CHILD_MESSAGE_PUSH_TYPE) {
+            const messageId =
+              typeof data.messageId === "string" ? data.messageId : "";
+            if (!messageId) return;
+            void push
+              .removeDeliveredNotifications?.({
+                notifications: [{ id: 0, tag: childMessagePushTag(messageId) }],
+              })
+              .catch((error) => {
+                console.warn("[warden] Could not clear child message notification:", error);
+              });
+            if (typeof body === "string" && body.length > 0) {
+              window.dispatchEvent(
+                new CustomEvent<ChildMessagePushDetail>(CHILD_MESSAGE_PUSH_EVENT, {
+                  detail: {
+                    messageId,
+                    title: typeof title === "string" ? title : "",
+                    message: body,
+                  },
+                })
+              );
+            }
+            return;
+          }
           if (data?.type !== NUDGE_REPLY_PUSH_TYPE) return;
           const nudgeId = typeof data.nudgeId === "string" ? data.nudgeId : "";
           if (!nudgeId) return;

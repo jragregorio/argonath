@@ -12,7 +12,8 @@ type AgentProcedure =
   | "clearAdminLock"
   | "pendingCaptures"
   | "pendingNudges"
-  | "ackNudge";
+  | "ackNudge"
+  | "sendMessage";
 
 async function callAgentProcedure(
   procedure: AgentProcedure,
@@ -36,6 +37,10 @@ async function callAgentProcedure(
     case "ackNudge":
       return caller.agent.ackNudge(
         input as Parameters<typeof caller.agent.ackNudge>[0]
+      );
+    case "sendMessage":
+      return caller.agent.sendMessage(
+        input as Parameters<typeof caller.agent.sendMessage>[0]
       );
     case "requestExtension":
       return caller.agent.requestExtension(
@@ -117,11 +122,40 @@ export async function POST(request: NextRequest) {
         );
         return NextResponse.json(result);
       }
+      case "sendMessage": {
+        const result = await callAgentProcedure(
+          "sendMessage",
+          input,
+          deviceToken
+        );
+        return NextResponse.json(result);
+      }
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Internal error";
+    // Child message rate limit: 429 lets the tray say "try again in Ns".
+    if (
+      error &&
+      typeof error === "object" &&
+      (error as { code?: unknown }).code === "TOO_MANY_REQUESTS"
+    ) {
+      const cause = (error as { cause?: { retryAfterSeconds?: unknown } }).cause;
+      const retryAfterSeconds =
+        typeof cause?.retryAfterSeconds === "number"
+          ? cause.retryAfterSeconds
+          : undefined;
+      return NextResponse.json(
+        { error: message, retryAfterSeconds },
+        {
+          status: 429,
+          headers: retryAfterSeconds
+            ? { "Retry-After": String(retryAfterSeconds) }
+            : undefined,
+        }
+      );
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

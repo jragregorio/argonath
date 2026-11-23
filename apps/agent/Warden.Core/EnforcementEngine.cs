@@ -1068,6 +1068,29 @@ public class EnforcementEngine
         return await _api.RequestExtensionAsync(minutes);
     }
 
+    public async Task<ChildMessageSendResult> SendMessageAsync(string? quick, string? text)
+    {
+        try
+        {
+            var result = await _api.SendMessageAsync(quick, text);
+            if (result.Ok)
+            {
+                WardenLog.Info("Message", quick != null ? $"Sent quick message ({quick})" : "Sent typed message");
+            }
+
+            return result;
+        }
+        catch (DeviceUnpairedException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            WardenLog.Warn("Message", $"Send failed: {ex.Message}");
+            return ChildMessageSendResult.Failed();
+        }
+    }
+
     public (bool ok, string? error) ValidateParentPin(string pin)
     {
         var config = _configStore.Load();

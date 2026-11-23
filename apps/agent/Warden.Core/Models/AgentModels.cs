@@ -1,5 +1,14 @@
 namespace Warden.Core.Models;
 
+/// <summary>Outcome of a child → parent tray message.</summary>
+public sealed record ChildMessageSendResult(bool Ok, bool IsRateLimited, int RetryAfterSeconds)
+{
+    public static ChildMessageSendResult Sent() => new(true, false, 0);
+    public static ChildMessageSendResult RateLimited(int retryAfterSeconds) =>
+        new(false, true, retryAfterSeconds);
+    public static ChildMessageSendResult Failed() => new(false, false, 0);
+}
+
 public class AgentConfig
 {
     public string ApiBaseUrl { get; set; } = "";

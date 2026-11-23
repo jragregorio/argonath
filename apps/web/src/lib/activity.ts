@@ -10,6 +10,7 @@ import {
   Camera,
   Clock,
   Lock,
+  MessageSquare,
   Monitor,
   Settings,
   Unlock,
@@ -25,6 +26,7 @@ const ACTION_LABELS: Record<string, string> = {
   pairing_code_generated: "Generated a pairing code",
   capture_requested: "Requested a capture",
   nudge_sent: "Sent a nudge",
+  child_message: "Sent you a message",
   snapshot_deleted: "Deleted a snapshot",
   extension_approved: "Approved extra screen time",
   extension_denied: "Denied extra screen time",
@@ -63,6 +65,7 @@ const ACTION_ICONS: Record<string, LucideIcon> = {
   device_online: Wifi,
   device_offline: WifiOff,
   nudge_sent: Bell,
+  child_message: MessageSquare,
   child_created: Users,
   child_renamed: Users,
   child_deleted: Users,
@@ -97,14 +100,21 @@ function isCustomNudge(metadata?: Record<string, unknown> | null) {
 }
 
 export function getActivityLabel(action: string, metadata?: Record<string, unknown> | null) {
+  if (action === "nudge_sent" && typeof metadata?.replyToMessageId === "string") {
+    return "Replied to a message";
+  }
   if (action === "nudge_sent" && isCustomNudge(metadata)) {
     return "Sent a custom nudge";
   }
   return ACTION_LABELS[action] ?? action.replaceAll("_", " ");
 }
 
-/** Quoted nudge body when present (custom or default). */
+/** Quoted body: nudge text, or the child's own message. */
 export function getActivityMessage(item: ActivityItemLike) {
+  if (item.action === "child_message") {
+    const text = item.metadata?.text;
+    return typeof text === "string" && text.trim() ? text.trim() : null;
+  }
   if (item.action !== "nudge_sent") return null;
   const message = item.metadata?.message;
   if (typeof message !== "string" || !message.trim()) return null;
@@ -122,6 +132,26 @@ export function getActivityReply(item: ActivityItemLike) {
       : null;
   if (!isMeaningfulNudgeReply(response, responseText)) return null;
   return formatNudgeReply(response, responseText);
+}
+
+/** Reply target for a child_message row (dashboard only; demo rows lack ids). */
+export function getChildMessageReplyTarget(item: ActivityItemLike) {
+  if (item.action !== "child_message" || !item.metadata) return null;
+  const { messageId, deviceId, text, replied } = item.metadata;
+  if (
+    typeof messageId !== "string" ||
+    typeof deviceId !== "string" ||
+    typeof text !== "string"
+  ) {
+    return null;
+  }
+  return {
+    messageId,
+    deviceId,
+    text,
+    childName: item.childName ?? null,
+    replied: replied === true,
+  };
 }
 
 export function formatActivityDetail(item: ActivityItemLike) {

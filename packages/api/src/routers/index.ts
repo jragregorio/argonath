@@ -24,6 +24,12 @@ import {
   isMeaningfulNudgeReply,
   NUDGE_REPLY_PUSH_TYPE,
   nudgeReplyPushTag,
+  CHILD_MESSAGE_MAX_LENGTH,
+  CHILD_MESSAGE_PUSH_TYPE,
+  CHILD_MESSAGE_QUICK_KEYS,
+  checkChildMessageRateLimit,
+  childMessagePushTag,
+  resolveChildMessageText,
 } from "@warden/shared";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -346,6 +352,7 @@ export const authRouter = router({
           notifyDeviceOnline: true,
           notifyDeviceOffline: true,
           notifyNudgeReplies: true,
+          notifyChildMessages: true,
         },
       }),
       prisma.familyMember.findMany({
@@ -478,6 +485,7 @@ export const authRouter = router({
         notifyDeviceOnline: z.boolean().optional(),
         notifyDeviceOffline: z.boolean().optional(),
         notifyNudgeReplies: z.boolean().optional(),
+        notifyChildMessages: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -486,6 +494,7 @@ export const authRouter = router({
         notifyDeviceOnline?: boolean;
         notifyDeviceOffline?: boolean;
         notifyNudgeReplies?: boolean;
+        notifyChildMessages?: boolean;
       } = {};
       if (input.notifyExtensionRequests !== undefined) {
         data.notifyExtensionRequests = input.notifyExtensionRequests;
@@ -498,6 +507,9 @@ export const authRouter = router({
       }
       if (input.notifyNudgeReplies !== undefined) {
         data.notifyNudgeReplies = input.notifyNudgeReplies;
+      }
+      if (input.notifyChildMessages !== undefined) {
+        data.notifyChildMessages = input.notifyChildMessages;
       }
       if (Object.keys(data).length === 0) {
         throw new TRPCError({
@@ -517,6 +529,7 @@ export const authRouter = router({
           notifyDeviceOnline: true,
           notifyDeviceOffline: true,
           notifyNudgeReplies: true,
+          notifyChildMessages: true,
         },
       });
     }),
@@ -1045,11 +1058,13 @@ export const deviceRouter = router({
           .min(1)
           .max(200)
           .optional(),
+        /** Parent replying to a child's tray message. */
+        replyToMessageId: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const now = new Date();
-      const [family, device, active] = await Promise.all([
+      const [family, device, active, replyTo] = await Promise.all([
         getFamilyForUser(ctx),
         prisma.device.findFirst({
           where: {
@@ -1064,10 +1079,27 @@ export const deviceRouter = router({
             expiresAt: { gt: now },
           },
         }),
+        input.replyToMessageId
+          ? prisma.childMessage.findFirst({
+              where: {
+                id: input.replyToMessageId,
+                familyId: ctx.familyId,
+                deviceId: input.deviceId,
+              },
+              select: { id: true },
+            })
+          : Promise.resolve(null),
       ]);
 
       if (!device) {
         throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      if (input.replyToMessageId && !replyTo) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "That message is no longer available",
+        });
       }
 
       if (!device.deviceToken) {
@@ -1108,8 +1140,16 @@ export const deviceRouter = router({
           status: "pending",
           requestedBy: ctx.userId,
           expiresAt,
+          replyToMessageId: replyTo?.id ?? null,
         },
       });
+
+      if (replyTo) {
+        await prisma.childMessage.update({
+          where: { id: replyTo.id },
+          data: { repliedAt: now, repliedBy: ctx.userId },
+        });
+      }
 
       await logAudit(family.id, ctx.userId, "nudge_sent", {
         deviceId: device.id,
@@ -1117,6 +1157,7 @@ export const deviceRouter = router({
         nudgeId: nudge.id,
         message,
         custom,
+        ...(replyTo ? { replyToMessageId: replyTo.id } : {}),
       });
 
       void broadcastToDevice(device.id, {
@@ -1718,6 +1759,7 @@ export const dashboardRouter = router({
       const childIds = new Set<string>();
       const deviceIds = new Set<string>();
       const nudgeIds = new Set<string>();
+      const childMessageIds = new Set<string>();
       const extensionRequestIds = new Set<string>();
       for (const log of logs) {
         const meta = asAuditMetadata(log.metadata);
@@ -1728,6 +1770,12 @@ export const dashboardRouter = router({
           typeof meta.nudgeId === "string"
         ) {
           nudgeIds.add(meta.nudgeId);
+        }
+        if (
+          log.action === "child_message" &&
+          typeof meta.messageId === "string"
+        ) {
+          childMessageIds.add(meta.messageId);
         }
         if (
           (log.action === "extension_approved" ||
@@ -1756,7 +1804,7 @@ export const dashboardRouter = router({
         deviceIds.add(request.deviceId);
       }
 
-      const [children, devices, nudges] = await Promise.all([
+      const [children, devices, nudges, childMessages] = await Promise.all([
         childIds.size > 0
           ? prisma.child.findMany({
               where: { familyId: family.id, id: { in: [...childIds] } },
@@ -1788,7 +1836,16 @@ export const dashboardRouter = router({
               },
             })
           : Promise.resolve([]),
+        childMessageIds.size > 0
+          ? prisma.childMessage.findMany({
+              where: { familyId: family.id, id: { in: [...childMessageIds] } },
+              select: { id: true, repliedAt: true },
+            })
+          : Promise.resolve([]),
       ]);
+      const childMessageById = new Map(
+        childMessages.map((m) => [m.id, m] as const)
+      );
 
       const childById = new Map(
         children.map((child) => [child.id, child] as const)
@@ -1805,6 +1862,13 @@ export const dashboardRouter = router({
 
       return logs.map((log) => {
         let meta = asAuditMetadata(log.metadata);
+        if (
+          log.action === "child_message" &&
+          typeof meta.messageId === "string"
+        ) {
+          const msg = childMessageById.get(meta.messageId);
+          meta = { ...meta, replied: Boolean(msg?.repliedAt) };
+        }
         if (
           log.action === "nudge_sent" &&
           typeof meta.nudgeId === "string"
@@ -2465,6 +2529,100 @@ export const agentRouter = router({
       timezone: timeZone,
     };
   }),
+
+  sendMessage: agentProcedure
+    .input(
+      z
+        .object({
+          quick: z.enum(CHILD_MESSAGE_QUICK_KEYS).optional(),
+          text: z.string().trim().max(CHILD_MESSAGE_MAX_LENGTH).optional(),
+        })
+        .refine((v) => Boolean(v.quick) || Boolean(v.text?.trim()), {
+          message: "Message is empty",
+        })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const now = new Date();
+      const child = await prisma.child.findUnique({
+        where: { id: ctx.device.childId },
+        select: { displayName: true, familyId: true },
+      });
+      if (!child) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      const recent = await prisma.childMessage.findMany({
+        where: {
+          deviceId: ctx.device.id,
+          createdAt: { gt: new Date(now.getTime() - 60 * 60 * 1000) },
+        },
+        select: { createdAt: true },
+      });
+      const limit = checkChildMessageRateLimit(
+        recent.map((r) => r.createdAt),
+        now
+      );
+      if (!limit.ok) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `Too many messages. Try again in ${limit.retryAfterSeconds}s`,
+          cause: { retryAfterSeconds: limit.retryAfterSeconds },
+        });
+      }
+
+      const typed = input.text?.trim() || null;
+      const text = resolveChildMessageText(typed ? null : input.quick, typed);
+      if (!text) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Message is empty" });
+      }
+
+      const message = await prisma.childMessage.create({
+        data: {
+          familyId: child.familyId,
+          childId: ctx.device.childId,
+          deviceId: ctx.device.id,
+          quick: typed ? null : (input.quick ?? null),
+          text,
+        },
+      });
+
+      await logAudit(child.familyId, "agent", "child_message", {
+        deviceId: ctx.device.id,
+        childId: ctx.device.childId,
+        messageId: message.id,
+        text,
+        ...(message.quick ? { quick: message.quick } : {}),
+      });
+
+      void broadcastToDevice(ctx.device.id, {
+        type: "message:received",
+        deviceId: ctx.device.id,
+        payload: {
+          messageId: message.id,
+          childId: ctx.device.childId,
+          childName: child.displayName,
+          text,
+        },
+        timestamp: now.toISOString(),
+      }).catch(() => {});
+
+      void notifyFamilyParents(child.familyId, "child_message", {
+        title: `Message from ${child.displayName}`,
+        body: text,
+        androidTag: childMessagePushTag(message.id),
+        data: {
+          type: CHILD_MESSAGE_PUSH_TYPE,
+          messageId: message.id,
+          deviceId: ctx.device.id,
+          childId: ctx.device.childId,
+          path: "/dashboard/activity",
+        },
+      }).catch((error) => {
+        console.error("[fcm] child message notify failed", error);
+      });
+
+      return { ok: true, id: message.id };
+    }),
 
   requestExtension: agentProcedure
     .input(z.object({ requestedMinutes: z.number().min(1).max(120) }))

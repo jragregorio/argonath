@@ -31,6 +31,8 @@ model User {
   notifyDeviceOffline     Boolean @default(true)
   /// FCM: child replied to a nudge this parent sent (default on).
   notifyNudgeReplies      Boolean @default(true)
+  /// FCM: a child sent a message from the Windows tray (default on).
+  notifyChildMessages     Boolean @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -53,6 +55,7 @@ model Family {
   members       FamilyMember[]
   refreshTokens RefreshToken[]
   nudges        Nudge[]
+  childMessages ChildMessage[]
   pushTokens    PushToken[]
 }
 
@@ -107,6 +110,7 @@ model Child {
   snapshots          Snapshot[]
   extensionOverrides ExtensionOverride[]
   nudges             Nudge[]
+  childMessages      ChildMessage[]
 
   @@index([familyId])
   @@index([familyId, createdAt])
@@ -142,6 +146,7 @@ model Device {
   extensionRequests ExtensionRequest[]
   snapshots         Snapshot[]
   nudges            Nudge[]
+  childMessages     ChildMessage[]
 
   @@index([childId])
   @@index([deviceToken])
@@ -251,6 +256,8 @@ model Nudge {
   response   String?
   responseText String?
   requestedBy String
+  /// Set when this nudge is a parent's reply to a ChildMessage.
+  replyToMessageId String?
   createdAt  DateTime  @default(now())
   seenAt     DateTime?
   expiresAt  DateTime
@@ -276,6 +283,29 @@ model AuditLog {
 
   @@index([familyId])
   @@index([createdAt])
+  @@index([familyId, createdAt])
+}
+
+/// Child-initiated message from the Windows tray. Parents reply with a Nudge
+/// (`Nudge.replyToMessageId`), so the answer reuses the nudge overlay.
+model ChildMessage {
+  id        String    @id @default(cuid())
+  familyId  String
+  childId   String
+  deviceId  String
+  /// come_here | done | need_help — null when typed
+  quick     String?
+  /// Display text: typed line, or the quick label (max 200)
+  text      String
+  createdAt DateTime  @default(now())
+  repliedAt DateTime?
+  repliedBy String?
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  child  Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, createdAt])
   @@index([familyId, createdAt])
 }
 
