@@ -7,9 +7,10 @@
 - `buildCommand`: `cd ../.. && npx turbo run build --filter=@warden/web`
 - Requires env vars listed in [environment.md](environment.md) and `apps/web/.env.example`.
 - Create private Supabase Storage bucket `snapshots` for capture features.
-- Create private Supabase Storage bucket `agent-releases` for Windows MSI artifacts
-  (MIME open; file size limit ≥100MB). Parent dashboard **Download for Windows**
-  uses signed URLs from `agentRelease.latest`.
+- Windows MSI artifacts are hosted on **GitHub Releases** of the public repo
+  `jragregorio/argonath` (tag `agent-v<version>`). Parent dashboard **Download for Windows**
+  links directly to the release asset from `agentRelease.latest`. (The old Supabase
+  `agent-releases` bucket is no longer used — free tier caps objects at 50 MB.)
 
 ## Windows agent
 
@@ -32,7 +33,7 @@ From `apps/agent`:
 
 ### Publish MSI (release backend)
 
-After building the MSI, upload to Supabase Storage and upsert the `AgentRelease` row:
+After building the MSI, upload it to GitHub Releases and upsert the `AgentRelease` row:
 
 ```bash
 npm run publish:agent -- --msi apps/agent/artifacts/Warden-0.5.15-x64.msi --channel stable
@@ -40,9 +41,11 @@ npm run publish:agent -- --msi apps/agent/artifacts/Warden-0.5.15-x64.msi --chan
 node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.5.15-x64.msi --channel stable
 ```
 
-Requires `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL` (or `SUPABASE_URL`), and `DATABASE_URL` (loaded from `apps/web/.env.local` / `packages/db/.env` when unset). Storage key: `releases/<channel>/Warden-<version>-x64.msi`. Optional flags: `--channel test`, `--mandatory`, `--version X.Y.Z`.
+Requires the GitHub CLI signed in with push access (`gh auth login`) and `DATABASE_URL` (loaded from `apps/web/.env.local` / `packages/db/.env` when unset). The script creates (or re-uploads to, with `--clobber`) release `agent-v<version>` on `jragregorio/argonath` with asset `Warden-<version>-x64.msi`, and stores the direct download URL plus SHA-256 and size. Optional flags: `--channel test`, `--mandatory`, `--version X.Y.Z`, `--dry-run` (prints tag, URL and hash; publishes nothing).
 
-Parents download via the child detail **Devices** card (**Download for Windows**). Agents receive an optional heartbeat `update` hint when a newer stable release exists (Phase 3 applies it).
+The repo must stay **public** — release assets of a private repo cannot be downloaded by parents or the updater.
+
+Parents download via the child detail **Devices** card (**Download for Windows**). Agents receive an optional heartbeat `update` hint when a newer stable release exists; the tray shows an **Update** banner and the SYSTEM task `Warden\WardenUpdater` installs it (agent ≥ 0.6.29). The updater reads `GET /api/agent/release/latest?channel=stable` (public).
 
 ### Install on child PC (elevated)
 

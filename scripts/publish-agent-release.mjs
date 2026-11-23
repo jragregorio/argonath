@@ -1,23 +1,51 @@
 /**
- * Publish a Warden agent MSI to Supabase Storage + AgentRelease row.
+ * Publish a Warden agent MSI to GitHub Releases (jragregorio/argonath) + AgentRelease row.
  *
  * Usage:
  *   node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.5.11-x64.msi --channel stable
  *   node scripts/publish-agent-release.mjs --msi path/to/file.msi --channel test --mandatory --version 0.5.12
  *
+ *   node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.6.29-x64.msi --dry-run
+ *
  * Loads env from apps/web/.env.local and packages/db/.env (without printing values).
- * Requires: SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_SUPABASE_URL|SUPABASE_URL, DATABASE_URL
+ * Requires: DATABASE_URL, and the GitHub CLI (`gh auth login`) with push access to the repo.
  */
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  copyFileSync,
+  createReadStream,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createClient } from "@supabase/supabase-js";
 import { PrismaClient } from "@prisma/client";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
-const BUCKET = "agent-releases";
+// Keep in sync with packages/shared/src/agent-version.ts (AGENT_RELEASE_REPO and helpers).
+const RELEASE_REPO = "jragregorio/argonath";
+const STRICT_VERSION = /^\d+\.\d+\.\d+$/;
+const releaseTag = (version) => `agent-v${version}`;
+const assetName = (version) => `Warden-${version}-x64.msi`;
+const downloadUrlFor = (version) =>
+  `https://github.com/${RELEASE_REPO}/releases/download/${releaseTag(version)}/${assetName(version)}`;
+
+function gh(args, { allowFail = false } = {}) {
+  const result = spawnSync("gh", args, { encoding: "utf8", shell: false });
+  if (result.error) {
+    throw new Error(`Could not run gh (GitHub CLI): ${result.error.message}`);
+  }
+  if (result.status !== 0 && !allowFail) {
+    throw new Error(`gh ${args[0]} ${args[1] ?? ""} failed: ${(result.stderr || "").trim()}`);
+  }
+  return result;
+}
 
 function loadEnvFile(filePath) {
   if (!existsSync(filePath)) return;
@@ -47,6 +75,7 @@ function parseArgs(argv) {
     channel: "stable",
     mandatory: false,
     version: null,
+    dryRun: false,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -65,6 +94,8 @@ function parseArgs(argv) {
       out.version = arg.slice("--version=".length);
     } else if (arg === "--mandatory") {
       out.mandatory = true;
+    } else if (arg === "--dry-run") {
+      out.dryRun = true;
     } else if (arg === "--help" || arg === "-h") {
       out.help = true;
     } else {
@@ -111,7 +142,10 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     console.log(`Usage:
-  node scripts/publish-agent-release.mjs --msi <path> [--channel stable|test] [--version X.Y.Z] [--mandatory]`);
+  node scripts/publish-agent-release.mjs --msi <path> [--channel stable|test] [--version X.Y.Z] [--mandatory] [--dry-run]
+
+Uploads the MSI to GitHub release ${releaseTag("<version>")} on ${RELEASE_REPO}
+as ${assetName("<version>")}, then records the AgentRelease row.`);
     process.exit(0);
   }
 
@@ -140,84 +174,89 @@ async function main() {
     );
   }
 
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
-    process.env.SUPABASE_URL?.trim();
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  const databaseUrl = process.env.DATABASE_URL?.trim();
-
-  if (!supabaseUrl || !serviceKey) {
-    throw new Error(
-      "Missing SUPABASE_SERVICE_ROLE_KEY and NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL)"
-    );
-  }
-  if (!databaseUrl) {
-    throw new Error("Missing DATABASE_URL");
+  if (!STRICT_VERSION.test(version)) {
+    throw new Error(`Version must be X.Y.Z, got: ${version}`);
   }
 
   const sizeBytes = statSync(msiPath).size;
   const sha256 = await sha256File(msiPath);
-  const storageKey = `releases/${args.channel}/Warden-${version}-x64.msi`;
+  const tag = releaseTag(version);
+  const asset = assetName(version);
+  const downloadUrl = downloadUrlFor(version);
 
-  console.log("Publishing agent release…");
-  console.log(`  version:    ${version}`);
-  console.log(`  channel:    ${args.channel}`);
-  console.log(`  mandatory:  ${args.mandatory}`);
-  console.log(`  size:       ${sizeBytes} (${formatBytes(sizeBytes)})`);
-  console.log(`  sha256:     ${sha256}`);
-  console.log(`  storageKey: ${storageKey}`);
-  console.log(`  msi:        ${msiPath}`);
+  console.log(args.dryRun ? "Dry run — nothing will be published." : "Publishing agent release…");
+  console.log(`  version:     ${version}`);
+  console.log(`  channel:     ${args.channel}`);
+  console.log(`  mandatory:   ${args.mandatory}`);
+  console.log(`  size:        ${sizeBytes} (${formatBytes(sizeBytes)})`);
+  console.log(`  sha256:      ${sha256}`);
+  console.log(`  repo/tag:    ${RELEASE_REPO} ${tag}`);
+  console.log(`  asset:       ${asset}`);
+  console.log(`  downloadUrl: ${downloadUrl}`);
+  console.log(`  msi:         ${msiPath}`);
 
-  const supabase = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false },
-  });
+  if (args.dryRun) {
+    return;
+  }
 
-  const fileBuffer = readFileSync(msiPath);
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(storageKey, fileBuffer, {
-      contentType: "application/octet-stream",
-      upsert: true,
+  if (!process.env.DATABASE_URL?.trim()) {
+    throw new Error("Missing DATABASE_URL");
+  }
+
+  // The asset name must be exactly Warden-<version>-x64.msi.
+  let uploadPath = msiPath;
+  let tempDir = null;
+  if (basename(msiPath) !== asset) {
+    tempDir = mkdtempSync(join(tmpdir(), "warden-release-"));
+    uploadPath = join(tempDir, asset);
+    copyFileSync(msiPath, uploadPath);
+  }
+
+  try {
+    const existing = gh(["release", "view", tag, "--repo", RELEASE_REPO], {
+      allowFail: true,
     });
-
-  if (uploadError) {
-    throw new Error(`Storage upload failed: ${uploadError.message}`);
+    if (existing.status === 0) {
+      gh(["release", "upload", tag, uploadPath, "--repo", RELEASE_REPO, "--clobber"]);
+    } else {
+      gh([
+        "release",
+        "create",
+        tag,
+        uploadPath,
+        "--repo",
+        RELEASE_REPO,
+        "--title",
+        `Warden agent ${version}`,
+        "--notes",
+        `Windows agent MSI.\n\nSHA-256: ${sha256}\nSize: ${sizeBytes} bytes`,
+      ]);
+    }
+  } finally {
+    if (tempDir) rmSync(tempDir, { recursive: true, force: true });
   }
 
   const prisma = new PrismaClient();
   try {
+    const fields = {
+      storageKey: null,
+      downloadUrl,
+      sha256,
+      sizeBytes,
+      mandatory: args.mandatory,
+      publishedAt: new Date(),
+    };
     const row = await prisma.agentRelease.upsert({
-      where: {
-        channel_version: {
-          channel: args.channel,
-          version,
-        },
-      },
-      create: {
-        version,
-        channel: args.channel,
-        storageKey,
-        sha256,
-        sizeBytes,
-        mandatory: args.mandatory,
-        publishedAt: new Date(),
-      },
-      update: {
-        storageKey,
-        sha256,
-        sizeBytes,
-        mandatory: args.mandatory,
-        publishedAt: new Date(),
-      },
+      where: { channel_version: { channel: args.channel, version } },
+      create: { version, channel: args.channel, ...fields },
+      update: fields,
     });
 
     console.log("\nPublished OK");
-    console.log(`  id:         ${row.id}`);
-    console.log(`  version:    ${row.version}`);
-    console.log(`  channel:    ${row.channel}`);
-    console.log(`  sizeBytes:  ${row.sizeBytes}`);
-    console.log(`  sha256:     ${row.sha256}`);
-    console.log(`  storageKey: ${row.storageKey}`);
+    console.log(`  id:          ${row.id}`);
+    console.log(`  version:     ${row.version}`);
+    console.log(`  channel:     ${row.channel}`);
+    console.log(`  downloadUrl: ${row.downloadUrl}`);
   } finally {
     await prisma.$disconnect();
   }
