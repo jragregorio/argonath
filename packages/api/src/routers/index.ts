@@ -20,6 +20,10 @@ import {
   SNAPSHOT_RETENTION_DAYS,
   type AllowedWindow,
   type RunningApp,
+  formatNudgeReplyMessage,
+  isMeaningfulNudgeReply,
+  NUDGE_REPLY_PUSH_TYPE,
+  nudgeReplyPushTag,
 } from "@warden/shared";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -29,7 +33,7 @@ import {
   isSupabaseConfigured,
 } from "../lib/supabase";
 import { logAudit } from "../lib/audit";
-import { notifyFamilyParents } from "../lib/fcm";
+import { notifyFamilyParents, notifyParentUser } from "../lib/fcm";
 import {
   createExtensionOverrideWithBaseline,
   ensureOutsideGrantBaselines,
@@ -341,6 +345,7 @@ export const authRouter = router({
           notifyExtensionRequests: true,
           notifyDeviceOnline: true,
           notifyDeviceOffline: true,
+          notifyNudgeReplies: true,
         },
       }),
       prisma.familyMember.findMany({
@@ -472,6 +477,7 @@ export const authRouter = router({
         notifyExtensionRequests: z.boolean().optional(),
         notifyDeviceOnline: z.boolean().optional(),
         notifyDeviceOffline: z.boolean().optional(),
+        notifyNudgeReplies: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -479,6 +485,7 @@ export const authRouter = router({
         notifyExtensionRequests?: boolean;
         notifyDeviceOnline?: boolean;
         notifyDeviceOffline?: boolean;
+        notifyNudgeReplies?: boolean;
       } = {};
       if (input.notifyExtensionRequests !== undefined) {
         data.notifyExtensionRequests = input.notifyExtensionRequests;
@@ -488,6 +495,9 @@ export const authRouter = router({
       }
       if (input.notifyDeviceOffline !== undefined) {
         data.notifyDeviceOffline = input.notifyDeviceOffline;
+      }
+      if (input.notifyNudgeReplies !== undefined) {
+        data.notifyNudgeReplies = input.notifyNudgeReplies;
       }
       if (Object.keys(data).length === 0) {
         throw new TRPCError({
@@ -506,6 +516,7 @@ export const authRouter = router({
           notifyExtensionRequests: true,
           notifyDeviceOnline: true,
           notifyDeviceOffline: true,
+          notifyNudgeReplies: true,
         },
       });
     }),
@@ -2723,6 +2734,21 @@ export const agentRouter = router({
           },
         });
 
+        // Real replies (On my way / Need a few / typed text) toast + push the
+        // parent who sent the nudge only. A plain OK or auto-dismiss stays quiet.
+        const meaningful = isMeaningfulNudgeReply(
+          updated.response,
+          updated.responseText
+        );
+        const childName = meaningful
+          ? ((
+              await prisma.child.findUnique({
+                where: { id: updated.childId },
+                select: { displayName: true },
+              })
+            )?.displayName ?? "Your child")
+          : null;
+
         void broadcastToDevice(ctx.device.id, {
           type: "nudge:seen",
           deviceId: ctx.device.id,
@@ -2730,9 +2756,37 @@ export const agentRouter = router({
             nudgeId: updated.id,
             response: updated.response,
             responseText: updated.responseText,
+            requestedBy: updated.requestedBy,
+            childName,
           },
           timestamp: new Date().toISOString(),
         }).catch(() => {});
+
+        if (meaningful && childName) {
+          void notifyParentUser(
+            updated.requestedBy,
+            updated.familyId,
+            "nudge_reply",
+            {
+              title: "Nudge reply",
+              body: formatNudgeReplyMessage(
+                childName,
+                updated.response,
+                updated.responseText
+              ),
+              androidTag: nudgeReplyPushTag(updated.id),
+              data: {
+                type: NUDGE_REPLY_PUSH_TYPE,
+                nudgeId: updated.id,
+                deviceId: ctx.device.id,
+                childId: updated.childId,
+                path: "/dashboard/activity",
+              },
+            }
+          ).catch((error) => {
+            console.error("[fcm] nudge reply notify failed", error);
+          });
+        }
 
         return {
           ok: true,

@@ -3,6 +3,7 @@
 import { DashboardNav } from "@/components/dashboard-nav";
 import { DashboardThemeProvider } from "@/components/dashboard-theme";
 import { DashboardVisibilityRefresh } from "@/components/dashboard-visibility-refresh";
+import { NudgeReplyToaster } from "@/components/nudge-reply-toaster";
 import { PushTokenSync } from "@/components/native-push-bootstrap";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { FamilyRealtimeProvider } from "@/lib/family-realtime";
@@ -20,6 +21,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <FamilyRealtimeProvider>
         <ToastProvider>
           <PushTokenSync />
+          <NudgeReplyToaster />
           <DashboardVisibilityRefresh />
           <PullToRefresh>
             <div className="flex w-full min-h-dvh flex-col overflow-x-hidden md:h-dvh md:min-h-0 md:flex-row md:overflow-hidden">

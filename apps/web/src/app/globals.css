@@ -593,3 +593,41 @@ body {
     transition: none;
   }
 }
+
+/* Timed toasts: slim bar drains to show the toast will auto-close. */
+@keyframes toast-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.toast-countdown {
+  animation-name: toast-countdown;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes toast-drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-drop-in {
+  animation: toast-drop-in 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Keep the countdown bar (it carries meaning); skip the entrance motion. */
+  .toast-drop-in {
+    animation: none;
+  }
+}

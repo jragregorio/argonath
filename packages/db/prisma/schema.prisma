@@ -29,6 +29,8 @@ model User {
   notifyDeviceOnline      Boolean @default(true)
   /// FCM: device went offline notifications (default on).
   notifyDeviceOffline     Boolean @default(true)
+  /// FCM: child replied to a nudge this parent sent (default on).
+  notifyNudgeReplies      Boolean @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

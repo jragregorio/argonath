@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { NUDGE_REPLY_PUSH_TYPE, nudgeReplyPushTag } from "@warden/shared";
+import {
+  NUDGE_REPLY_PUSH_EVENT,
+  type NudgeReplyPushDetail,
+} from "@/components/nudge-reply-toaster";
 import { trpc } from "@/lib/trpc";
 import {
   extractPathFromPushPayload,
@@ -32,6 +37,9 @@ type CapacitorBridge = {
         cb: (payload: unknown) => void
       ) => Promise<{ remove: () => Promise<void> }>;
       removeAllListeners: () => Promise<void>;
+      removeDeliveredNotifications?: (options: {
+        notifications: { id: number | string; tag?: string }[];
+      }) => Promise<void>;
     };
   };
 };
@@ -92,6 +100,32 @@ export function NativePushBootstrap() {
         });
         await push.addListener("registrationError", (error) => {
           console.error("[warden] Push registration error:", error);
+        });
+        // Foreground only: Android still posts a system notification while the
+        // app is open. For nudge replies, cancel it and show the in-app toast.
+        await push.addListener("pushNotificationReceived", (payload) => {
+          const { data, body } = (payload ?? {}) as {
+            data?: Record<string, unknown>;
+            body?: unknown;
+          };
+          if (data?.type !== NUDGE_REPLY_PUSH_TYPE) return;
+          const nudgeId = typeof data.nudgeId === "string" ? data.nudgeId : "";
+          if (!nudgeId) return;
+          // FCM posts tagged notifications with id 0.
+          void push
+            .removeDeliveredNotifications?.({
+              notifications: [{ id: 0, tag: nudgeReplyPushTag(nudgeId) }],
+            })
+            .catch((error) => {
+              console.warn("[warden] Could not clear nudge reply notification:", error);
+            });
+          if (typeof body === "string" && body.length > 0) {
+            window.dispatchEvent(
+              new CustomEvent<NudgeReplyPushDetail>(NUDGE_REPLY_PUSH_EVENT, {
+                detail: { nudgeId, message: body },
+              })
+            );
+          }
         });
         await push.addListener("pushNotificationActionPerformed", (payload) => {
           const path = extractPathFromPushPayload(payload);

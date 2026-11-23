@@ -466,6 +466,11 @@ export default function SettingsPage() {
                 label: "Device offline",
                 description: "When a paired PC stops checking in",
               },
+              {
+                key: "notifyNudgeReplies" as const,
+                label: "Nudge replies",
+                description: "When a child replies to a nudge you sent",
+              },
             ] as const
           ).map(({ key, label, description }) => {
             const checked = me?.user?.[key] ?? true;

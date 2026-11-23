@@ -74,7 +74,6 @@ export function useDeviceActions({
 }: UseDeviceActionsOptions): UseDeviceActionsReturn {
   const utils = trpc.useUtils();
   const { showToast } = useToast();
-  const toastedNudgesRef = useRef(new Set<string>());
   const settledNudgesRef = useRef(new Set<string>());
 
   const [pendingLocks, setPendingLocks] = useState<
@@ -205,18 +204,7 @@ export function useDeviceActions({
       settledNudgesRef.current.add(nudgeId);
 
       if (status === "seen") {
-        const formatted = formatNudgeReply(response, responseText) ?? "OK";
-        const typed = responseText?.trim();
-        if (
-          isMeaningfulNudgeReply(response, responseText) &&
-          !toastedNudgesRef.current.has(nudgeId)
-        ) {
-          toastedNudgesRef.current.add(nudgeId);
-          const child =
-            getChildLabel?.(deviceId) ?? getDeviceLabel(deviceId);
-          const body = typed ? `"${formatted}"` : formatted;
-          showToast(`${child} replied: ${body}`, "success");
-        }
+        // Reply toast lives in NudgeReplyToaster (dashboard-wide, sender only).
         void utils.dashboard.activity.invalidate();
       }
 

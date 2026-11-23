@@ -164,7 +164,7 @@ export const DEVICE_OFFLINE_PUSH_THRESHOLD_SECONDS = 120;
 export const IDLE_THRESHOLD_SECONDS = 300;
 
 /** Product / dashboard version (keep in sync with Warden.Tray `<Version>`). */
-export const APP_VERSION = "0.8.23";
+export const APP_VERSION = "0.8.24";
 
 /** Default text shown on the child PC when a parent sends a nudge without a custom message. */
 export const DEFAULT_NUDGE_MESSAGE = "Your parent wants your attention";
@@ -196,6 +196,28 @@ export function isMeaningfulNudgeReply(
 ): boolean {
   if (responseText?.trim()) return true;
   return response === "on_my_way" || response === "need_a_few";
+}
+
+/** FCM `data.type` for a child's meaningful nudge reply (sent to the nudging parent only). */
+export const NUDGE_REPLY_PUSH_TYPE = "nudge:replied";
+
+/**
+ * Android notification tag for a nudge-reply push. The dashboard uses it to
+ * cancel the system notification when the app is open (it shows a toast instead).
+ */
+export function nudgeReplyPushTag(nudgeId: string): string {
+  return `nudge-reply:${nudgeId}`;
+}
+
+/** Toast / push body: `{child} replied: "typed"` or `{child} replied: On my way`. */
+export function formatNudgeReplyMessage(
+  childName: string,
+  response?: string | null,
+  responseText?: string | null
+): string {
+  const formatted = formatNudgeReply(response, responseText) ?? "OK";
+  const body = responseText?.trim() ? `"${formatted}"` : formatted;
+  return `${childName} replied: ${body}`;
 }
 
 export function isDeviceRecentlySeen(

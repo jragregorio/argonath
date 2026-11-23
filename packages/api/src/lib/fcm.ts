@@ -6,20 +6,30 @@ export type PushNotificationPayload = {
   title: string;
   body: string;
   data?: Record<string, string>;
+  /**
+   * Android notification tag. A later push with the same tag replaces the
+   * earlier one, and the dashboard can cancel a tagged notification by tag.
+   */
+  androidTag?: string;
 };
 
 export type NotificationCategory =
   | "extension"
   | "device_online"
-  | "device_offline";
+  | "device_offline"
+  | "nudge_reply";
 
 const CATEGORY_PREF_FIELD: Record<
   NotificationCategory,
-  "notifyExtensionRequests" | "notifyDeviceOnline" | "notifyDeviceOffline"
+  | "notifyExtensionRequests"
+  | "notifyDeviceOnline"
+  | "notifyDeviceOffline"
+  | "notifyNudgeReplies"
 > = {
   extension: "notifyExtensionRequests",
   device_online: "notifyDeviceOnline",
   device_offline: "notifyDeviceOffline",
+  nudge_reply: "notifyNudgeReplies",
 };
 
 function readServiceAccount(): ServiceAccount | null {
@@ -73,6 +83,27 @@ export async function notifyFamilyParents(
   category: NotificationCategory,
   payload: PushNotificationPayload
 ): Promise<{ sent: number; failed: number }> {
+  return sendToMatchingTokens({ familyId }, category, payload);
+}
+
+/**
+ * Send an FCM notification to one parent's registered devices in a family
+ * (e.g. the parent who sent a nudge). Respects that parent's category pref.
+ */
+export async function notifyParentUser(
+  userId: string,
+  familyId: string,
+  category: NotificationCategory,
+  payload: PushNotificationPayload
+): Promise<{ sent: number; failed: number }> {
+  return sendToMatchingTokens({ familyId, userId }, category, payload);
+}
+
+async function sendToMatchingTokens(
+  scope: { familyId: string; userId?: string },
+  category: NotificationCategory,
+  payload: PushNotificationPayload
+): Promise<{ sent: number; failed: number }> {
   const messaging = ensureApp();
   if (!messaging) {
     console.warn(
@@ -85,7 +116,8 @@ export async function notifyFamilyParents(
 
   const rows = await prisma.pushToken.findMany({
     where: {
-      familyId,
+      familyId: scope.familyId,
+      ...(scope.userId ? { userId: scope.userId } : {}),
       user: { [prefField]: true },
     },
     select: { id: true, token: true },
@@ -121,6 +153,7 @@ export async function notifyFamilyParents(
             notification: {
               channelId: "warden_alerts",
               priority: "high",
+              ...(payload.androidTag ? { tag: payload.androidTag } : {}),
             },
           },
         });
