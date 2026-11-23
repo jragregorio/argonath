@@ -18,6 +18,12 @@
   <ItemGroup>
     <ProjectReference Include="..\Warden.Core\Warden.Core.csproj" />
     <ProjectReference Include="..\Warden.Updater\Warden.Updater.csproj" />
+    <!-- net48 custom-action library: only its pure XML builders are exercised here. -->
+    <ProjectReference Include="..\Warden.Installer.CA\Warden.Installer.CA.csproj" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);NU1702</NoWarn>
+  </PropertyGroup>
 
 </Project>

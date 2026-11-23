@@ -303,7 +303,37 @@
       Impersonate="no"
       Return="ignore" />
 
+    <!--
+      On-demand SYSTEM task Warden\WardenUpdater (in-app Update button). Users may run it but
+      not modify it (SDDL in UpdaterTaskRegistrar). Created after the logon task; a failure
+      fails the install so a machine never ends up with a half-working updater.
+    -->
+    <SetProperty
+      Id="CreateWardenUpdaterTask"
+      Value="ExePath=[INSTALLFOLDER]Warden.Updater.exe"
+      Before="CreateWardenUpdaterTask"
+      Sequence="execute"
+      Condition="NOT REMOVE" />
+
+    <CustomAction
+      Id="CreateWardenUpdaterTask"
+      BinaryRef="WardenInstallerCA"
+      DllEntry="CreateWardenUpdaterTask"
+      Execute="deferred"
+      Impersonate="no"
+      Return="check" />
+
+    <CustomAction
+      Id="DeleteWardenUpdaterTask"
+      BinaryRef="WardenInstallerCA"
+      DllEntry="DeleteWardenUpdaterTask"
+      Execute="deferred"
+      Impersonate="no"
+      Return="ignore" />
+
     <InstallExecuteSequence>
+      <Custom Action="CreateWardenUpdaterTask" After="CreateWardenTask" Condition="NOT REMOVE" />
+      <Custom Action="DeleteWardenUpdaterTask" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot;" />
       <Custom Action="CreateWardenTask" After="InstallFiles" Condition="NOT REMOVE" />
       <!-- Rollback scheduling only; Execute=rollback means it does not run on success. -->
       <Custom Action="RollbackWardenTask" Before="CreateWardenTask" Condition="NOT REMOVE" />

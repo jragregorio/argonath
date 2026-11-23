@@ -638,7 +638,7 @@ public static class LogonTaskRegistrar
         }
     }
 
-    private static (int exit, string output) RunSchtasks(string arguments)
+    internal static (int exit, string output) RunSchtasks(string arguments)
     {
         var psi = new ProcessStartInfo
         {

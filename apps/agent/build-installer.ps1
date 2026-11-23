@@ -80,6 +80,17 @@ if (-not (Test-Path -LiteralPath (Join-Path $publishDir 'Warden.Tray.exe'))) {
     throw "Publish output missing Warden.Tray.exe under $publishDir"
 }
 
+# The SYSTEM updater ships in the same folder (same self-contained runtime); the
+# $(PublishDir)** harvest in Package.wxs picks it up.
+$updaterProject = Join-Path $agentRoot 'Warden.Updater\Warden.Updater.csproj'
+Write-Host "==> Publishing Warden.Updater ($Configuration, win-x64, self-contained)"
+dotnet publish $updaterProject -c $Configuration -r win-x64 --self-contained true -o $publishDir
+Assert-ExitCode 'dotnet publish Warden.Updater'
+
+if (-not (Test-Path -LiteralPath (Join-Path $publishDir 'Warden.Updater.exe'))) {
+    throw "Publish output missing Warden.Updater.exe under $publishDir"
+}
+
 $publishDirFull = [System.IO.Path]::GetFullPath($publishDir)
 if (-not $publishDirFull.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
     $publishDirFull += [System.IO.Path]::DirectorySeparatorChar
