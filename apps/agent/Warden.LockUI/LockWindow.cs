@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -576,10 +577,18 @@ public class LockWindow : Window
 
 public static class LockWindowManager
 {
+    private const int MaxDesktopSets = 16;
+
     private static readonly List<LockWindow> Windows = new();
     private static readonly KeyboardLockService KeyboardLock = new();
     private static Dispatcher? _dispatcher;
     private static DispatcherTimer? _topmostTimer;
+    private static Func<int, Task<bool>>? _onExtensionRequest;
+    private static Func<Task<(bool ok, string? error)>>? _onShutdownPc;
+    private static Func<string, Task<(bool ok, string? error)>>? _onParentShutdown;
+    private static IReadOnlyList<MonitorBounds>? _monitors;
+    private static PolicyEvaluation? _lastEvaluation;
+    private static bool _ensuringDesktopCover;
 
     /// <summary>Set true only while LockWindowManager is closing windows intentionally.</summary>
     internal static bool AllowClose { get; private set; }
@@ -606,6 +615,12 @@ public static class LockWindowManager
                 ),
             };
 
+        _onExtensionRequest = onExtensionRequest;
+        _onShutdownPc = onShutdownPc;
+        _onParentShutdown = onParentShutdown;
+        _monitors = screens;
+        _lastEvaluation = evaluation;
+
         var thread = new Thread(() =>
         {
             try
@@ -620,6 +635,7 @@ public static class LockWindowManager
 
                     Windows.Add(window);
                     window.Show();
+                    _ = new WindowInteropHelper(window).EnsureHandle();
                 }
 
                 try
@@ -635,13 +651,29 @@ public static class LockWindowManager
                 _dispatcher = Dispatcher.CurrentDispatcher;
                 _topmostTimer = new DispatcherTimer(DispatcherPriority.Background)
                 {
-                    Interval = TimeSpan.FromMilliseconds(750)
+                    Interval = TimeSpan.FromMilliseconds(250)
                 };
                 _topmostTimer.Tick += (_, _) =>
                 {
-                    foreach (var window in Windows)
+                    try
                     {
-                        window.AssertTopmost();
+                        foreach (var window in Windows)
+                        {
+                            window.AssertTopmost();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        WardenLog.Debug("LockUI", "AssertTopmost on lock timer failed", ex);
+                    }
+
+                    try
+                    {
+                        EnsureLockedOnCurrentDesktop();
+                    }
+                    catch (Exception ex)
+                    {
+                        WardenLog.Warn("LockUI", "EnsureLockedOnCurrentDesktop failed", ex);
                     }
                 };
                 _topmostTimer.Start();
@@ -683,6 +715,11 @@ public static class LockWindowManager
                 Windows.Clear();
                 Dispatcher.ExitAllFrames();
                 _dispatcher = null;
+                _onExtensionRequest = null;
+                _onShutdownPc = null;
+                _onParentShutdown = null;
+                _monitors = null;
+                _lastEvaluation = null;
             }
             finally
             {
@@ -705,9 +742,97 @@ public static class LockWindowManager
 
     public static void Update(PolicyEvaluation evaluation)
     {
+        _lastEvaluation = evaluation;
         foreach (var window in Windows)
         {
             window.UpdateEvaluation(evaluation);
+        }
+    }
+
+    private static void EnsureLockedOnCurrentDesktop()
+    {
+        if (Windows.Count == 0)
+        {
+            return;
+        }
+
+        if (_ensuringDesktopCover)
+        {
+            return;
+        }
+
+        var hasValidHwnd = false;
+        foreach (var window in Windows)
+        {
+            var hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd == IntPtr.Zero)
+            {
+                continue;
+            }
+
+            hasValidHwnd = true;
+            if (VirtualDesktopAffinity.IsOnCurrentDesktop(hwnd))
+            {
+                return;
+            }
+        }
+
+        if (!hasValidHwnd)
+        {
+            return;
+        }
+
+        if (!VirtualDesktopAffinity.IsAvailable)
+        {
+            return;
+        }
+
+        var monitors = _monitors;
+        var onExtension = _onExtensionRequest;
+        var onShutdown = _onShutdownPc;
+        var onParentShutdown = _onParentShutdown;
+        if (monitors == null || onExtension == null || onShutdown == null || onParentShutdown == null)
+        {
+            return;
+        }
+
+        var monitorCount = monitors.Count;
+        if (monitorCount <= 0)
+        {
+            monitorCount = 1;
+        }
+
+        var setCount = Windows.Count / monitorCount;
+        if (setCount >= MaxDesktopSets)
+        {
+            WardenLog.Warn(
+                "LockUI",
+                $"Virtual desktop cover cap ({MaxDesktopSets} sets) reached; skipping new overlay"
+            );
+            return;
+        }
+
+        _ensuringDesktopCover = true;
+        try
+        {
+            foreach (var screen in monitors)
+            {
+                var window = new LockWindow(screen, onExtension, onShutdown, onParentShutdown);
+                if (_lastEvaluation != null && screen.IsPrimary)
+                {
+                    window.UpdateEvaluation(_lastEvaluation);
+                }
+
+                Windows.Add(window);
+                window.Show();
+                _ = new WindowInteropHelper(window).EnsureHandle();
+            }
+
+            WardenLog.Info("LockUI", "Lock overlay extended to current virtual desktop");
+        }
+        finally
+        {
+            _ensuringDesktopCover = false;
         }
     }
 }
