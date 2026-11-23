@@ -1,7 +1,7 @@
 # Agent installer + auto-update
 
 **Started:** 2026-07-30
-**Status:** Phase 3 implemented on branch `feat/agent-in-app-update` (agent 0.6.29, web 0.8.28); hardware validation on TESTPC pending.
+**Status:** Phase 3 merged to main; agent 0.6.30 published on `jragregorio/warden-releases` (web 0.8.28). Hardware validation on TESTPC pending.
 
 ## Goal
 
@@ -174,11 +174,11 @@ Plan: `docs/superpowers/plans/2026-11-24-agent-in-app-update.md`
 
 ### Still to do (needs TESTPC + a publish)
 
-1. `node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.6.30-x64.msi --channel stable`
-2. Install 0.6.29 manually on TESTPC (one-time bootstrap). Check
+1. ~~Publish~~ done: 0.6.30 is live on `jragregorio/warden-releases` (0.6.29 on argonath was withdrawn).
+2. Install 0.6.30 manually on TESTPC (one-time bootstrap). Check
    `schtasks /Query /TN Warden\WardenUpdater /XML`; as the child,
    `schtasks /Run /TN Warden\WardenUpdater` succeeds and `schtasks /Change /TN Warden\WardenUpdater /DISABLE` is denied.
-3. Bump to 0.6.30, build, publish; on TESTPC press **Update** → tray restarts on 0.6.30;
+3. Bump to 0.6.31, build, publish; on TESTPC press **Update** → tray restarts on 0.6.31;
    CHILDUSER / startup mode unchanged.
-4. Failure path: wrong `sha256` on the 0.6.30 row → tray never closes, banner shows
+4. Failure path: wrong `sha256` on the 0.6.31 row → tray never closes, banner shows
    `Update failed — try again`. Restore the hash afterwards.
