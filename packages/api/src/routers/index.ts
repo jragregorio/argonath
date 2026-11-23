@@ -30,6 +30,7 @@ import {
   checkChildMessageRateLimit,
   childMessagePushTag,
   resolveChildMessageText,
+  buildAgentReleaseDownloadUrl,
 } from "@warden/shared";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -178,7 +179,6 @@ function toFamilyClientView<T extends { parentPin?: string | null }>(family: T) 
   };
 }
 
-const AGENT_RELEASES_BUCKET = "agent-releases";
 const agentReleaseChannelSchema = z.enum(["stable", "test"]);
 
 type AgentReleaseRow = {
@@ -187,7 +187,7 @@ type AgentReleaseRow = {
   sizeBytes: number;
   mandatory: boolean;
   publishedAt: Date;
-  storageKey: string;
+  downloadUrl: string | null;
 };
 
 async function findLatestAgentRelease(
@@ -202,29 +202,14 @@ async function findLatestAgentRelease(
       sizeBytes: true,
       mandatory: true,
       publishedAt: true,
-      storageKey: true,
+      downloadUrl: true,
     },
   });
 }
 
-async function createAgentReleaseSignedUrl(
-  storageKey: string,
-  expiresInSeconds: number
-): Promise<string | null> {
-  if (!isSupabaseConfigured()) {
-    return null;
-  }
-
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.storage
-    .from(AGENT_RELEASES_BUCKET)
-    .createSignedUrl(storageKey, expiresInSeconds);
-
-  if (error || !data?.signedUrl) {
-    return null;
-  }
-
-  return data.signedUrl;
+/** GitHub Releases asset URL for a release row (falls back to the canonical URL). */
+function resolveAgentReleaseDownloadUrl(row: AgentReleaseRow): string {
+  return row.downloadUrl ?? buildAgentReleaseDownloadUrl(row.version);
 }
 
 /** Best-effort update hint for agents; never throws. */
@@ -238,10 +223,6 @@ async function getHeartbeatUpdateHint(
   downloadUrl: string;
 } | null> {
   try {
-    if (!isSupabaseConfigured()) {
-      return null;
-    }
-
     const latest = await findLatestAgentRelease("stable");
     if (!latest) {
       return null;
@@ -251,20 +232,12 @@ async function getHeartbeatUpdateHint(
       return null;
     }
 
-    const downloadUrl = await createAgentReleaseSignedUrl(
-      latest.storageKey,
-      30 * 60
-    );
-    if (!downloadUrl) {
-      return null;
-    }
-
     return {
       version: latest.version,
       sha256: latest.sha256,
       sizeBytes: latest.sizeBytes,
       mandatory: latest.mandatory,
-      downloadUrl,
+      downloadUrl: resolveAgentReleaseDownloadUrl(latest),
     };
   } catch (error) {
     console.error("[agentRelease] heartbeat update lookup failed", error);
@@ -3087,20 +3060,8 @@ export const agentReleaseRouter = router({
       const channel = input?.channel ?? "stable";
 
       try {
-        if (!isSupabaseConfigured()) {
-          return null;
-        }
-
         const latest = await findLatestAgentRelease(channel);
         if (!latest) {
-          return null;
-        }
-
-        const downloadUrl = await createAgentReleaseSignedUrl(
-          latest.storageKey,
-          3600
-        );
-        if (!downloadUrl) {
           return null;
         }
 
@@ -3110,12 +3071,38 @@ export const agentReleaseRouter = router({
           sizeBytes: latest.sizeBytes,
           mandatory: latest.mandatory,
           publishedAt: latest.publishedAt,
-          downloadUrl,
+          downloadUrl: resolveAgentReleaseDownloadUrl(latest),
         };
       } catch (error) {
         console.error("[agentRelease] latest lookup failed", error);
         return null;
       }
+    }),
+
+  /**
+   * Unauthenticated latest-release lookup for the SYSTEM updater
+   * (release metadata is public on GitHub anyway).
+   */
+  publicLatest: publicProcedure
+    .input(
+      z
+        .object({
+          channel: agentReleaseChannelSchema.default("stable"),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const latest = await findLatestAgentRelease(input?.channel ?? "stable");
+      if (!latest) {
+        return null;
+      }
+
+      return {
+        version: latest.version,
+        sha256: latest.sha256,
+        sizeBytes: latest.sizeBytes,
+        downloadUrl: resolveAgentReleaseDownloadUrl(latest),
+      };
     }),
 });
 

@@ -341,7 +341,8 @@ model AgentRelease {
   id          String   @id @default(cuid())
   version     String // semver-ish "0.5.11" (Major.Minor.Build as used by agent)
   channel     String   @default("stable") // "stable" | "test"
-  storageKey  String // e.g. releases/stable/Warden-0.5.11-x64.msi
+  storageKey  String? // legacy Supabase key (pre-GitHub releases)
+  downloadUrl String? // GitHub Releases asset URL
   sha256      String // lowercase hex
   sizeBytes   Int
   mandatory   Boolean  @default(false)
