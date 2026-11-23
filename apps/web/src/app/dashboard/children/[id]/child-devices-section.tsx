@@ -58,10 +58,6 @@ type ChildDevicesSectionProps = {
   childId: string;
 };
 
-// Re-enable after Supabase plan upgrade (Free plan caps Storage objects at 50MB;
-// the MSI is ~84MB). Publish with: npm run publish:agent -- --msi …
-const INSTALLER_DOWNLOAD_ENABLED = false;
-
 export function ChildDevicesSection({
   child,
   childId,
@@ -100,9 +96,7 @@ export function ChildDevicesSection({
   });
 
   const { data: latestRelease, isLoading: latestReleaseLoading } =
-    trpc.agentRelease.latest.useQuery(undefined, {
-      enabled: INSTALLER_DOWNLOAD_ENABLED,
-    });
+    trpc.agentRelease.latest.useQuery();
 
   const {
     pendingLocks,
@@ -731,28 +725,17 @@ export function ChildDevicesSection({
             <Button
               variant="outline"
               className="w-full sm:w-auto"
-              disabled={
-                !INSTALLER_DOWNLOAD_ENABLED ||
-                !latestRelease?.downloadUrl ||
-                latestReleaseLoading
-              }
+              disabled={!latestRelease?.downloadUrl || latestReleaseLoading}
               onClick={() => {
-                if (
-                  !INSTALLER_DOWNLOAD_ENABLED ||
-                  !latestRelease?.downloadUrl
-                ) {
+                if (!latestRelease?.downloadUrl) {
                   return;
                 }
-                window.open(
-                  latestRelease.downloadUrl,
-                  "_blank",
-                  "noopener,noreferrer"
-                );
+                // GitHub serves the asset as an attachment, so this downloads
+                // the MSI directly without leaving the dashboard.
+                window.location.assign(latestRelease.downloadUrl);
               }}
               title={
-                !INSTALLER_DOWNLOAD_ENABLED
-                  ? "Temporarily unavailable"
-                  : latestRelease
+                latestRelease
                     ? `Download Warden ${latestRelease.version} for Windows`
                     : "Installer not published yet"
               }
@@ -760,11 +743,7 @@ export function ChildDevicesSection({
               <Download className="w-4 h-4 mr-2" />
               Download for Windows
             </Button>
-            {!INSTALLER_DOWNLOAD_ENABLED ? (
-              <p className="text-xs text-muted-foreground">
-                Temporarily unavailable
-              </p>
-            ) : latestReleaseLoading ? (
+            {latestReleaseLoading ? (
               <p className="text-xs text-muted-foreground">
                 Checking for installer…
               </p>
