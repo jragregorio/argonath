@@ -222,21 +222,13 @@ function Brand() {
   );
 }
 
-/**
- * Temporary desktop version until AgentRelease rows are published regularly.
- * Flip USE_AGENT_RELEASE_FOR_DESKTOP_VERSION when ready to read from DB again.
- * Keep HARDCODED_DESKTOP_APP_VERSION in sync with apps/agent/Directory.Build.props.
- */
-const USE_AGENT_RELEASE_FOR_DESKTOP_VERSION = false;
-const HARDCODED_DESKTOP_APP_VERSION = "0.6.28";
-
 function VersionCredit({ className = "" }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
 
   const metaQuery = trpc.agentRelease.latestMeta.useQuery(undefined, {
-    enabled: open && USE_AGENT_RELEASE_FOR_DESKTOP_VERSION,
+    enabled: open,
     staleTime: 60_000,
     retry: false,
   });
@@ -263,18 +255,19 @@ function VersionCredit({ className = "" }: { className?: string }) {
     };
   }, [open]);
 
-  let desktopVersion: string | null = HARDCODED_DESKTOP_APP_VERSION;
+  // Latest published agent release (AgentRelease row written by publish:agent).
+  const desktopVersion = metaQuery.data?.version ?? null;
   let desktopStatus: string | null = null;
-  if (USE_AGENT_RELEASE_FOR_DESKTOP_VERSION) {
-    desktopVersion = metaQuery.data?.version ?? null;
-    if (metaQuery.isFetching && !metaQuery.data) {
+  if (!desktopVersion) {
+    if (metaQuery.isFetching) {
       desktopStatus = "Loading desktop version…";
     } else if (metaQuery.isError) {
       desktopStatus = "Couldn’t load desktop version.";
-    } else if (!desktopVersion) {
+    } else {
       desktopStatus = "No desktop release published.";
     }
   }
+
 
   return (
     <div ref={rootRef} className={`relative ${className}`}>
