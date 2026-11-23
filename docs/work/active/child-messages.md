@@ -95,3 +95,18 @@ Run `npm run db:push` **before** the web deploy. `auth.me` selects `notifyChildM
 | `npm run check:boundaries` | 0 |
 
 Version: web 0.8.25 → **0.8.26**. Agent unchanged (server-only fix).
+
+## Bugfix: phone push removed while the app is in the background (2026-11-24, web 0.8.27)
+
+**Symptom:** after 0.8.26 the dashboard toast worked, but no phone notification for child messages, even though "More time requested" pushes arrive.
+
+**Evidence** (owner approved each test send, using the local Firebase service account):
+- An FCM dry run of the exact child-message payload passed (token valid, payload valid).
+- A real child-message push with a tag (18:08 UTC) did not show. The same push without a tag (18:13) did not show. An extension-shaped push with `type: extension:requested` (18:17) **did** show.
+- Android Notification history **lists** the 18:08 and 18:13 notifications. They were posted, then removed.
+
+**Cause:** the `pushNotificationReceived` handler in `native-push-bootstrap.tsx` clears child-message and nudge-reply notifications so the in-app toast replaces them. It also fires while the Capacitor app is in the background (the WebView stays alive), so it removed notifications the parent never saw. Pushes whose `type` it ignores (extension, device online/offline) were unaffected.
+
+**Fix:** the handler returns early unless `document.visibilityState === "visible"`. In the background, the system notification stays. Web-only change, no APK rebuild.
+
+Version: web 0.8.26 → **0.8.27**. The temporary diagnostic script was deleted.

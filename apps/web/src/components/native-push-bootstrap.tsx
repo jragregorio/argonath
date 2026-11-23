@@ -108,10 +108,15 @@ export function NativePushBootstrap() {
         await push.addListener("registrationError", (error) => {
           console.error("[warden] Push registration error:", error);
         });
-        // Foreground only: Android still posts a system notification while the
-        // app is open. For nudge replies and child messages, cancel it and
+        // While the dashboard is on screen, Android still posts a system
+        // notification. For nudge replies and child messages, cancel it and
         // show the in-app toast instead.
+        //
+        // This listener can also fire while the app is in the background (the
+        // WebView stays alive), so only act when the page is actually visible.
+        // Otherwise the parent never sees the notification (2026-11-24 bug).
         await push.addListener("pushNotificationReceived", (payload) => {
+          if (document.visibilityState !== "visible") return;
           const { data, body, title } = (payload ?? {}) as {
             data?: Record<string, unknown>;
             body?: unknown;
