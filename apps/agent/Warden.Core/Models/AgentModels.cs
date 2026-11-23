@@ -168,3 +168,19 @@ public class ExtensionPayload
 {
     public int ExtraMinutes { get; set; }
 }
+
+/// <summary>Optional heartbeat `update` hint: a newer stable agent release exists.</summary>
+public sealed class AgentUpdateInfo
+{
+    public string Version { get; set; } = "";
+    public string Sha256 { get; set; } = "";
+    public long SizeBytes { get; set; }
+    public bool Mandatory { get; set; }
+    public string DownloadUrl { get; set; } = "";
+}
+
+public sealed class HeartbeatResponse
+{
+    public bool Ok { get; set; }
+    public AgentUpdateInfo? Update { get; set; }
+}

@@ -150,7 +150,35 @@ public class WardenApiClient
         );
 
         HandleUnpairedResponse(response);
-        return response.IsSuccessStatusCode;
+        if (!response.IsSuccessStatusCode) return false;
+
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            LastUpdateHint = ParseHeartbeatResponse(body)?.Update;
+        }
+        catch
+        {
+            // Update hint is best-effort; never fail the heartbeat over it.
+        }
+
+        return true;
+    }
+
+    /// <summary>Latest <c>update</c> hint from the most recent successful heartbeat (null when none).</summary>
+    public AgentUpdateInfo? LastUpdateHint { get; private set; }
+
+    /// <summary>Parses a heartbeat response body; returns null for anything that is not valid JSON.</summary>
+    internal static HeartbeatResponse? ParseHeartbeatResponse(string body)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<HeartbeatResponse>(body, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     public async Task<PolicyData?> GetPolicyAsync()

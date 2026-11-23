@@ -64,6 +64,11 @@ public class EnforcementEngine
     public event Action<TimeWarningPayload>? TimeWarningRequested;
     public event Action<ExtensionPayload>? ExtensionApprovedNoticeRequested;
     public event Action<string>? AppBlockedNoticeRequested;
+    /// <summary>Raised when the advertised update version changes (including to null).</summary>
+    public event Action<AgentUpdateInfo?>? UpdateAvailabilityChanged;
+
+    /// <summary>Newer stable release reported by the last heartbeat, or null.</summary>
+    public AgentUpdateInfo? AvailableUpdate { get; private set; }
 
     public bool IsLocked => _isLocked;
     public bool IsAdminLocked => _currentPolicy?.AdminLock ?? false;
@@ -1059,8 +1064,21 @@ public class EnforcementEngine
             previousSessionUnclean,
             runningApps
         );
+        PublishUpdateHint(_api.LastUpdateHint);
         // Refresh policy/bonus only — do not clobber local accumulation from a stale server value.
         await RefreshPolicyAsync(syncUsageFromServer: false);
+    }
+
+    private void PublishUpdateHint(AgentUpdateInfo? hint)
+    {
+        if (string.Equals(AvailableUpdate?.Version, hint?.Version, StringComparison.Ordinal))
+        {
+            AvailableUpdate = hint;
+            return;
+        }
+
+        AvailableUpdate = hint;
+        UpdateAvailabilityChanged?.Invoke(hint);
     }
 
     public async Task<bool> RequestExtensionAsync(int minutes)
