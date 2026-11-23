@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    SYSTEM-level updater launched on demand by the scheduled task Warden\WardenUpdater.
+    Standalone: references no other Warden project
+    (see docs/superpowers/specs/2026-11-24-agent-in-app-update-design.md).
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Warden.Updater</RootNamespace>
+    <ApplicationIcon>..\Warden.Tray\warden_icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Warden.Tests" />
+  </ItemGroup>
+
+</Project>
