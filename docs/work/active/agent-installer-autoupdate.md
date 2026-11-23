@@ -174,7 +174,7 @@ Plan: `docs/superpowers/plans/2026-11-24-agent-in-app-update.md`
 
 ### Still to do (needs TESTPC + a publish)
 
-1. `node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.6.29-x64.msi --channel stable`
+1. `node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.6.30-x64.msi --channel stable`
 2. Install 0.6.29 manually on TESTPC (one-time bootstrap). Check
    `schtasks /Query /TN Warden\WardenUpdater /XML`; as the child,
    `schtasks /Run /TN Warden\WardenUpdater` succeeds and `schtasks /Change /TN Warden\WardenUpdater /DISABLE` is denied.
