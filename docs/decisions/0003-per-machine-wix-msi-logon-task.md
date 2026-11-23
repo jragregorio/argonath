@@ -69,6 +69,15 @@ login on the machine (parents often elevate from an admin account on the same PC
   Publish via `scripts/publish-agent-release.mjs`. Parents get a signed download
   URL from `agentRelease.latest`; heartbeats may include an `update` hint for
   Phase 3 (SYSTEM updater not yet shipped).
+- **In-app update (agent ≥ 0.6.29, supersedes the hosting note above):** MSIs are
+  hosted on GitHub Releases of the public repo `jragregorio/argonath` (tag
+  `agent-v<version>`; Supabase free tier caps objects at 50 MB). The MSI also
+  registers the on-demand SYSTEM task `Warden\WardenUpdater` (no triggers,
+  `IgnoreNew`, 15-minute limit; its SDDL lets Users run but not modify it). The
+  tray's **Update** button starts it; `Warden.Updater.exe` asks
+  `/api/agent/release/latest`, accepts only that repo's release URL, verifies
+  size + SHA-256 while holding the file open, runs `msiexec /qn`, then relaunches
+  the logon task(s).
 
 ## Alternatives considered
 

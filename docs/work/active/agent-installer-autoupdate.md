@@ -1,7 +1,7 @@
 # Agent installer + auto-update
 
 **Started:** 2026-07-30
-**Status:** Phase 2 complete. Ready for Phase 3 when wanted.
+**Status:** Phase 3 implemented on branch `feat/agent-in-app-update` (agent 0.6.29, web 0.8.28); hardware validation on TESTPC pending.
 
 ## Goal
 
@@ -16,7 +16,7 @@ without manual zip/copy deploys.
 | **1** | MSI packaging with WiX — **DONE** |
 | **1.1** | Hardening (CHILDUSER persist, icon, URL source, watchdog) — **DONE** |
 | **2** | Release backend (version manifest + artifact hosting + SHA-256) — **DONE** |
-| **3** | SYSTEM updater service (check, verify, silent upgrade) |
+| **3** | SYSTEM updater (on-demand task + tray Update button) — **IMPLEMENTED, needs TESTPC run** |
 | **4** | Hardening + docs (graceful upgrade shutdown, ops runbook polish) |
 
 ## Decisions locked
@@ -152,3 +152,32 @@ node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.5.11-
 
 Autostart diagnosis, agent file logging, HKCU self-heal, and installer startup-script hardening
 are tracked in [agent-startup-diagnostics.md](./agent-startup-diagnostics.md) (targets v0.5.14).
+
+## Phase 3 — in-app update (2026-11-24)
+
+Design: `docs/superpowers/specs/2026-11-24-agent-in-app-update-design.md`
+Plan: `docs/superpowers/plans/2026-11-24-agent-in-app-update.md`
+
+### Delivered
+
+- Hosting moved to **GitHub Releases** (`jragregorio/argonath`, tag `agent-v<version>`);
+  `AgentRelease.downloadUrl` added (`storageKey` now nullable); publish script uses `gh`.
+- Public `GET /api/agent/release/latest?channel=stable` for the SYSTEM updater.
+- Dashboard **Download for Windows** re-enabled (direct asset download).
+- Tray banner under the title bar: `Update available (vX.Y.Z)` + **Update**; hidden while locked.
+- `Warden.Updater.exe` + SYSTEM task `Warden\WardenUpdater` (child may run, not modify).
+  Logs/downloads in `C:\ProgramData\Warden\updater\` (SYSTEM/Admins only);
+  status in `C:\ProgramData\Warden\update-status.json`.
+- First .NET tests: `apps/agent/Warden.Tests` (xUnit, 43 tests).
+- Resolves the Phase 1 open item "locked mid-upgrade": an update cannot start while locked.
+
+### Still to do (needs TESTPC + a publish)
+
+1. `node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.6.29-x64.msi --channel stable`
+2. Install 0.6.29 manually on TESTPC (one-time bootstrap). Check
+   `schtasks /Query /TN Warden\WardenUpdater /XML`; as the child,
+   `schtasks /Run /TN Warden\WardenUpdater` succeeds and `schtasks /Change /TN Warden\WardenUpdater /DISABLE` is denied.
+3. Bump to 0.6.30, build, publish; on TESTPC press **Update** → tray restarts on 0.6.30;
+   CHILDUSER / startup mode unchanged.
+4. Failure path: wrong `sha256` on the 0.6.30 row → tray never closes, banner shows
+   `Update failed — try again`. Restore the hash afterwards.
