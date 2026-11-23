@@ -1,5 +1,5 @@
 /**
- * Publish a Warden agent MSI to GitHub Releases (jragregorio/argonath) + AgentRelease row.
+ * Publish a Warden agent MSI to GitHub Releases (jragregorio/warden-releases) + AgentRelease row.
  *
  * Usage:
  *   node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.5.11-x64.msi --channel stable
@@ -29,7 +29,7 @@ import { PrismaClient } from "@prisma/client";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 // Keep in sync with packages/shared/src/agent-version.ts (AGENT_RELEASE_REPO and helpers).
-const RELEASE_REPO = "jragregorio/argonath";
+const RELEASE_REPO = "jragregorio/warden-releases";
 const STRICT_VERSION = /^\d+\.\d+\.\d+$/;
 const releaseTag = (version) => `agent-v${version}`;
 const assetName = (version) => `Warden-${version}-x64.msi`;

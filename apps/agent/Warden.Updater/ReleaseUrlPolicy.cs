@@ -7,7 +7,7 @@ namespace Warden.Updater;
 public static class ReleaseUrlPolicy
 {
     private const string AllowedHost = "github.com";
-    private const string AllowedPathPrefix = "/jragregorio/argonath/releases/download/";
+    private const string AllowedPathPrefix = "/jragregorio/warden-releases/releases/download/";
 
     public static bool IsAllowed(Uri url) =>
         url.IsAbsoluteUri

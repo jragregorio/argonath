@@ -7,7 +7,7 @@ namespace Warden.Tests;
 public class UpdaterTests : IDisposable
 {
     private const string GoodUrl =
-        "https://github.com/jragregorio/argonath/releases/download/agent-v0.6.29/Warden-0.6.29-x64.msi";
+        "https://github.com/jragregorio/warden-releases/releases/download/agent-v0.6.29/Warden-0.6.29-x64.msi";
 
     private readonly string _root = Path.Combine(
         Path.GetTempPath(),
@@ -47,10 +47,11 @@ public class UpdaterTests : IDisposable
 
     [Theory]
     [InlineData(GoodUrl, true)]
-    [InlineData("http://github.com/jragregorio/argonath/releases/download/agent-v0.6.29/Warden-0.6.29-x64.msi", false)]
-    [InlineData("https://evil.com/jragregorio/argonath/releases/download/agent-v0.6.29/Warden-0.6.29-x64.msi", false)]
+    [InlineData("http://github.com/jragregorio/warden-releases/releases/download/agent-v0.6.29/Warden-0.6.29-x64.msi", false)]
+    [InlineData("https://evil.com/jragregorio/warden-releases/releases/download/agent-v0.6.29/Warden-0.6.29-x64.msi", false)]
     [InlineData("https://github.com/other/repo/releases/download/agent-v0.6.29/Warden-0.6.29-x64.msi", false)]
-    [InlineData("https://github.com.evil.com/jragregorio/argonath/releases/download/a/b.msi", false)]
+    [InlineData("https://github.com/jragregorio/argonath/releases/download/agent-v0.6.29/Warden-0.6.29-x64.msi", false)]
+    [InlineData("https://github.com.evil.com/jragregorio/warden-releases/releases/download/a/b.msi", false)]
     public void IsAllowed(string url, bool expected) =>
         Assert.Equal(expected, ReleaseUrlPolicy.IsAllowed(new Uri(url)));
 

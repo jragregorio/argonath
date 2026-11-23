@@ -38,7 +38,7 @@ describe("agent release urls", () => {
 
   it("builds direct download url", () => {
     expect(buildAgentReleaseDownloadUrl("0.6.29")).toBe(
-      "https://github.com/jragregorio/argonath/releases/download/agent-v0.6.29/Warden-0.6.29-x64.msi"
+      "https://github.com/jragregorio/warden-releases/releases/download/agent-v0.6.29/Warden-0.6.29-x64.msi"
     );
   });
 

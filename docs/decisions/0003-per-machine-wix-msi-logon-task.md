@@ -70,7 +70,7 @@ login on the machine (parents often elevate from an admin account on the same PC
   URL from `agentRelease.latest`; heartbeats may include an `update` hint for
   Phase 3 (SYSTEM updater not yet shipped).
 - **In-app update (agent ≥ 0.6.29, supersedes the hosting note above):** MSIs are
-  hosted on GitHub Releases of the public repo `jragregorio/argonath` (tag
+  hosted on GitHub Releases of the public repo `jragregorio/warden-releases` (tag
   `agent-v<version>`; Supabase free tier caps objects at 50 MB). The MSI also
   registers the on-demand SYSTEM task `Warden\WardenUpdater` (no triggers,
   `IgnoreNew`, 15-minute limit; its SDDL lets Users run but not modify it). The

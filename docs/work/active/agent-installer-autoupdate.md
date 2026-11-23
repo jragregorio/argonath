@@ -160,7 +160,7 @@ Plan: `docs/superpowers/plans/2026-11-24-agent-in-app-update.md`
 
 ### Delivered
 
-- Hosting moved to **GitHub Releases** (`jragregorio/argonath`, tag `agent-v<version>`);
+- Hosting moved to **GitHub Releases** (`jragregorio/warden-releases`, tag `agent-v<version>`);
   `AgentRelease.downloadUrl` added (`storageKey` now nullable); publish script uses `gh`.
 - Public `GET /api/agent/release/latest?channel=stable` for the SYSTEM updater.
 - Dashboard **Download for Windows** re-enabled (direct asset download).

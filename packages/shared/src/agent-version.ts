@@ -24,7 +24,7 @@ function parseAgentVersion(raw: string): number[] {
 }
 
 /** Public GitHub repo whose Releases host the agent MSI. */
-export const AGENT_RELEASE_REPO = "jragregorio/argonath";
+export const AGENT_RELEASE_REPO = "jragregorio/warden-releases";
 
 const STRICT_AGENT_VERSION = /^\d+\.\d+\.\d+$/;
 

@@ -8,7 +8,7 @@
 - Requires env vars listed in [environment.md](environment.md) and `apps/web/.env.example`.
 - Create private Supabase Storage bucket `snapshots` for capture features.
 - Windows MSI artifacts are hosted on **GitHub Releases** of the public repo
-  `jragregorio/argonath` (tag `agent-v<version>`). Parent dashboard **Download for Windows**
+  `jragregorio/warden-releases` (tag `agent-v<version>`). Parent dashboard **Download for Windows**
   links directly to the release asset from `agentRelease.latest`. (The old Supabase
   `agent-releases` bucket is no longer used — free tier caps objects at 50 MB.)
 
@@ -41,7 +41,7 @@ npm run publish:agent -- --msi apps/agent/artifacts/Warden-0.5.15-x64.msi --chan
 node scripts/publish-agent-release.mjs --msi apps/agent/artifacts/Warden-0.5.15-x64.msi --channel stable
 ```
 
-Requires the GitHub CLI signed in with push access (`gh auth login`) and `DATABASE_URL` (loaded from `apps/web/.env.local` / `packages/db/.env` when unset). The script creates (or re-uploads to, with `--clobber`) release `agent-v<version>` on `jragregorio/argonath` with asset `Warden-<version>-x64.msi`, and stores the direct download URL plus SHA-256 and size. Optional flags: `--channel test`, `--mandatory`, `--version X.Y.Z`, `--dry-run` (prints tag, URL and hash; publishes nothing).
+Requires the GitHub CLI signed in with push access (`gh auth login`) and `DATABASE_URL` (loaded from `apps/web/.env.local` / `packages/db/.env` when unset). The script creates (or re-uploads to, with `--clobber`) release `agent-v<version>` on `jragregorio/warden-releases` with asset `Warden-<version>-x64.msi`, and stores the direct download URL plus SHA-256 and size. Optional flags: `--channel test`, `--mandatory`, `--version X.Y.Z`, `--dry-run` (prints tag, URL and hash; publishes nothing).
 
 The repo must stay **public** — release assets of a private repo cannot be downloaded by parents or the updater.
 
