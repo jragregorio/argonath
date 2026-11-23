@@ -166,9 +166,10 @@ Plan: `docs/superpowers/plans/2026-11-24-agent-in-app-update.md`
 - Dashboard **Download for Windows** re-enabled (direct asset download).
 - Tray banner under the title bar: `Update available (vX.Y.Z)` + **Update**; hidden while locked.
 - `Warden.Updater.exe` + SYSTEM task `Warden\WardenUpdater` (child may run, not modify).
-  Logs/downloads in `C:\ProgramData\Warden\updater\` (SYSTEM/Admins only);
-  status in `C:\ProgramData\Warden\update-status.json`.
-- First .NET tests: `apps/agent/Warden.Tests` (xUnit, 43 tests).
+  Logs/downloads in SYSTEM's own profile
+  (`C:\Windows\System32\config\systemprofile\AppData\Local\Warden\updater\`);
+  status in `C:\ProgramData\Warden\update-status.json` (the tray reads it as the child).
+- First .NET tests: `apps/agent/Warden.Tests` (xUnit, 48 tests).
 - Resolves the Phase 1 open item "locked mid-upgrade": an update cannot start while locked.
 
 ### Still to do (needs TESTPC + a publish)
