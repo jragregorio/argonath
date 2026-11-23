@@ -22,3 +22,30 @@ function parseAgentVersion(raw: string): number[] {
     return match ? Number.parseInt(match[1], 10) : 0;
   });
 }
+
+/** Public GitHub repo whose Releases host the agent MSI. */
+export const AGENT_RELEASE_REPO = "jragregorio/argonath";
+
+const STRICT_AGENT_VERSION = /^\d+\.\d+\.\d+$/;
+
+function assertStrictAgentVersion(version: string): string {
+  if (!STRICT_AGENT_VERSION.test(version)) {
+    throw new Error(`Invalid agent version: ${version}`);
+  }
+  return version;
+}
+
+export function agentReleaseTag(version: string): string {
+  return `agent-v${assertStrictAgentVersion(version)}`;
+}
+
+export function agentReleaseAssetName(version: string): string {
+  return `Warden-${assertStrictAgentVersion(version)}-x64.msi`;
+}
+
+/** Direct asset URL (GitHub answers with an attachment download). */
+export function buildAgentReleaseDownloadUrl(version: string): string {
+  return `https://github.com/${AGENT_RELEASE_REPO}/releases/download/${agentReleaseTag(
+    version
+  )}/${agentReleaseAssetName(version)}`;
+}
