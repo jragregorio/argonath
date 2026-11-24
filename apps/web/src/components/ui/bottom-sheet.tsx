@@ -65,6 +65,8 @@ export function BottomSheet({
 
   if (!open) return null;
 
+  const hasFooter = Boolean(showDone || footer);
+
   return (
     <div className="md:hidden">
       <button
@@ -116,11 +118,21 @@ export function BottomSheet({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3"
+          // With no footer the body is the sheet's last row, so it must clear
+          // the system nav bar (Android 3-button nav / iOS home indicator)
+          // itself; otherwise the bottom action sits under the nav buttons.
+          style={
+            hasFooter
+              ? undefined
+              : { paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }
+          }
+        >
           {children}
         </div>
 
-        {(showDone || footer) && (
+        {hasFooter && (
           <div
             className="shrink-0 border-t border-border bg-background px-4 pt-3"
             style={{
