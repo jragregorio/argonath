@@ -175,10 +175,11 @@ Plan: `docs/superpowers/plans/2026-11-24-agent-in-app-update.md`
 ### Still to do (needs TESTPC + a publish)
 
 1. ~~Publish~~ done: 0.6.30 is live on `jragregorio/warden-releases` (0.6.29 on argonath was withdrawn).
-2. Install 0.6.30 manually on TESTPC (one-time bootstrap). Check
+2. ~~Install 0.6.30 manually on TESTPC~~ done (device reports Agent v0.6.30). Check
    `schtasks /Query /TN Warden\WardenUpdater /XML`; as the child,
    `schtasks /Run /TN Warden\WardenUpdater` succeeds and `schtasks /Change /TN Warden\WardenUpdater /DISABLE` is denied.
-3. Bump to 0.6.31, build, publish; on TESTPC press **Update** → tray restarts on 0.6.31;
+3. ~~Bump to 0.6.31, build, publish~~ done 2026-11-24 (SHA-256 `89a8e594…0c2987`,
+   88,738,789 bytes; endpoint returns 0.6.31). On TESTPC press **Update** → tray restarts on 0.6.31;
    CHILDUSER / startup mode unchanged.
 4. Failure path: wrong `sha256` on the 0.6.31 row → tray never closes, banner shows
    `Update failed — try again`. Restore the hash afterwards.
