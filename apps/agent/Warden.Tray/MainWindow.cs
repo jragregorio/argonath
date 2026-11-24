@@ -140,6 +140,7 @@ public class MainWindow : Window
     {
         Background = UiTheme.BgBrush;
         var root = new StackPanel { Margin = new Thickness(22, 10, 22, 16) };
+        System.Windows.Documents.TextElement.SetFontFamily(root, UiTheme.BodyFont);
 
         _updateBanner = new UpdateBanner();
         _updateBanner.UpdateClicked += StartUpdate;
@@ -147,15 +148,16 @@ public class MainWindow : Window
 
         _greeting = new TextBlock
         {
+            FontFamily = UiTheme.DisplayFont,
             FontSize = 28,
-            FontWeight = FontWeights.ExtraBold,
+            FontWeight = FontWeights.Bold,
             Foreground = UiTheme.TextBrush,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
         _moodLine = new TextBlock
         {
             FontSize = 15,
-            FontWeight = FontWeights.SemiBold,
+            FontWeight = FontWeights.Normal,
             Foreground = UiTheme.MutedBrush,
             Margin = new Thickness(0, 2, 0, 14),
             TextWrapping = TextWrapping.Wrap
@@ -166,7 +168,7 @@ public class MainWindow : Window
         root.Children.Add(BuildTimeCard());
 
         _askButton = UiTheme.PrimaryButton("");
-        _askButton.Content = IconLabel("", "Ask for more time", UiTheme.AccentOnBrush, 16, FontWeights.Bold);
+        _askButton.Content = IconLabel("", "Ask for more time", UiTheme.AccentOnBrush, 16, FontWeights.SemiBold);
         _askButton.Height = 52;
         _askButton.Padding = new Thickness(0);
         _askButton.Click += (_, _) => ToggleRequestPanel();
@@ -183,7 +185,7 @@ public class MainWindow : Window
             btn.BorderBrush = UiTheme.AccentBrush;
             btn.BorderThickness = new Thickness(2);
             btn.FontSize = 15;
-            btn.FontWeight = FontWeights.Bold;
+            btn.FontWeight = FontWeights.SemiBold;
             btn.Height = 46;
             btn.Padding = new Thickness(0);
             btn.Margin = new Thickness(i == 0 ? 0 : 8, 0, 0, 0);
@@ -202,7 +204,7 @@ public class MainWindow : Window
         {
             Text = "Quick message",
             FontSize = 14,
-            FontWeight = FontWeights.Bold,
+            FontWeight = FontWeights.SemiBold,
             Foreground = UiTheme.MutedBrush,
             Margin = new Thickness(0, 14, 0, 8)
         });
@@ -291,8 +293,9 @@ public class MainWindow : Window
         var centre = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         _timeBig = new TextBlock
         {
+            FontFamily = UiTheme.DisplayFont,
             FontSize = 28,
-            FontWeight = FontWeights.ExtraBold,
+            FontWeight = FontWeights.SemiBold,
             Foreground = UiTheme.TextBrush,
             HorizontalAlignment = HorizontalAlignment.Center
         };
@@ -301,7 +304,7 @@ public class MainWindow : Window
         {
             Text = "left",
             FontSize = 12,
-            FontWeight = FontWeights.Bold,
+            FontWeight = FontWeights.Normal,
             Foreground = UiTheme.MutedBrush,
             HorizontalAlignment = HorizontalAlignment.Center
         });
@@ -313,11 +316,11 @@ public class MainWindow : Window
         {
             Text = "TODAY",
             FontSize = 12,
-            FontWeight = FontWeights.Bold,
+            FontWeight = FontWeights.SemiBold,
             Foreground = UiTheme.MutedBrush,
             Margin = new Thickness(0, 0, 0, 8)
         });
-        _usedText = new TextBlock { FontSize = 18, FontWeight = FontWeights.ExtraBold, Foreground = UiTheme.TextBrush };
+        _usedText = new TextBlock { FontSize = 18, FontWeight = FontWeights.SemiBold, Foreground = UiTheme.TextBrush };
         side.Children.Add(_usedText);
         _usedOf = new TextBlock
         {
@@ -327,14 +330,16 @@ public class MainWindow : Window
             TextWrapping = TextWrapping.Wrap
         };
         side.Children.Add(_usedOf);
-        _pillText = new TextBlock { FontSize = 13, FontWeight = FontWeights.ExtraBold, Foreground = UiTheme.AccentOnBrush };
+        _pillText = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = UiTheme.AccentOnBrush };
         _pill = new Border
         {
-            CornerRadius = new CornerRadius(999),
-            Padding = new Thickness(12, 3, 12, 4),
+            Padding = new Thickness(12, 4, 12, 4),
             HorizontalAlignment = HorizontalAlignment.Left,
             Child = _pillText
         };
+        // Capsule: WPF stretches an oversized CornerRadius (e.g. 999) into an oval
+        // instead of capping it like CSS does, so use exactly half the height.
+        _pill.SizeChanged += (_, e) => _pill.CornerRadius = new CornerRadius(e.NewSize.Height / 2);
         side.Children.Add(_pill);
 
         var row = new Grid();
@@ -377,7 +382,7 @@ public class MainWindow : Window
         {
             var (caption, glyph, action) = tiles[i];
             var tile = UiTheme.SecondaryButton("");
-            tile.Content = IconLabel(glyph, caption, UiTheme.TextBrush, 14, FontWeights.Bold, UiTheme.AccentBrush);
+            tile.Content = IconLabel(glyph, caption, UiTheme.TextBrush, 14, FontWeights.SemiBold, UiTheme.AccentBrush);
             tile.Height = 56;
             tile.Padding = new Thickness(0);
             tile.Click += async (_, _) => await action();
@@ -396,7 +401,7 @@ public class MainWindow : Window
 
         var parents = new WpfButton
         {
-            Content = IconLabel("", "Parents", UiTheme.MutedBrush, 12, FontWeights.Bold),
+            Content = IconLabel("", "Parents", UiTheme.MutedBrush, 12, FontWeights.SemiBold),
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(8, 6, 8, 6),
@@ -412,7 +417,7 @@ public class MainWindow : Window
         {
             Text = "My colour",
             FontSize = 12,
-            FontWeight = FontWeights.Bold,
+            FontWeight = FontWeights.SemiBold,
             Foreground = UiTheme.MutedBrush,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0)
@@ -451,7 +456,7 @@ public class MainWindow : Window
         {
             Text = "+",
             FontSize = 15,
-            FontWeight = FontWeights.ExtraBold,
+            FontWeight = FontWeights.Bold,
             Foreground = Brushes.White,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
@@ -484,7 +489,7 @@ public class MainWindow : Window
         new()
         {
             FontSize = 13,
-            FontWeight = FontWeights.Bold,
+            FontWeight = FontWeights.SemiBold,
             Foreground = UiTheme.MutedBrush,
             Margin = new Thickness(2, 8, 0, 0),
             TextWrapping = TextWrapping.Wrap,

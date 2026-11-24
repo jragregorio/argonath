@@ -38,6 +38,10 @@ public class LockWindow : Window
     private static readonly SolidColorBrush MoonFillBrush = Freeze(Color.FromArgb(38, 0xf2, 0xd2, 0x7a));
     private static readonly SolidColorBrush FaintBrush = Freeze(Color.FromRgb(0x8f, 0x9b, 0x97));
 
+    // Windows 11 UI font; falls back to Segoe UI on Windows 10.
+    private static readonly FontFamily BodyFont = new("Segoe UI Variable Text, Segoe UI");
+    private static readonly FontFamily DisplayFont = new("Segoe UI Variable Display, Segoe UI");
+
     private const string MoonGeometry = "M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z";
     private const string SparkleGeometry = "M17 3.5l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5z";
 
@@ -88,7 +92,7 @@ public class LockWindow : Window
         Topmost = true;
         ShowInTaskbar = false;
         Background = SkyBrush(palette);
-        FontFamily = new FontFamily("Segoe UI");
+        FontFamily = BodyFont;
         Left = bounds.Left;
         Top = bounds.Top;
         Width = bounds.Width;
@@ -119,6 +123,7 @@ public class LockWindow : Window
         };
 
         var layers = new Grid();
+        System.Windows.Documents.TextElement.SetFontFamily(layers, BodyFont);
         layers.Children.Add(BuildStars(bounds.Width, bounds.Height, palette));
 
         if (!bounds.IsPrimary)
@@ -140,9 +145,10 @@ public class LockWindow : Window
 
         _titleText = new TextBlock
         {
+            FontFamily = DisplayFont,
             Text = copy.Title,
             FontSize = 36,
-            FontWeight = FontWeights.ExtraBold,
+            FontWeight = FontWeights.Bold,
             Foreground = TextBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
@@ -191,7 +197,7 @@ public class LockWindow : Window
         {
             Text = "We'll unlock right away if your parent says yes.",
             FontSize = 14,
-            FontWeight = FontWeights.Bold,
+            FontWeight = FontWeights.SemiBold,
             Foreground = _softBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 14, 0, 0),
@@ -375,7 +381,7 @@ public class LockWindow : Window
         {
             Text = text,
             FontSize = size,
-            FontWeight = FontWeights.Bold,
+            FontWeight = FontWeights.SemiBold,
             Foreground = brush,
             VerticalAlignment = VerticalAlignment.Center
         });
@@ -422,7 +428,7 @@ public class LockWindow : Window
         {
             Text = LockCopy.For(null, _childName).Title,
             FontSize = 28,
-            FontWeight = FontWeights.ExtraBold,
+            FontWeight = FontWeights.Bold,
             Foreground = TextBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center
@@ -588,7 +594,7 @@ public class LockWindow : Window
             Padding = new Thickness(22, 0, 22, 0),
             Margin = new Thickness(6, 0, 6, 0),
             FontSize = 16,
-            FontWeight = FontWeights.Bold,
+            FontWeight = FontWeights.SemiBold,
             Background = background,
             Foreground = foreground,
             BorderThickness = new Thickness(0),

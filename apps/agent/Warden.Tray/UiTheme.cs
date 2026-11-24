@@ -41,6 +41,10 @@ internal static class UiTheme
     /// <summary>The chosen colour as "#rrggbb", for saving and for the lock screen.</summary>
     public static string AccentHex { get; private set; } = AccentPalette.DefaultHex;
 
+    // Windows 11 UI font (lighter, cleaner weights); falls back to Segoe UI on Windows 10.
+    public static readonly WpfFontFamily BodyFont = new("Segoe UI Variable Text, Segoe UI");
+    public static readonly WpfFontFamily DisplayFont = new("Segoe UI Variable Display, Segoe UI");
+
     public const double ButtonRadius = 14;
     public const double CardRadius = 20;
     public const double TileRadius = 16;
@@ -122,7 +126,7 @@ internal static class UiTheme
     {
         window.Background = BgBrush;
         window.Foreground = TextBrush;
-        window.FontFamily = new WpfFontFamily("Segoe UI");
+        window.FontFamily = BodyFont;
         window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
         window.ResizeMode = ResizeMode.CanMinimize;
 
