@@ -1,7 +1,7 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import {
   ActivityFeedSkeleton,
@@ -9,7 +9,13 @@ import {
 } from "@/components/dashboard-skeletons";
 import { RecentActivityCard } from "@/components/recent-activity-card";
 import { PendingExtensionRequestCard } from "@/components/pending-extension-request-card";
-import { Clock } from "lucide-react";
+import { FilterChip, FilterChipRow } from "@/components/filter-chip";
+import {
+  ACTIVITY_CATEGORY_LABELS,
+  collapsePresenceRuns,
+  getActivityCategory,
+  type ActivityCategory,
+} from "@/lib/activity";
 import { POLL_SAFETY_MS } from "@/lib/query-defaults";
 import { useToast } from "@/lib/toast";
 
@@ -27,6 +33,42 @@ export default function ActivityPage() {
       { limit: ACTIVITY_LIMIT },
       { refetchInterval: POLL_SAFETY_MS }
     );
+  const [childFilter, setChildFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<
+    ActivityCategory | "all"
+  >("all");
+
+  // Chips only for children / categories that actually appear in the feed.
+  const childNames = useMemo(
+    () =>
+      [
+        ...new Set(
+          (activity ?? [])
+            .map((item) => item.childName)
+            .filter((name): name is string => Boolean(name))
+        ),
+      ].sort((a, b) => a.localeCompare(b)),
+    [activity]
+  );
+  const categories = useMemo(() => {
+    const present = new Set(
+      (activity ?? []).map((item) => getActivityCategory(item.action))
+    );
+    return (Object.keys(ACTIVITY_CATEGORY_LABELS) as ActivityCategory[]).filter(
+      (category) => present.has(category)
+    );
+  }, [activity]);
+
+  const filteredActivity = useMemo(() => {
+    if (!activity) return undefined;
+    const filtered = activity.filter(
+      (item) =>
+        (childFilter === "all" || item.childName === childFilter) &&
+        (categoryFilter === "all" ||
+          getActivityCategory(item.action) === categoryFilter)
+    );
+    return collapsePresenceRuns(filtered);
+  }, [activity, childFilter, categoryFilter]);
 
   const resolve = trpc.extension.resolve.useMutation({
     onMutate: async ({ requestId }) => {
@@ -82,12 +124,20 @@ export default function ActivityPage() {
         description="Pending requests and family history"
       />
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Pending</h2>
-
-        {pendingLoading && !requests ? (
+      {/* Pending only takes space when there is something to decide. */}
+      {pendingLoading && !requests ? (
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">Pending</h2>
           <ExtensionRequestCardsSkeleton />
-        ) : requests && requests.length > 0 ? (
+        </section>
+      ) : requests && requests.length > 0 ? (
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">
+            Pending{" "}
+            <span className="text-muted-foreground font-normal">
+              ({requests.length})
+            </span>
+          </h2>
           <div className="space-y-4">
             {requests.map((request) => {
               const busy = resolvingId === request.id;
@@ -112,26 +162,67 @@ export default function ActivityPage() {
               );
             })}
           </div>
-        ) : (
-          <Card>
-            <CardContent className="py-10 text-center text-muted-foreground">
-              <Clock className="w-10 h-10 mx-auto mb-3 opacity-50" />
-              <p>No pending extension requests</p>
-            </CardContent>
-          </Card>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">All activity</h2>
+
+        {(childNames.length > 1 || categories.length > 1) && (
+          <div className="space-y-3">
+            {childNames.length > 1 && (
+              <FilterChipRow label="Child">
+                <FilterChip
+                  active={childFilter === "all"}
+                  onClick={() => setChildFilter("all")}
+                >
+                  All
+                </FilterChip>
+                {childNames.map((name) => (
+                  <FilterChip
+                    key={name}
+                    active={childFilter === name}
+                    onClick={() => setChildFilter(name)}
+                  >
+                    {name}
+                  </FilterChip>
+                ))}
+              </FilterChipRow>
+            )}
+            {categories.length > 1 && (
+              <FilterChipRow label="Type">
+                <FilterChip
+                  active={categoryFilter === "all"}
+                  onClick={() => setCategoryFilter("all")}
+                >
+                  All
+                </FilterChip>
+                {categories.map((category) => (
+                  <FilterChip
+                    key={category}
+                    active={categoryFilter === category}
+                    onClick={() => setCategoryFilter(category)}
+                  >
+                    {ACTIVITY_CATEGORY_LABELS[category]}
+                  </FilterChip>
+                ))}
+              </FilterChipRow>
+            )}
+          </div>
+        )}
 
         {activityLoading && !activity ? (
           <ActivityFeedSkeleton />
         ) : (
           <RecentActivityCard
-            items={activity}
+            items={filteredActivity}
             initialVisible={ACTIVITY_LIMIT}
-            emptyDescription="Lockdowns, captures, nudges, extensions, and policy changes will show here"
+            groupByDay
+            emptyDescription={
+              childFilter !== "all" || categoryFilter !== "all"
+                ? "Nothing matches these filters"
+                : "Lockdowns, captures, nudges, extensions, and policy changes will show here"
+            }
           />
         )}
       </section>

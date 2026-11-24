@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Activity, Reply } from "lucide-react";
 import { cn } from "@warden/ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useChildMessageReply } from "@/components/child-message-reply";
 import {
+  formatActivityDayLabel,
   formatActivityDetail,
   getActivityIcon,
   getActivityLabel,
@@ -30,6 +31,8 @@ export type RecentActivityItem = {
   } | null;
   childName?: string | null;
   deviceName?: string | null;
+  /** Set by `collapsePresenceRuns`: presence changes this row stands for. */
+  collapsedCount?: number;
 };
 
 type RecentActivityCardProps = {
@@ -42,6 +45,8 @@ type RecentActivityCardProps = {
   /** When false, omit the expand footer (still respects initialVisible). */
   enableShowMore?: boolean;
   emptyDescription?: string;
+  /** Insert "Today" / "Yesterday" / date headings between days. */
+  groupByDay?: boolean;
 };
 
 export function RecentActivityCard({
@@ -51,6 +56,7 @@ export function RecentActivityCard({
   initialVisible = 5,
   enableShowMore = true,
   emptyDescription = "Lockdowns, captures, nudges, and policy changes will show here",
+  groupByDay = false,
 }: RecentActivityCardProps) {
   const [showAll, setShowAll] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -89,7 +95,15 @@ export function RecentActivityCard({
   return (
     <Card className="overflow-hidden p-0">
       <ul className="divide-y divide-border">
-        {visible.map((item) => {
+        {visible.map((item, index) => {
+          const dayLabel = groupByDay
+            ? formatActivityDayLabel(item.createdAt)
+            : null;
+          const showDayHeader =
+            groupByDay &&
+            (index === 0 ||
+              formatActivityDayLabel(visible[index - 1].createdAt) !==
+                dayLabel);
           const detail = formatActivityDetail({
             ...item,
             childName: hideChildName ? null : item.childName,
@@ -112,8 +126,15 @@ export function RecentActivityCard({
           const Icon = getActivityIcon(item.action);
 
           return (
+            <Fragment key={item.id}>
+            {showDayHeader && (
+              <li
+                className="bg-muted/30 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:px-5"
+              >
+                {dayLabel}
+              </li>
+            )}
             <li
-              key={item.id}
               role="button"
               tabIndex={0}
               aria-expanded={expanded}
@@ -177,7 +198,13 @@ export function RecentActivityCard({
                     </div>
                   )}
                   <p className="text-sm text-muted-foreground">
-                    {[detail, actorName ? `by ${actorName}` : null]
+                    {[
+                      detail,
+                      actorName ? `by ${actorName}` : null,
+                      item.collapsedCount && item.collapsedCount > 1
+                        ? `${item.collapsedCount} connection changes`
+                        : null,
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
                   </p>
@@ -209,6 +236,7 @@ export function RecentActivityCard({
                 )}
               </div>
             </li>
+            </Fragment>
           );
         })}
       </ul>

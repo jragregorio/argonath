@@ -243,3 +243,104 @@ export function formatActivityDetail(item: ActivityItemLike) {
 
   return parts.length > 0 ? parts.join(" · ") : null;
 }
+
+// ---------------------------------------------------------------------------
+// Activity page: filtering, presence collapsing, day grouping
+// ---------------------------------------------------------------------------
+
+export type ActivityCategory =
+  | "messages"
+  | "screen_time"
+  | "locks"
+  | "devices"
+  | "captures"
+  | "other";
+
+export const ACTIVITY_CATEGORY_LABELS: Record<ActivityCategory, string> = {
+  messages: "Messages & nudges",
+  screen_time: "Screen time",
+  locks: "Locks & apps",
+  devices: "Devices",
+  captures: "Captures",
+  other: "Other",
+};
+
+const ACTION_CATEGORIES: Record<string, ActivityCategory> = {
+  nudge_sent: "messages",
+  child_message: "messages",
+  extension_approved: "screen_time",
+  extension_denied: "screen_time",
+  bonus_granted: "screen_time",
+  bonus_cleared: "screen_time",
+  policy_updated: "screen_time",
+  timezone_updated: "screen_time",
+  admin_lock: "locks",
+  admin_unlock: "locks",
+  app_blocked: "locks",
+  app_unblocked: "locks",
+  apps_unblocked: "locks",
+  device_online: "devices",
+  device_offline: "devices",
+  device_renamed: "devices",
+  device_deleted: "devices",
+  pairing_code_generated: "devices",
+  capture_requested: "captures",
+  snapshot_deleted: "captures",
+  snapshots_bulk_deleted: "captures",
+};
+
+export function getActivityCategory(action: string): ActivityCategory {
+  return ACTION_CATEGORIES[action] ?? "other";
+}
+
+function isPresenceAction(action: string) {
+  return action === "device_online" || action === "device_offline";
+}
+
+/**
+ * Collapse consecutive online/offline rows for the same child+device into the
+ * newest row, annotated with how many presence changes it stands for. Items
+ * must be newest-first (as the API returns them). Non-presence rows break a run.
+ */
+export function collapsePresenceRuns<
+  T extends ActivityItemLike & { collapsedCount?: number },
+>(items: T[]): T[] {
+  const out: T[] = [];
+  for (const item of items) {
+    const prev = out[out.length - 1];
+    if (
+      prev &&
+      isPresenceAction(item.action) &&
+      isPresenceAction(prev.action) &&
+      (prev.deviceName ?? null) === (item.deviceName ?? null) &&
+      (prev.childName ?? null) === (item.childName ?? null)
+    ) {
+      out[out.length - 1] = {
+        ...prev,
+        collapsedCount: (prev.collapsedCount ?? 1) + 1,
+      };
+      continue;
+    }
+    out.push(item);
+  }
+  return out;
+}
+
+/** Day heading for grouped feeds: "Today", "Yesterday", or "Mon, Nov 23". */
+export function formatActivityDayLabel(
+  value: Date | string,
+  now: Date = new Date()
+): string {
+  const date = value instanceof Date ? value : new Date(value);
+  const startOf = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOf(now) - startOf(date)) / 86_400_000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}),
+  });
+}

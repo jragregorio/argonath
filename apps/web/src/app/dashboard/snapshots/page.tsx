@@ -11,10 +11,26 @@ import { PageHeader } from "@/components/page-header";
 import { SnapshotsGridSkeleton } from "@/components/dashboard-skeletons";
 import { getDeviceDisplayName } from "@warden/shared";
 import { cn } from "@warden/ui";
-import { Camera, CheckSquare, Loader2, Square, Trash2, Video, X } from "lucide-react";
+import {
+  Camera,
+  CheckSquare,
+  Loader2,
+  Square,
+  Trash2,
+  Video,
+  X,
+} from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { useToast } from "@/lib/toast";
+import { isSupabaseConfigured } from "@/lib/dev-config";
 import { ZoomableImage } from "@/components/zoomable-image";
 import { POLL_LIVE_MS, POLL_SAFETY_MS } from "@/lib/query-defaults";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { FilterChip } from "@/components/filter-chip";
 import {
   formatAbsoluteTime,
   formatRelativeTime,
@@ -45,28 +61,142 @@ function statusLabel(status: string) {
   return status;
 }
 
-function FilterChip({
-  active,
-  onClick,
-  children,
+const THUMBNAIL_STALE_MS = 50 * 60 * 1000; // signed URLs live 60 min
+
+/**
+ * Card preview. Uses the same signed URL as the viewer (server-cached, and it
+ * does not mark the snapshot viewed). Falls back to the type icon until the
+ * image loads or if it fails.
+ */
+function SnapshotThumbnail({
+  snapshotId,
+  type,
+  alt,
 }: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  snapshotId: string;
+  type: string;
+  alt: string;
 }) {
+  const { data } = trpc.snapshot.getSignedUrl.useQuery(
+    { snapshotId },
+    { staleTime: THUMBNAIL_STALE_MS, refetchOnWindowFocus: false }
+  );
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const url = data?.url ?? null;
+  const Icon = type === "screen" ? Camera : Video;
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "shrink-0 rounded-full border px-3.5 py-2 text-sm font-medium min-h-10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        active
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground hover:bg-secondary"
+    <>
+      {url && !failed && (
+        // eslint-disable-next-line @next/next/no-img-element -- short-lived signed Supabase URL
+        <img
+          src={url}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+          className={cn(
+            "absolute inset-0 h-full w-full object-cover transition-opacity duration-200",
+            loaded ? "opacity-100" : "opacity-0"
+          )}
+        />
       )}
-    >
-      {children}
-    </button>
+      {!loaded && (
+        <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
+          <Icon className="w-8 h-8" />
+          <span className="text-xs">
+            <span className="md:hidden">Tap</span>
+            <span className="hidden md:inline">Click</span> to view
+          </span>
+        </div>
+      )}
+    </>
+  );
+}
+
+type CaptureDevice = {
+  id: string;
+  label: string;
+  childName: string;
+};
+
+/** Header action: request a screenshot from any online device. */
+function TakeSnapshotButton({ devices }: { devices: CaptureDevice[] }) {
+  const utils = trpc.useUtils();
+  const { showToast } = useToast();
+  const [open, setOpen] = useState(false);
+  const requestCapture = trpc.snapshot.requestCapture.useMutation({
+    onSuccess: (_data, { type }) => {
+      showToast(
+        type === "screen"
+          ? "Screenshot requested — it will appear here shortly."
+          : "Webcam capture requested — it will appear here shortly.",
+        "success"
+      );
+      void utils.snapshot.list.invalidate();
+    },
+    onError: (err) => {
+      showToast(err.message || "Capture failed", "error");
+    },
+  });
+
+  if (!isSupabaseConfigured()) return null;
+  const disabled = devices.length === 0 || requestCapture.isPending;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          disabled={disabled}
+          title={devices.length === 0 ? "No devices are online" : undefined}
+        >
+          {requestCapture.isPending ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Camera className="w-4 h-4 mr-2" />
+          )}
+          Take snapshot
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="min-w-[16rem] py-1">
+        <div role="menu">
+          {devices.map((device) => (
+            <div key={device.id} className="px-3 py-2">
+              <p className="text-sm font-medium">
+                {device.childName}{" "}
+                <span className="text-muted-foreground font-normal">
+                  · {device.label}
+                </span>
+              </p>
+              <div className="mt-1.5 flex gap-2">
+                {(["screen", "webcam"] as const).map((type) => (
+                  <Button
+                    key={type}
+                    role="menuitem"
+                    size="sm"
+                    variant="outline"
+                    className="h-8"
+                    onClick={() => {
+                      setOpen(false);
+                      requestCapture.mutate({ deviceId: device.id, type });
+                    }}
+                  >
+                    {type === "screen" ? (
+                      <Camera className="w-3.5 h-3.5 mr-1.5" />
+                    ) : (
+                      <Video className="w-3.5 h-3.5 mr-1.5" />
+                    )}
+                    {type === "screen" ? "Screen" : "Webcam"}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -85,6 +215,19 @@ export default function SnapshotsPage() {
   };
 
   const { data: children } = trpc.children.list.useQuery();
+  const onlineCaptureDevices: CaptureDevice[] = useMemo(
+    () =>
+      (children ?? []).flatMap((child) =>
+        child.devices
+          .filter((device) => device.isOnline && device.isPaired)
+          .map((device) => ({
+            id: device.id,
+            label: getDeviceDisplayName(device),
+            childName: child.displayName,
+          }))
+      ),
+    [children]
+  );
   const { data: snapshots, isLoading } = trpc.snapshot.list.useQuery(listInput, {
     placeholderData: keepPreviousData,
     // snapshot:ready / snapshot:failed invalidate; poll faster while pending
@@ -239,6 +382,7 @@ export default function SnapshotsPage() {
       <PageHeader
         title="Snapshots"
         description="On-demand screen and webcam captures from your children's devices"
+        action={<TakeSnapshotButton devices={onlineCaptureDevices} />}
       />
 
       <div className="space-y-3">
@@ -364,14 +508,11 @@ export default function SnapshotsPage() {
                     disabled={snapshot.status !== "ready"}
                   >
                     {snapshot.status === "ready" ? (
-                      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
-                        {snapshot.type === "screen" ? (
-                          <Camera className="w-8 h-8" />
-                        ) : (
-                          <Video className="w-8 h-8" />
-                        )}
-                        <span className="text-xs">Tap to view</span>
-                      </div>
+                      <SnapshotThumbnail
+                        snapshotId={snapshot.id}
+                        type={snapshot.type}
+                        alt={`${snapshot.type === "screen" ? "Screen" : "Webcam"} capture from ${snapshot.child.displayName}`}
+                      />
                     ) : (
                       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
                         {snapshot.status === "pending" ? (

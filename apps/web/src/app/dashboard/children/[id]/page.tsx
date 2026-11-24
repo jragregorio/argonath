@@ -36,6 +36,11 @@ export default function ChildDetailPage() {
     { limit: 30, childId },
     { refetchInterval: POLL_HEARTBEAT_MS }
   );
+  // Warm queries the sections need, so they ride in the first request batch
+  // instead of starting only after `children.get` resolves (a full extra
+  // round trip). Same keys as the sections → shared cache, no double fetch.
+  trpc.agentRelease.latest.useQuery();
+  trpc.family.get.useQuery();
 
   if (isLoading) {
     return <ChildDetailSkeleton />;

@@ -8,7 +8,15 @@ import {
   ActivityFeedSkeleton,
   OverviewSkeleton,
 } from "@/components/dashboard-skeletons";
-import { Monitor, Unlock, Users, ChevronRight } from "lucide-react";
+import {
+  Clock,
+  Hourglass,
+  Lock,
+  Monitor,
+  Unlock,
+  Users,
+  ChevronRight,
+} from "lucide-react";
 import { PendingExtensionBanner } from "@/components/pending-extension-banner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -62,6 +70,68 @@ function filterActivityForMobile(
   return todayItems.length > 0 ? todayItems : items;
 }
 
+/** `95` → `1h 35m`, `40` → `40m`, `0` → `0m`. */
+function formatMinutesCompact(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m}m`;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+function OverviewStatCard({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  href,
+  tone,
+}: {
+  icon: typeof Clock;
+  label: string;
+  value: React.ReactNode;
+  hint?: string;
+  href?: string;
+  tone?: "destructive" | "warning";
+}) {
+  const card = (
+    <Card
+      className={cn(
+        "h-full",
+        href && "transition-colors group-hover:border-primary/40",
+        tone === "destructive" && "border-destructive/40",
+        tone === "warning" && "border-amber-500/40"
+      )}
+    >
+      <CardHeader className="relative mb-0">
+        <div
+          className={cn(
+            "absolute top-0 right-0 flex h-10 w-10 items-center justify-center rounded-full",
+            tone === "destructive"
+              ? "bg-destructive/15 text-destructive"
+              : tone === "warning"
+                ? "bg-amber-500/15 text-amber-300"
+                : "bg-primary/10 text-primary"
+          )}
+        >
+          <Icon className="w-5 h-5" />
+        </div>
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className="text-3xl tabular-nums">{value}</CardTitle>
+        {hint && (
+          <p className="text-xs text-muted-foreground">{hint}</p>
+        )}
+      </CardHeader>
+    </Card>
+  );
+  return href ? (
+    <Link href={href} className="block group">
+      {card}
+    </Link>
+  ) : (
+    card
+  );
+}
+
 export default function DashboardOverviewPage() {
   const router = useRouter();
   const { data: overview, isLoading } = trpc.dashboard.overview.useQuery(
@@ -104,6 +174,11 @@ export default function DashboardOverviewPage() {
   const children = overview?.children ?? [];
   const pendingRequests = overview?.pendingRequests ?? 0;
   const onlineCount = devices.filter((d) => d.isOnline).length;
+  const lockedCount = devices.filter((d) => getEffectiveAdminLock(d)).length;
+  const usedMinutesToday = children.reduce(
+    (sum, child) => sum + (child.evaluation?.usedMinutes ?? 0),
+    0
+  );
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -115,33 +190,43 @@ export default function DashboardOverviewPage() {
 
       <PendingExtensionBanner count={pendingRequests} />
 
-      {/* Desktop summary cards */}
-      <div className="hidden md:grid md:grid-cols-2 gap-4">
-        <Link href="/dashboard/children" className="block group">
-          <Card className="h-full transition-colors group-hover:border-primary/40">
-            <CardHeader className="relative mb-0">
-              <div className="absolute top-0 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <Users className="w-5 h-5 text-primary" />
-              </div>
-              <CardDescription>Children</CardDescription>
-              <CardTitle className="text-3xl">{children.length}</CardTitle>
-            </CardHeader>
-          </Card>
-        </Link>
-        <Card>
-          <CardHeader className="relative mb-0">
-            <div className="absolute top-0 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-              <Monitor className="w-5 h-5 text-primary" />
-            </div>
-            <CardDescription>Devices online</CardDescription>
-            <CardTitle className="text-3xl">
+      {/* Desktop summary cards: family-wide numbers a parent acts on. The
+          child count lives in the Children section below, so it isn't
+          repeated here. */}
+      <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <OverviewStatCard
+          icon={Clock}
+          label="Screen time today"
+          value={formatMinutesCompact(usedMinutesToday)}
+          hint={`across ${children.length} ${children.length === 1 ? "child" : "children"}`}
+        />
+        <OverviewStatCard
+          icon={Monitor}
+          label="Devices online"
+          value={
+            <>
               {onlineCount}
               <span className="text-lg text-muted-foreground font-normal">
                 /{devices.length}
               </span>
-            </CardTitle>
-          </CardHeader>
-        </Card>
+            </>
+          }
+        />
+        <OverviewStatCard
+          icon={Lock}
+          label="Locked down"
+          value={lockedCount}
+          hint={lockedCount === 0 ? "No active lockdowns" : "Release from the child card"}
+          tone={lockedCount > 0 ? "destructive" : undefined}
+        />
+        <OverviewStatCard
+          icon={Hourglass}
+          label="Pending requests"
+          value={pendingRequests}
+          hint={pendingRequests === 0 ? "Nothing to review" : "Review in Activity"}
+          href={pendingRequests > 0 ? "/dashboard/activity" : undefined}
+          tone={pendingRequests > 0 ? "warning" : undefined}
+        />
       </div>
 
       <div>

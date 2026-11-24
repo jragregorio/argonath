@@ -9,8 +9,21 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { ChildrenListSkeleton } from "@/components/dashboard-skeletons";
-import { getDeviceDisplayName } from "@warden/shared";
-import { Pencil, Plus, Trash2, User } from "lucide-react";
+import {
+  getDeviceDisplayName,
+  getEvaluationStatusLabel,
+} from "@warden/shared";
+import { MoreHorizontal, Pencil, Plus, Trash2, User } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  evaluationStatusBadgeVariant,
+  getPolicyRemainingDisplay,
+} from "@/lib/policy-remaining-display";
+import { formatRelativeTime } from "@/lib/format-relative-time";
 import { useRouter } from "next/navigation";
 import { cn } from "@warden/ui";
 import { POLL_HEARTBEAT_MS } from "@/lib/query-defaults";
@@ -33,6 +46,7 @@ export default function ChildrenPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const utils = trpc.useUtils();
   const { data: children, isLoading } = trpc.children.list.useQuery(undefined, {
     // Online badges / usage follow heartbeats; Realtime covers lock/policy/extension
@@ -42,11 +56,16 @@ export default function ChildrenPage() {
     refetchInterval: POLL_HEARTBEAT_MS,
   });
 
+  const evaluationByChildId = useMemo(
+    () =>
+      new Map(
+        (overview?.children ?? []).map((c) => [c.id, c.evaluation] as const)
+      ),
+    [overview?.children]
+  );
+
   const rosterItems: ChildRosterItem[] = useMemo(() => {
     if (!children) return [];
-    const evaluationByChildId = new Map(
-      (overview?.children ?? []).map((c) => [c.id, c.evaluation] as const)
-    );
     return children.map((child) => ({
       id: child.id,
       displayName: child.displayName,
@@ -60,7 +79,7 @@ export default function ChildrenPage() {
       })),
       evaluation: evaluationByChildId.get(child.id),
     }));
-  }, [children, overview?.children]);
+  }, [children, evaluationByChildId]);
   const createChild = trpc.children.create.useMutation({
     onSuccess: () => {
       utils.children.list.invalidate();
@@ -139,6 +158,13 @@ export default function ChildrenPage() {
         <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {children.map((child) => {
             const isEditing = editingId === child.id;
+            const evaluation = evaluationByChildId.get(child.id);
+            const remainingDisplay = evaluation
+              ? getPolicyRemainingDisplay(evaluation)
+              : null;
+            const remainingText = remainingDisplay
+              ? (remainingDisplay.primaryText ?? remainingDisplay.statusText)
+              : null;
             const manageHref = `/dashboard/children/${child.id}`;
 
             const navigateToManage = () => {
@@ -205,70 +231,132 @@ export default function ChildrenPage() {
                   </form>
                 ) : (
                   <CardTitle className="flex items-center gap-2">
-                    <User className="w-5 h-5" />
+                    <User className="w-5 h-5 shrink-0" />
                     <span className="truncate">{child.displayName}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 ml-auto"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        setEditingId(child.id);
-                        setEditName(child.displayName);
-                      }}
-                      title="Rename"
+                    {evaluation && (
+                      <Badge
+                        variant={evaluationStatusBadgeVariant(evaluation)}
+                        className="shrink-0"
+                      >
+                        {getEvaluationStatusLabel(evaluation)}
+                      </Badge>
+                    )}
+                    <Popover
+                      open={menuOpenId === child.id}
+                      onOpenChange={(open) =>
+                        setMenuOpenId(open ? child.id : null)
+                      }
                     >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="ml-auto h-7 w-7 shrink-0 p-0"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          aria-label={`More actions for ${child.displayName}`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        align="end"
+                        className="min-w-[10rem] py-1"
+                        // Portal content still bubbles through the React tree
+                        // to the card's navigate-on-click/Enter handlers.
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <div role="menu">
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-secondary"
+                            onClick={() => {
+                              setMenuOpenId(null);
+                              setEditingId(child.id);
+                              setEditName(child.displayName);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4 text-muted-foreground" />
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                            disabled={deleteChild.isPending}
+                            onClick={() => {
+                              setMenuOpenId(null);
+                              setDeleteConfirm({
+                                childId: child.id,
+                                displayName: child.displayName,
+                                deviceCount: child.devices.length,
+                              });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete child…
+                          </button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </CardTitle>
                 )}
-                <CardDescription>
-                  {child.devices.length === 0
-                    ? "No devices paired"
-                    : `${child.devices.length} ${child.devices.length === 1 ? "device" : "devices"} paired`}
-                </CardDescription>
+                {evaluation ? (
+                  <CardDescription className="space-y-0.5">
+                    <span className="block font-medium text-foreground tabular-nums">
+                      {evaluation.usedMinutes} / {evaluation.dailyLimitMinutes}{" "}
+                      min today
+                    </span>
+                    {remainingText && (
+                      <span className="block">{remainingText}</span>
+                    )}
+                  </CardDescription>
+                ) : null}
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex gap-2 flex-wrap">
-                  {child.devices.map((device) => (
-                    <Badge
-                      key={device.id}
-                      variant={device.isOnline ? "success" : "secondary"}
-                      title={[
-                        device.isOnline ? "Online" : "Offline",
-                        device.agentVersion
-                          ? `Agent v${device.agentVersion}`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    >
-                      {getDeviceDisplayName(device)}
-                      {device.agentVersion ? ` · v${device.agentVersion}` : ""}
-                    </Badge>
-                  ))}
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive"
-                    disabled={deleteChild.isPending}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      setDeleteConfirm({
-                        childId: child.id,
-                        displayName: child.displayName,
-                        deviceCount: child.devices.length,
-                      });
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    Delete
-                  </Button>
-                </div>
+              <CardContent>
+                {child.devices.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No devices paired
+                  </p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {child.devices.map((device) => (
+                      <li
+                        key={device.id}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <span
+                          className={cn(
+                            "h-2 w-2 shrink-0 rounded-full",
+                            device.isOnline
+                              ? "bg-primary"
+                              : "bg-muted-foreground/40"
+                          )}
+                          aria-hidden
+                        />
+                        <span className="min-w-0 truncate font-medium">
+                          {getDeviceDisplayName(device)}
+                        </span>
+                        <span
+                          className="ml-auto shrink-0 text-xs text-muted-foreground"
+                          title={
+                            device.agentVersion
+                              ? `Agent v${device.agentVersion}`
+                              : undefined
+                          }
+                        >
+                          {device.isOnline
+                            ? "Online"
+                            : device.lastSeenAt
+                              ? `Seen ${formatRelativeTime(device.lastSeenAt)}`
+                              : "Never connected"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
             );

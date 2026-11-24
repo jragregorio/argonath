@@ -1664,10 +1664,22 @@ export const dashboardRouter = router({
         .optional()
     )
     .query(async ({ ctx, input }) => {
-      const family = await getFamilyForUser(ctx);
       const limit = input?.limit ?? 30;
       const filterChildId = input?.childId;
       const includeDevicePresence = input?.includeDevicePresence ?? true;
+
+      // Round trips are the cost here (hosted Postgres), so independent
+      // lookups run together. The child query is scoped by the session's
+      // familyId; getFamilyForUser still enforces access in the same batch.
+      const [family, filterChild] = await Promise.all([
+        getFamilyForUser(ctx),
+        filterChildId
+          ? prisma.child.findFirst({
+              where: { id: filterChildId, familyId: ctx.familyId },
+              select: { id: true, devices: { select: { id: true } } },
+            })
+          : Promise.resolve(null),
+      ]);
 
       let where: Prisma.AuditLogWhereInput = { familyId: family.id };
 
@@ -1679,10 +1691,7 @@ export const dashboardRouter = router({
       }
 
       if (filterChildId) {
-        const child = await prisma.child.findFirst({
-          where: { id: filterChildId, familyId: family.id },
-          select: { id: true, devices: { select: { id: true } } },
-        });
+        const child = filterChild;
         if (!child) {
           throw new TRPCError({ code: "NOT_FOUND" });
         }
@@ -1720,14 +1729,6 @@ export const dashboardRouter = router({
         ),
       ];
 
-      const actors =
-        actorIds.length > 0
-          ? await prisma.user.findMany({
-              where: { id: { in: actorIds } },
-              select: { id: true, name: true, email: true },
-            })
-          : [];
-      const actorById = new Map(actors.map((user) => [user.id, user] as const));
 
       const childIds = new Set<string>();
       const deviceIds = new Set<string>();
@@ -1761,23 +1762,52 @@ export const dashboardRouter = router({
         }
       }
 
-      const extensionRequests =
-        extensionRequestIds.size > 0
-          ? await prisma.extensionRequest.findMany({
-              where: {
-                id: { in: [...extensionRequestIds] },
-                child: { familyId: family.id },
-              },
-              select: { id: true, childId: true, deviceId: true },
-            })
-          : [];
+      const [actors, extensionRequests, nudges, childMessages] =
+        await Promise.all([
+          actorIds.length > 0
+            ? prisma.user.findMany({
+                where: { id: { in: actorIds } },
+                select: { id: true, name: true, email: true },
+              })
+            : Promise.resolve([]),
+          extensionRequestIds.size > 0
+            ? prisma.extensionRequest.findMany({
+                where: {
+                  id: { in: [...extensionRequestIds] },
+                  child: { familyId: family.id },
+                },
+                select: { id: true, childId: true, deviceId: true },
+              })
+            : Promise.resolve([]),
+          nudgeIds.size > 0
+            ? prisma.nudge.findMany({
+                where: { familyId: family.id, id: { in: [...nudgeIds] } },
+                select: {
+                  id: true,
+                  message: true,
+                  response: true,
+                  responseText: true,
+                },
+              })
+            : Promise.resolve([]),
+          childMessageIds.size > 0
+            ? prisma.childMessage.findMany({
+                where: {
+                  familyId: family.id,
+                  id: { in: [...childMessageIds] },
+                },
+                select: { id: true, repliedAt: true },
+              })
+            : Promise.resolve([]),
+        ]);
+      const actorById = new Map(actors.map((user) => [user.id, user] as const));
 
       for (const request of extensionRequests) {
         childIds.add(request.childId);
         deviceIds.add(request.deviceId);
       }
 
-      const [children, devices, nudges, childMessages] = await Promise.all([
+      const [children, devices] = await Promise.all([
         childIds.size > 0
           ? prisma.child.findMany({
               where: { familyId: family.id, id: { in: [...childIds] } },
@@ -1796,23 +1826,6 @@ export const dashboardRouter = router({
                 machineName: true,
                 childId: true,
               },
-            })
-          : Promise.resolve([]),
-        nudgeIds.size > 0
-          ? prisma.nudge.findMany({
-              where: { familyId: family.id, id: { in: [...nudgeIds] } },
-              select: {
-                id: true,
-                message: true,
-                response: true,
-                responseText: true,
-              },
-            })
-          : Promise.resolve([]),
-        childMessageIds.size > 0
-          ? prisma.childMessage.findMany({
-              where: { familyId: family.id, id: { in: [...childMessageIds] } },
-              select: { id: true, repliedAt: true },
             })
           : Promise.resolve([]),
       ]);
