@@ -7,6 +7,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shell;
 using Warden.Core.Theming;
+using Warden.LockUI;
 using WpfBinding = System.Windows.Data.Binding;
 using WpfBorder = System.Windows.Controls.Border;
 using WpfButton = System.Windows.Controls.Button;
@@ -310,7 +311,7 @@ internal static class UiTheme
             FrameworkElement.VerticalAlignmentProperty,
             VerticalAlignment.Center
         );
-        factory.AppendChild(presenter);
+        factory.AppendChild(LiftEffect.WrapWithHighlight(presenter, ButtonRadius));
 
         return new ControlTemplate(typeof(WpfButton)) { VisualTree = factory };
     }
@@ -448,7 +449,7 @@ internal static class UiTheme
         WpfBrush foreground,
         WpfBrush? borderBrush)
     {
-        return new WpfButton
+        var button = new WpfButton
         {
             Content = content,
             FontSize = 14,
@@ -462,6 +463,13 @@ internal static class UiTheme
             HorizontalAlignment = WpfHorizontalAlignment.Stretch,
             Template = CreateRoundedButtonTemplate()
         };
+
+        // Lift on hover: filled buttons cast a shadow in their own colour, the rest a dark one.
+        var shadow = borderBrush == null && background is SolidColorBrush fill && fill.Color != DangerBrush.Color
+            ? fill.Color
+            : Colors.Black;
+        LiftEffect.Attach(button, shadow, lift: 2, shadowStrength: shadow == Colors.Black ? 0.6 : 0.5);
+        return button;
     }
 
     private static ControlTemplate CreateRoundedTextBoxTemplate()
@@ -565,7 +573,7 @@ internal static class UiTheme
                 RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
             }
         );
-        factory.AppendChild(presenter);
+        factory.AppendChild(LiftEffect.WrapWithHighlight(presenter, ButtonRadius));
 
         return new ControlTemplate(typeof(WpfButton)) { VisualTree = factory };
     }

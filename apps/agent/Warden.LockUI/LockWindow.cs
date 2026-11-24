@@ -288,6 +288,7 @@ public class LockWindow : Window
             pinCard.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
             if (show) pinBox.Focus();
         };
+        LiftEffect.Attach(parentsLink, shadowColor: null, lift: 1);
         corner.Children.Add(parentsLink);
         layers.Children.Add(corner);
 
@@ -601,6 +602,11 @@ public class LockWindow : Window
             Cursor = Cursors.Hand,
             Template = CreateRoundedButtonTemplate(16)
         };
+        // Lift on hover: the accent button casts a shadow in its own colour, others a dark one.
+        var shadow = background is SolidColorBrush fill && fill.Color != DangerBrush.Color && fill.Color.R + fill.Color.G + fill.Color.B > 300
+            ? fill.Color
+            : Colors.Black;
+        LiftEffect.Attach(btn, shadow, lift: 2, shadowStrength: shadow == Colors.Black ? 0.6 : 0.5);
         var panel = new StackPanel { Orientation = Orientation.Horizontal };
         if (glyph != null)
         {
@@ -666,7 +672,7 @@ public class LockWindow : Window
             {
                 RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
             });
-        factory.AppendChild(presenter);
+        factory.AppendChild(LiftEffect.WrapWithHighlight(presenter, radius));
 
         return new ControlTemplate(typeof(Button)) { VisualTree = factory };
     }

@@ -187,5 +187,7 @@ Plan: `docs/superpowers/plans/2026-11-24-agent-in-app-update.md`
    update test: 0.6.31 → 0.6.32.
 5. 0.6.34: Option A fonts (plain Segoe UI) and a restyled popup window (nudge, time
    check, app blocked, extra time) that follows the child's colour.
-6. Failure path: wrong `sha256` on the 0.6.31 row → tray never closes, banner shows
+6. 0.6.35: "Lift" hover/press effect on tray, popup and lock-screen buttons
+   (`Warden.LockUI/LiftEffect.cs`).
+7. Failure path: wrong `sha256` on the 0.6.31 row → tray never closes, banner shows
    `Update failed — try again`. Restore the hash afterwards.

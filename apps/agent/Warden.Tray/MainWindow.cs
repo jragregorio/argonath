@@ -409,6 +409,7 @@ public class MainWindow : Window
             Template = FlatTemplate()
         };
         parents.Click += (_, _) => RequestExit();
+        Warden.LockUI.LiftEffect.Attach(parents, shadowColor: null, lift: 1);
         DockPanel.SetDock(parents, Dock.Right);
         footer.Children.Add(parents);
 
