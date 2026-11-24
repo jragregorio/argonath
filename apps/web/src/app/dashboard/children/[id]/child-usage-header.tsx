@@ -498,6 +498,7 @@ export function ChildUsageHeader({
           <PageHeader
             title={child.displayName}
             description="Devices, screen time limits, and captures for this child"
+            keepActionInline
             action={
               <>
                 <Button

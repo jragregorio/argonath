@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { NudgeControls } from "@/components/nudge-controls";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { SwipeToLock } from "@/components/swipe-to-lock";
 import {
   RecentActivityCard,
@@ -167,6 +169,94 @@ export default function DashboardOverviewPage() {
       )?.displayName ?? "Child",
   });
 
+  type OverviewDevice = (typeof devices)[number];
+
+  /** Nudge + lock/release row, shared by desktop cards and the mobile sheet. */
+  const renderDeviceControls = (device: OverviewDevice) => {
+    const effectiveAdminLock = getEffectiveAdminLock(device);
+    return (
+      <div className="@container space-y-2">
+        {nudgeByDevice[device.id]?.label && (
+          <span className="block break-words text-xs text-muted-foreground">
+            {nudgeByDevice[device.id].label}
+          </span>
+        )}
+        {/* Stack when the card itself is narrow (e.g. two
+            cards side by side on a ~800px window), so the
+            swipe track never collapses to a sliver. */}
+        <div className="flex flex-col items-stretch gap-2 @sm:flex-row">
+          <NudgeControls
+            className="w-full @sm:w-52 @sm:shrink-0"
+            disabled={
+              !device.isPaired ||
+              !device.isOnline ||
+              Boolean(nudgeByDevice[device.id]?.nudgeId)
+            }
+            isSending={
+              sendNudge.isPending &&
+              sendNudge.variables?.deviceId ===
+                device.id
+            }
+            title={
+              !device.isPaired
+                ? "Device must be paired first"
+                : !device.isOnline
+                  ? "Device is offline"
+                  : "Send a gentle attention nudge"
+            }
+            onSend={(message) =>
+              sendNudge.mutate({
+                deviceId: device.id,
+                message,
+              })
+            }
+          />
+          {effectiveAdminLock ? (
+            <Button
+              variant="outline"
+              className="min-w-0 @sm:flex-1"
+              onClick={() =>
+                setAdminLock.mutate({
+                  deviceId: device.id,
+                  locked: false,
+                })
+              }
+            >
+              <Unlock className="mr-1.5 h-4 w-4" />
+              Release
+            </Button>
+          ) : (
+            <SwipeToLock
+              className="min-w-0 @sm:flex-1"
+              onConfirm={() =>
+                setAdminLock.mutate({
+                  deviceId: device.id,
+                  locked: true,
+                })
+              }
+              disabled={!device.isPaired}
+              pending={
+                setAdminLock.isPending &&
+                setAdminLock.variables?.deviceId ===
+                  device.id &&
+                setAdminLock.variables?.locked === true
+              }
+              title={
+                !device.isPaired
+                  ? "Device must be paired first"
+                  : "Swipe to immediately lock this device"
+              }
+            />
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const [quickActionsChildId, setQuickActionsChildId] = useState<
+    string | null
+  >(null);
+
   if (isLoading && !overview) {
     return <OverviewSkeleton />;
   }
@@ -272,7 +362,46 @@ export default function DashboardOverviewPage() {
                     runningApps: device.runningApps,
                   })),
                 }))}
+                onQuickActions={setQuickActionsChildId}
               />
+              {(() => {
+                const sheetChild = children.find(
+                  (c) => c.id === quickActionsChildId
+                );
+                return (
+                  <BottomSheet
+                    open={Boolean(sheetChild)}
+                    onClose={() => setQuickActionsChildId(null)}
+                    title={sheetChild?.displayName ?? ""}
+                    description="Nudge or lock a device"
+                  >
+                    <div className="space-y-4">
+                      {sheetChild?.devices.map((device) => (
+                        <div
+                          key={device.id}
+                          className="space-y-3 rounded-lg border border-border/60 p-3"
+                        >
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Monitor className="h-5 w-5 shrink-0 text-muted-foreground" />
+                            <span className="min-w-0 flex-1 truncate text-base font-medium">
+                              {getDeviceDisplayName(device)}
+                            </span>
+                            <Badge
+                              variant={device.isOnline ? "success" : "secondary"}
+                            >
+                              {device.isOnline ? "Online" : "Offline"}
+                            </Badge>
+                            {getEffectiveAdminLock(device) && (
+                              <Badge variant="destructive">Locked down</Badge>
+                            )}
+                          </div>
+                          {renderDeviceControls(device)}
+                        </div>
+                      ))}
+                    </div>
+                  </BottomSheet>
+                );
+              })()}
             </div>
             <div className="hidden md:grid md:grid-cols-1 lg:grid-cols-2 gap-4">
             {children.map((child) => {
@@ -478,81 +607,7 @@ export default function DashboardOverviewPage() {
                                 {deviceBadges}
                               </div>
 
-                              <div className="@container space-y-2">
-                                {nudgeByDevice[device.id]?.label && (
-                                  <span className="block break-words text-xs text-muted-foreground">
-                                    {nudgeByDevice[device.id].label}
-                                  </span>
-                                )}
-                                {/* Stack when the card itself is narrow (e.g. two
-                                    cards side by side on a ~800px window), so the
-                                    swipe track never collapses to a sliver. */}
-                                <div className="flex flex-col items-stretch gap-2 @sm:flex-row">
-                                  <NudgeControls
-                                    className="w-full @sm:w-52 @sm:shrink-0"
-                                    disabled={
-                                      !device.isPaired ||
-                                      !device.isOnline ||
-                                      Boolean(nudgeByDevice[device.id]?.nudgeId)
-                                    }
-                                    isSending={
-                                      sendNudge.isPending &&
-                                      sendNudge.variables?.deviceId ===
-                                        device.id
-                                    }
-                                    title={
-                                      !device.isPaired
-                                        ? "Device must be paired first"
-                                        : !device.isOnline
-                                          ? "Device is offline"
-                                          : "Send a gentle attention nudge"
-                                    }
-                                    onSend={(message) =>
-                                      sendNudge.mutate({
-                                        deviceId: device.id,
-                                        message,
-                                      })
-                                    }
-                                  />
-                                  {effectiveAdminLock ? (
-                                    <Button
-                                      variant="outline"
-                                      className="min-w-0 @sm:flex-1"
-                                      onClick={() =>
-                                        setAdminLock.mutate({
-                                          deviceId: device.id,
-                                          locked: false,
-                                        })
-                                      }
-                                    >
-                                      <Unlock className="mr-1.5 h-4 w-4" />
-                                      Release
-                                    </Button>
-                                  ) : (
-                                    <SwipeToLock
-                                      className="min-w-0 @sm:flex-1"
-                                      onConfirm={() =>
-                                        setAdminLock.mutate({
-                                          deviceId: device.id,
-                                          locked: true,
-                                        })
-                                      }
-                                      disabled={!device.isPaired}
-                                      pending={
-                                        setAdminLock.isPending &&
-                                        setAdminLock.variables?.deviceId ===
-                                          device.id &&
-                                        setAdminLock.variables?.locked === true
-                                      }
-                                      title={
-                                        !device.isPaired
-                                          ? "Device must be paired first"
-                                          : "Swipe to immediately lock this device"
-                                      }
-                                    />
-                                  )}
-                                </div>
-                              </div>
+                              {renderDeviceControls(device)}
                             </div>
                           </div>
                         );

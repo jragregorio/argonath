@@ -6,6 +6,11 @@ type PageHeaderProps = {
   description?: string;
   action?: ReactNode;
   hideDescriptionOnMobile?: boolean;
+  /**
+   * Keep `action` on the title row at every width (no wrap). Use for compact
+   * actions like a "⋯" button; wide buttons should keep the default wrap.
+   */
+  keepActionInline?: boolean;
 };
 
 export function PageHeader({
@@ -13,10 +18,16 @@ export function PageHeader({
   description,
   action,
   hideDescriptionOnMobile = false,
+  keepActionInline = false,
 }: PageHeaderProps) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div className="min-w-0">
+    <div
+      className={cn(
+        "flex items-start justify-between gap-4",
+        keepActionInline ? "flex-nowrap" : "flex-wrap"
+      )}
+    >
+      <div className={cn("min-w-0", keepActionInline && "flex-1")}>
         <h1 className="font-display text-3xl font-semibold tracking-tight">
           {title}
         </h1>

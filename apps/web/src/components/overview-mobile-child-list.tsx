@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Lock } from "lucide-react";
+import { isAfterHoursBonusActive } from "@warden/shared";
 import { Badge } from "@/components/ui/badge";
 import {
   getDeviceDisplayName,
@@ -82,6 +84,16 @@ function getAwaySubtitle(
   evaluation: PolicyRemainingDisplayInput
 ): string {
   if (devices.length === 0) return "No devices paired";
+  if (isAfterHoursBonusActive(evaluation)) {
+    return `Offline · ${evaluation.remainingMinutes} min bonus left`;
+  }
+  if (
+    evaluation.status === "allowed" &&
+    evaluation.limitingFactor !== "none" &&
+    evaluation.remainingMinutes < 999
+  ) {
+    return `Offline · ${evaluation.remainingMinutes} min left today`;
+  }
   if (evaluation.nextWindowStart) {
     return `Offline · Next: ${formatNextWindowStart(
       evaluation.nextWindowStart,
@@ -101,11 +113,39 @@ function shouldShowAwayStatusBadge(
 type OverviewMobileChildListProps = {
   items: OverviewMobileChildItem[];
   className?: string;
+  /** Opens nudge/lock controls for a child without leaving Overview. */
+  onQuickActions?: (childId: string) => void;
 };
+
+function QuickActionsButton({
+  childName,
+  onClick,
+}: {
+  childName: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-border bg-secondary/40 px-3.5 text-sm font-medium text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label={`Nudge or lock ${childName}'s devices`}
+      // The row itself navigates; keep this tap/keypress local.
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      <Lock className="h-4 w-4" aria-hidden />
+      Actions
+    </button>
+  );
+}
 
 export function OverviewMobileChildList({
   items,
   className,
+  onQuickActions,
 }: OverviewMobileChildListProps) {
   const router = useRouter();
 
@@ -179,6 +219,12 @@ export function OverviewMobileChildList({
                 <Badge variant="success" className="shrink-0">
                   Online
                 </Badge>
+                {onQuickActions && (
+                  <QuickActionsButton
+                    childName={item.displayName}
+                    onClick={() => onQuickActions(item.id)}
+                  />
+                )}
               </div>
             </div>
           );
@@ -199,6 +245,8 @@ export function OverviewMobileChildList({
               rowA11y
             )}
           >
+            {/* Badge sits under the name (not beside it) so name + subtitle
+                keep the row width next to the Actions button. */}
             <div className="min-w-0 flex-1">
               <p className="truncate text-base font-medium">
                 {item.displayName}
@@ -206,15 +254,21 @@ export function OverviewMobileChildList({
               <p className="truncate text-sm text-muted-foreground">
                 {getAwaySubtitle(item.devices, item.evaluation)}
               </p>
+              {showAwayBadge ? (
+                <Badge
+                  variant={evaluationStatusBadgeVariant(item.evaluation)}
+                  className="mt-1.5 text-xs px-2.5 py-0.5"
+                >
+                  {awayLabel}
+                </Badge>
+              ) : null}
             </div>
-            {showAwayBadge ? (
-              <Badge
-                variant={evaluationStatusBadgeVariant(item.evaluation)}
-                className="shrink-0 text-xs px-2.5 py-0.5"
-              >
-                {awayLabel}
-              </Badge>
-            ) : null}
+            {onQuickActions && item.devices.length > 0 && (
+              <QuickActionsButton
+                childName={item.displayName}
+                onClick={() => onQuickActions(item.id)}
+              />
+            )}
           </div>
         );
       })}

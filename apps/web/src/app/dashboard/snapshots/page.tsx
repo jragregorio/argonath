@@ -467,7 +467,8 @@ export default function SnapshotsPage() {
       {isLoading ? (
         <SnapshotsGridSkeleton />
       ) : snapshots && snapshots.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3">
+          {/* Two thumbnails per row on phones; full cards from md up. */}
           {snapshots.map((snapshot) => {
             const selected = selectedIds.has(snapshot.id);
             return (
@@ -533,32 +534,41 @@ export default function SnapshotsPage() {
                     )}
                   </button>
                 </div>
-                <CardHeader className="pb-2 pt-4 px-5">
+                <CardHeader className="px-3 pt-3 pb-1 md:px-5 md:pt-4 md:pb-2">
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-sm truncate">
                       {snapshot.child.displayName}
                     </CardTitle>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <Badge variant={statusBadgeVariant(snapshot.status)}>
+                      {/* On phones the thumbnail already says "ready" and
+                          what it is; only pending/failed earn a badge. */}
+                      <Badge
+                        variant={statusBadgeVariant(snapshot.status)}
+                        className={cn(
+                          snapshot.status === "ready" && "max-md:hidden"
+                        )}
+                      >
                         {statusLabel(snapshot.status)}
                       </Badge>
-                      <Badge variant="secondary">
+                      <Badge variant="secondary" className="max-md:hidden">
                         {snapshot.type === "screen" ? "Screen" : "Webcam"}
                       </Badge>
                     </div>
                   </div>
                   <CardDescription
+                    className="max-md:text-xs"
                     title={formatAbsoluteTime(snapshot.capturedAt)}
                   >
                     {getDeviceDisplayName(snapshot.device)} ·{" "}
                     {formatRelativeTime(snapshot.capturedAt)}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="px-5 pb-4 pt-0 flex gap-2">
+                <CardContent className="flex gap-2 px-3 pb-3 pt-0 max-md:justify-end md:px-5 md:pb-4">
                   {snapshot.status === "ready" && (
                     <Button
                       variant="outline"
                       size="sm"
+                      className="max-md:hidden"
                       onClick={() => setLightboxId(snapshot.id)}
                     >
                       View
@@ -567,12 +577,13 @@ export default function SnapshotsPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-destructive hover:text-destructive"
+                    className="text-destructive hover:text-destructive max-md:min-h-11 max-md:min-w-11 max-md:px-0"
                     onClick={() => confirmDelete(snapshot.id)}
                     disabled={isDeleting}
+                    aria-label={`Delete snapshot from ${snapshot.child.displayName}`}
                   >
-                    <Trash2 className="w-4 h-4 mr-1.5" />
-                    Delete
+                    <Trash2 className="w-4 h-4 md:mr-1.5" />
+                    <span className="max-md:sr-only">Delete</span>
                   </Button>
                 </CardContent>
               </Card>

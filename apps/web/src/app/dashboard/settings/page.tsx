@@ -5,7 +5,12 @@ import { Check } from "lucide-react";
 import { COMMON_TIME_ZONES } from "@warden/shared";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardDescription, CardTitle } from "@/components/ui/card";
+import {
+  SettingsCard,
+  SettingsCardContent,
+  SettingsCardHeader,
+} from "@/components/settings-section";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -171,14 +176,14 @@ export default function SettingsPage() {
           account & security on the left, family & preferences on the right. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
         <div className="space-y-6">
-        <Card>
-          <CardHeader>
+        <SettingsCard>
+          <SettingsCardHeader>
             <CardTitle>Account</CardTitle>
             <CardDescription>
               Update the name and email for your parent account
             </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
+          </SettingsCardHeader>
+          <SettingsCardContent className="space-y-6">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -270,17 +275,17 @@ export default function SettingsPage() {
                 </p>
               )}
             </form>
-          </CardContent>
-        </Card>
+          </SettingsCardContent>
+        </SettingsCard>
 
-        <Card>
-          <CardHeader>
+        <SettingsCard>
+          <SettingsCardHeader>
             <CardTitle>Password</CardTitle>
             <CardDescription>
               Change your password. Other signed-in devices will be signed out.
             </CardDescription>
-          </CardHeader>
-          <CardContent>
+          </SettingsCardHeader>
+          <SettingsCardContent>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -358,11 +363,11 @@ export default function SettingsPage() {
                 </p>
               )}
             </form>
-          </CardContent>
-        </Card>
+          </SettingsCardContent>
+        </SettingsCard>
 
-        <Card>
-          <CardHeader>
+        <SettingsCard>
+          <SettingsCardHeader>
             <CardTitle className="flex items-center gap-2">
               Parent PIN
               {family?.hasParentPin ? (
@@ -386,8 +391,8 @@ export default function SettingsPage() {
                 ? " A PIN is active on paired devices — enter a new one below to change it."
                 : " No PIN yet — set one so parents can shut down Warden on the device."}
             </CardDescription>
-          </CardHeader>
-          <CardContent>
+          </SettingsCardHeader>
+          <SettingsCardContent>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -426,20 +431,20 @@ export default function SettingsPage() {
                 </p>
               )}
             </form>
-          </CardContent>
-        </Card>
+          </SettingsCardContent>
+        </SettingsCard>
         </div>
         <div className="space-y-6">
         {isAdmin && (
-          <Card>
-            <CardHeader>
+          <SettingsCard>
+            <SettingsCardHeader>
               <CardTitle>Family</CardTitle>
               <CardDescription>
                 Rename the family and set the timezone used for allowed hours and
                 daily usage
               </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-8">
+            </SettingsCardHeader>
+            <SettingsCardContent className="space-y-8">
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -531,18 +536,18 @@ export default function SettingsPage() {
                   </p>
                 )}
               </form>
-            </CardContent>
-          </Card>
+            </SettingsCardContent>
+          </SettingsCard>
         )}
 
-        <Card>
-          <CardHeader>
+        <SettingsCard>
+          <SettingsCardHeader>
             <CardTitle>Notifications</CardTitle>
             <CardDescription>
               Choose which push alerts you receive on your phone
             </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          </SettingsCardHeader>
+          <SettingsCardContent className="space-y-4">
             {(
               [
                 {
@@ -604,20 +609,20 @@ export default function SettingsPage() {
                 )}
               </p>
             )}
-          </CardContent>
-        </Card>
+          </SettingsCardContent>
+        </SettingsCard>
 
-        <Card>
-          <CardHeader>
+        <SettingsCard>
+          <SettingsCardHeader>
             <CardTitle>Appearance</CardTitle>
             <CardDescription>
               Choose the dashboard color theme
             </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+          </SettingsCardHeader>
+          <SettingsCardContent className="space-y-3">
             <DashboardThemePicker />
-          </CardContent>
-        </Card>
+          </SettingsCardContent>
+        </SettingsCard>
         </div>
       </div>
     </div>
