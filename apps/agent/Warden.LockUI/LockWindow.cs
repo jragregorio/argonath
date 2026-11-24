@@ -39,8 +39,8 @@ public class LockWindow : Window
     private static readonly SolidColorBrush FaintBrush = Freeze(Color.FromRgb(0x8f, 0x9b, 0x97));
 
     // Windows 11 UI font; falls back to Segoe UI on Windows 10.
-    private static readonly FontFamily BodyFont = new("Segoe UI Variable Text, Segoe UI");
-    private static readonly FontFamily DisplayFont = new("Segoe UI Variable Display, Segoe UI");
+    private static readonly FontFamily BodyFont = new("Segoe UI");
+    private static readonly FontFamily DisplayFont = new("Segoe UI");
 
     private const string MoonGeometry = "M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z";
     private const string SparkleGeometry = "M17 3.5l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5z";

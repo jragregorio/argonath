@@ -42,8 +42,8 @@ internal static class UiTheme
     public static string AccentHex { get; private set; } = AccentPalette.DefaultHex;
 
     // Windows 11 UI font (lighter, cleaner weights); falls back to Segoe UI on Windows 10.
-    public static readonly WpfFontFamily BodyFont = new("Segoe UI Variable Text, Segoe UI");
-    public static readonly WpfFontFamily DisplayFont = new("Segoe UI Variable Display, Segoe UI");
+    public static readonly WpfFontFamily BodyFont = new("Segoe UI");
+    public static readonly WpfFontFamily DisplayFont = new("Segoe UI");
 
     public const double ButtonRadius = 14;
     public const double CardRadius = 20;

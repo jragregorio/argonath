@@ -185,5 +185,7 @@ Plan: `docs/superpowers/plans/2026-11-24-agent-in-app-update.md`
 4. 0.6.32 (playful tray UI + colour themes + night-sky lock screen, see
    `docs/superpowers/specs/2026-11-24-agent-playful-ui-design.md`) is the second in-app
    update test: 0.6.31 → 0.6.32.
-5. Failure path: wrong `sha256` on the 0.6.31 row → tray never closes, banner shows
+5. 0.6.34: Option A fonts (plain Segoe UI) and a restyled popup window (nudge, time
+   check, app blocked, extra time) that follows the child's colour.
+6. Failure path: wrong `sha256` on the 0.6.31 row → tray never closes, banner shows
    `Update failed — try again`. Restore the hash afterwards.

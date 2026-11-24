@@ -52,11 +52,17 @@ public sealed class AttentionWindow : Window
         Left = screen.WorkingArea.Left + (screen.WorkingArea.Width - Width) / 2;
         Top = screen.WorkingArea.Top + 48;
 
+        FontFamily = UiTheme.BodyFont;
+        var style = AttentionStyle.For(title);
+        var tone = ToneBrush(style.Tone);
+
         var card = new Border
         {
             Background = UiTheme.CardBrush,
-            BorderBrush = UiTheme.BorderBrush,
-            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(140, tone.Color.R, tone.Color.G, tone.Color.B)
+            ),
+            BorderThickness = new Thickness(1.5),
             CornerRadius = new CornerRadius(UiTheme.CardRadius),
             Padding = new Thickness(24, 22, 24, 20),
             Effect = new System.Windows.Media.Effects.DropShadowEffect
@@ -70,16 +76,41 @@ public sealed class AttentionWindow : Window
 
         var stack = new StackPanel();
 
-        stack.Children.Add(
-            new TextBlock
+        var header = new StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 0, 14)
+        };
+        header.Children.Add(
+            new Border
             {
-                Text = title,
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = UiTheme.MutedBrush,
-                Margin = new Thickness(0, 0, 0, 8)
+                Width = 38,
+                Height = 38,
+                CornerRadius = new CornerRadius(19),
+                Background = tone,
+                Child = new TextBlock
+                {
+                    Text = style.Glyph,
+                    FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+                    FontSize = 17,
+                    Foreground = UiTheme.AccentOnBrush,
+                    HorizontalAlignment = WpfHorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
             }
         );
+        header.Children.Add(
+            new TextBlock
+            {
+                Text = style.Label,
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = tone,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(12, 0, 0, 0)
+            }
+        );
+        stack.Children.Add(header);
 
         stack.Children.Add(
             new TextBlock
@@ -87,7 +118,7 @@ public sealed class AttentionWindow : Window
                 Text = string.IsNullOrWhiteSpace(message)
                     ? "Your parent wants your attention"
                     : message,
-                FontSize = 18,
+                FontSize = 19,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = UiTheme.TextBrush,
                 TextWrapping = TextWrapping.Wrap,
@@ -396,12 +427,33 @@ public sealed class AttentionWindow : Window
         }
         else
         {
-            btn.Opacity = 0.55;
-            btn.Background = UiTheme.BorderBrush;
-            btn.Foreground = UiTheme.MutedBrush;
+            // Waiting for the countdown: a soft version of the child's colour, not flat grey.
+            btn.Opacity = 1;
+            if (primary)
+            {
+                btn.Background = UiTheme.AccentFillBrush;
+                btn.Foreground = UiTheme.TextBrush;
+                btn.BorderThickness = new Thickness(0);
+            }
+            else
+            {
+                btn.Background = UiTheme.CardBrush;
+                btn.Foreground = UiTheme.MutedBrush;
+                btn.BorderBrush = UiTheme.BorderBrush;
+                btn.BorderThickness = new Thickness(1);
+            }
+
             btn.Cursor = System.Windows.Input.Cursors.Arrow;
         }
     }
+
+    private static SolidColorBrush ToneBrush(AttentionTone tone) =>
+        tone switch
+        {
+            AttentionTone.HeadsUp => UiTheme.HeadsUpBrush,
+            AttentionTone.Alert => UiTheme.AlmostDoneBrush,
+            _ => UiTheme.AccentBrush
+        };
 
     private void CloseWithResponse(string response)
     {

@@ -295,7 +295,7 @@ public class MainWindow : Window
         {
             FontFamily = UiTheme.DisplayFont,
             FontSize = 28,
-            FontWeight = FontWeights.SemiBold,
+            FontWeight = FontWeights.Bold,
             Foreground = UiTheme.TextBrush,
             HorizontalAlignment = HorizontalAlignment.Center
         };
@@ -382,7 +382,7 @@ public class MainWindow : Window
         {
             var (caption, glyph, action) = tiles[i];
             var tile = UiTheme.SecondaryButton("");
-            tile.Content = IconLabel(glyph, caption, UiTheme.TextBrush, 14, FontWeights.SemiBold, UiTheme.AccentBrush);
+            tile.Content = IconLabel(glyph, caption, UiTheme.TextBrush, 14, FontWeights.Normal, UiTheme.AccentBrush);
             tile.Height = 56;
             tile.Padding = new Thickness(0);
             tile.Click += async (_, _) => await action();
@@ -401,7 +401,7 @@ public class MainWindow : Window
 
         var parents = new WpfButton
         {
-            Content = IconLabel("", "Parents", UiTheme.MutedBrush, 12, FontWeights.SemiBold),
+            Content = IconLabel("", "Parents", UiTheme.MutedBrush, 12, FontWeights.Normal),
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(8, 6, 8, 6),
@@ -417,7 +417,7 @@ public class MainWindow : Window
         {
             Text = "My colour",
             FontSize = 12,
-            FontWeight = FontWeights.SemiBold,
+            FontWeight = FontWeights.Normal,
             Foreground = UiTheme.MutedBrush,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0)
