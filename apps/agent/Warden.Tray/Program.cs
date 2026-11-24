@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using Warden.Core;
 using Warden.Core.Diagnostics;
 using Warden.Core.Services;
+using Warden.Core.Theming;
 using Warden.LockUI;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
@@ -116,7 +117,8 @@ static class Program
 
             WardenLog.Info("Startup", "Constructing services");
             _configStore = new ConfigStore();
-            var http = NetworkResilience.CreateAgentHttpClient();
+            UiTheme.Apply(new UiPreferencesStore().LoadAccentHex());
+            var http =NetworkResilience.CreateAgentHttpClient();
             var api = new WardenApiClient(http, _configStore);
 
             WardenLog.Info("Startup", "Loading config");
@@ -170,6 +172,9 @@ static class Program
                             ))
                             .ToList();
 
+                        LockWindowManager.Appearance = new LockAppearance(
+                            UiTheme.AccentHex,
+                            _configStore!.Load().ChildName);
                         LockWindowManager.Show(
                             minutes => _engine!.RequestExtensionAsync(minutes),
                             async () =>

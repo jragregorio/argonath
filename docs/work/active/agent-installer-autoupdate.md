@@ -182,5 +182,8 @@ Plan: `docs/superpowers/plans/2026-11-24-agent-in-app-update.md`
    88,738,789 bytes; endpoint returns 0.6.31). **In-app update 0.6.30 → 0.6.31
    confirmed working on the child PC (2026-11-24).** On TESTPC press **Update** → tray restarts on 0.6.31;
    CHILDUSER / startup mode unchanged.
-4. Failure path: wrong `sha256` on the 0.6.31 row → tray never closes, banner shows
+4. 0.6.32 (playful tray UI + colour themes + night-sky lock screen, see
+   `docs/superpowers/specs/2026-11-24-agent-playful-ui-design.md`) is the second in-app
+   update test: 0.6.31 → 0.6.32.
+5. Failure path: wrong `sha256` on the 0.6.31 row → tray never closes, banner shows
    `Update failed — try again`. Restore the hash afterwards.

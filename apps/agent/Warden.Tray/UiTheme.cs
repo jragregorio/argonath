@@ -6,6 +6,7 @@ using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shell;
+using Warden.Core.Theming;
 using WpfBinding = System.Windows.Data.Binding;
 using WpfBorder = System.Windows.Controls.Border;
 using WpfButton = System.Windows.Controls.Button;
@@ -21,22 +22,28 @@ namespace Warden.Tray;
 
 internal static class UiTheme
 {
-    // Maiev palette — aligned with apps/web globals.css
-    public static readonly WpfColor Bg = WpfColor.FromRgb(0x1a, 0x24, 0x20);
-    public static readonly WpfColor Card = WpfColor.FromRgb(0x24, 0x30, 0x2c);
-    public static readonly WpfColor BorderColor = WpfColor.FromRgb(0x36, 0x45, 0x4f);
-    public static readonly WpfColor TextPrimary = WpfColor.FromRgb(0xe0, 0xe0, 0xe0);
-    public static readonly WpfColor TextMuted = WpfColor.FromRgb(0xa8, 0xb0, 0xb0);
-    public static readonly WpfColor Accent = WpfColor.FromRgb(0x50, 0xc8, 0x78);
-    public static readonly WpfColor AccentOn = WpfColor.FromRgb(0x0f, 0x1a, 0x12);
+    // Fixed colours (same in every theme).
     public static readonly WpfColor Gold = WpfColor.FromRgb(0xc5, 0xa0, 0x59);
     public static readonly WpfColor GoldLight = WpfColor.FromRgb(0xd8, 0xb9, 0x78);
     public static readonly WpfColor Danger = WpfColor.FromRgb(0xb5, 0x4a, 0x3f);
     public static readonly WpfColor CloseBright = WpfColor.FromRgb(0xff, 0x5a, 0x5a);
-    public static readonly WpfColor Success = WpfColor.FromRgb(0x50, 0xc8, 0x78);
+
+    // Colours derived from the child's chosen colour (see Apply).
+    public static WpfColor Bg { get; private set; }
+    public static WpfColor Card { get; private set; }
+    public static WpfColor BorderColor { get; private set; }
+    public static WpfColor Accent { get; private set; }
+    public static WpfColor TextPrimary { get; private set; }
+    public static WpfColor TextMuted { get; private set; }
+    public static WpfColor AccentOn { get; private set; }
+    public static WpfColor Success { get; private set; }
+
+    /// <summary>The chosen colour as "#rrggbb", for saving and for the lock screen.</summary>
+    public static string AccentHex { get; private set; } = AccentPalette.DefaultHex;
 
     public const double ButtonRadius = 14;
-    public const double CardRadius = 12;
+    public const double CardRadius = 20;
+    public const double TileRadius = 16;
     public const double WindowRadius = 12;
     public const double TitleBarHeight = 34;
 
@@ -50,18 +57,54 @@ internal static class UiTheme
         return brush;
     }
 
-    public static readonly SolidColorBrush BgBrush = Brush(Bg);
-    public static readonly SolidColorBrush CardBrush = Brush(Card);
-    public static readonly SolidColorBrush BorderBrush = Brush(BorderColor);
-    public static readonly SolidColorBrush TextBrush = Brush(TextPrimary);
-    public static readonly SolidColorBrush MutedBrush = Brush(TextMuted);
-    public static readonly SolidColorBrush AccentBrush = Brush(Accent);
-    public static readonly SolidColorBrush AccentOnBrush = Brush(AccentOn);
+    public static WpfColor ToColor(Rgb c) => WpfColor.FromRgb(c.R, c.G, c.B);
+
+    public static SolidColorBrush BgBrush { get; private set; } = null!;
+    public static SolidColorBrush CardBrush { get; private set; } = null!;
+    public static SolidColorBrush BorderBrush { get; private set; } = null!;
+    public static SolidColorBrush TrackBrush { get; private set; } = null!;
+    public static SolidColorBrush TextBrush { get; private set; } = null!;
+    public static SolidColorBrush MutedBrush { get; private set; } = null!;
+    public static SolidColorBrush AccentBrush { get; private set; } = null!;
+    public static SolidColorBrush AccentOnBrush { get; private set; } = null!;
+    public static SolidColorBrush SuccessBrush { get; private set; } = null!;
     public static readonly SolidColorBrush GoldBrush = Brush(Gold);
     public static readonly SolidColorBrush GoldLightBrush = Brush(GoldLight);
     public static readonly SolidColorBrush DangerBrush = Brush(Danger);
     public static readonly SolidColorBrush CloseBrightBrush = Brush(CloseBright);
-    public static readonly SolidColorBrush SuccessBrush = Brush(Success);
+
+    // Ring / pill colours as time runs low (fixed so they always mean the same thing).
+    public static readonly SolidColorBrush HeadsUpBrush = Brush(WpfColor.FromRgb(0xf2, 0xc1, 0x4e));
+    public static readonly SolidColorBrush AlmostDoneBrush = Brush(WpfColor.FromRgb(0xff, 0x7f, 0x6e));
+    public static readonly SolidColorBrush TimesUpBrush = Brush(WpfColor.FromRgb(0x8d, 0x98, 0x94));
+
+    static UiTheme() => Apply(AccentPalette.DefaultHex);
+
+    /// <summary>Re-derives every themed colour from <paramref name="hex"/>. Windows built afterwards use it.</summary>
+    public static void Apply(string? hex)
+    {
+        var palette = AccentPalette.FromHex(hex);
+        AccentHex = AccentPalette.TryNormalizeHex(hex, out var normalized) ? normalized : AccentPalette.DefaultHex;
+
+        Bg = ToColor(palette.Background);
+        Card = ToColor(palette.Card);
+        BorderColor = ToColor(palette.Border);
+        Accent = ToColor(palette.Accent);
+        TextPrimary = ToColor(AccentPalette.Text);
+        TextMuted = ToColor(AccentPalette.MutedText);
+        AccentOn = ToColor(AccentPalette.OnAccent);
+        Success = Accent;
+
+        BgBrush = Brush(Bg);
+        CardBrush = Brush(Card);
+        BorderBrush = Brush(BorderColor);
+        TrackBrush = Brush(ToColor(palette.Track));
+        TextBrush = Brush(TextPrimary);
+        MutedBrush = Brush(TextMuted);
+        AccentBrush = Brush(Accent);
+        AccentOnBrush = Brush(AccentOn);
+        SuccessBrush = Brush(Success);
+    }
 
     public static SolidColorBrush AccentFillBrush =>
         new(WpfColor.FromArgb(90, Accent.R, Accent.G, Accent.B));
@@ -142,7 +185,7 @@ internal static class UiTheme
         left.Children.Add(
             new TextBlock
             {
-                Text = "\uE756",
+                Text = "\uEA18",
                 FontFamily = new WpfFontFamily("Segoe MDL2 Assets"),
                 FontSize = 14,
                 Foreground = GoldBrush,

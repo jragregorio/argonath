@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using Warden.Core.Diagnostics;
 using Warden.Core.Models;
 using Warden.Core.Services;
+using Warden.Core.Theming;
 
 namespace Warden.LockUI;
 
@@ -19,24 +20,44 @@ public readonly record struct MonitorBounds(
     int Height,
     bool IsPrimary);
 
+/// <summary>How the lock screen should look: the colour chosen in the tray app and the child's name.</summary>
+public sealed record LockAppearance(string? AccentHex, string? ChildName)
+{
+    public static LockAppearance Default { get; } = new(AccentPalette.DefaultHex, null);
+}
+
+/// <summary>Full-screen "night sky" lock overlay, tinted with the child's chosen colour.</summary>
 public class LockWindow : Window
 {
-    private static readonly SolidColorBrush BgBrush = Freeze(Color.FromRgb(0x1a, 0x24, 0x20));
-    private static readonly SolidColorBrush TextBrush = Freeze(Color.FromRgb(0xe0, 0xe0, 0xe0));
-    private static readonly SolidColorBrush MutedBrush = Freeze(Color.FromRgb(0xa8, 0xb0, 0xb0));
-    private static readonly SolidColorBrush AccentBrush = Freeze(Color.FromRgb(0x50, 0xc8, 0x78));
-    private static readonly SolidColorBrush AccentOnBrush = Freeze(Color.FromRgb(0x0f, 0x1a, 0x12));
-    private static readonly SolidColorBrush PanelBorderBrush = Freeze(Color.FromRgb(0x36, 0x45, 0x4f));
-    private static readonly SolidColorBrush CardBrush = Freeze(Color.FromRgb(0x24, 0x30, 0x2c));
+    private static readonly SolidColorBrush TextBrush = Freeze(Rgb(AccentPalette.Text));
+    private static readonly SolidColorBrush MutedBrush = Freeze(Rgb(AccentPalette.MutedText));
+    private static readonly SolidColorBrush OnAccentBrush = Freeze(Rgb(AccentPalette.OnAccent));
     private static readonly SolidColorBrush DangerBrush = Freeze(Color.FromRgb(0xb5, 0x4a, 0x3f));
-    private static readonly SolidColorBrush SuccessBrush = Freeze(Color.FromRgb(0x50, 0xc8, 0x78));
-    private static readonly SolidColorBrush ShieldRingBrush = Freeze(Color.FromArgb(102, 0xc5, 0xa0, 0x59));
-    private static readonly SolidColorBrush ShieldFillBrush = Freeze(Color.FromArgb(38, 0x50, 0xc8, 0x78));
-    private static readonly SolidColorBrush ShieldStrokeBrush = Freeze(Color.FromRgb(0xc5, 0xa0, 0x59));
-    private static readonly SolidColorBrush FooterBrush = Freeze(Color.FromRgb(0x6e, 0x78, 0x72));
-    private static readonly SolidColorBrush OutlineFgBrush = Freeze(Color.FromRgb(0xe0, 0xe0, 0xe0));
-    private static readonly SolidColorBrush OutlineBorderBrush = Freeze(Color.FromArgb(64, 0x36, 0x45, 0x4f));
+    private static readonly SolidColorBrush DangerTextBrush = Freeze(Color.FromRgb(0xff, 0x8a, 0x7a));
+    private static readonly SolidColorBrush MoonBrush = Freeze(Color.FromRgb(0xf2, 0xd2, 0x7a));
+    private static readonly SolidColorBrush MoonFillBrush = Freeze(Color.FromArgb(38, 0xf2, 0xd2, 0x7a));
+    private static readonly SolidColorBrush FaintBrush = Freeze(Color.FromRgb(0x8f, 0x9b, 0x97));
 
+    private const string MoonGeometry = "M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z";
+    private const string SparkleGeometry = "M17 3.5l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5z";
+
+    /// <summary>Star positions as fractions of the screen (x, y, radius px, opacity).</summary>
+    private static readonly (double X, double Y, double R, double O)[] Stars =
+    [
+        (0.12, 0.15, 2, 0.7), (0.22, 0.30, 1.5, 0.5), (0.85, 0.20, 2, 0.7), (0.79, 0.10, 1.5, 0.5),
+        (0.92, 0.42, 1.5, 0.5), (0.08, 0.55, 1.5, 0.5), (0.31, 0.12, 1.2, 0.6), (0.69, 0.33, 1.2, 0.6),
+        (0.16, 0.83, 1.5, 0.4), (0.88, 0.80, 1.5, 0.4), (0.45, 0.06, 1.2, 0.5), (0.58, 0.88, 1.2, 0.4),
+        (0.04, 0.30, 1.2, 0.5), (0.96, 0.62, 1.2, 0.5)
+    ];
+
+    private readonly SolidColorBrush _accentBrush;
+    private readonly SolidColorBrush _softBrush;
+    private readonly SolidColorBrush _cardBrush;
+    private readonly SolidColorBrush _borderBrush;
+    private readonly SolidColorBrush _nightBrush;
+    private readonly string? _childName;
+
+    private readonly TextBlock? _titleText;
     private readonly TextBlock? _statusText;
     private readonly TextBlock? _timeText;
     private readonly TextBlock? _pinStatusText;
@@ -46,9 +67,19 @@ public class LockWindow : Window
         MonitorBounds bounds,
         Func<int, Task<bool>> onExtensionRequest,
         Func<Task<(bool ok, string? error)>> onShutdownPc,
-        Func<string, Task<(bool ok, string? error)>> onParentShutdown)
+        Func<string, Task<(bool ok, string? error)>> onParentShutdown,
+        LockAppearance? appearance = null)
     {
         _isPrimary = bounds.IsPrimary;
+        appearance ??= LockAppearance.Default;
+        _childName = appearance.ChildName;
+
+        var palette = AccentPalette.FromHex(appearance.AccentHex);
+        _accentBrush = Freeze(Rgb(palette.Accent));
+        _softBrush = Freeze(Rgb(palette.Soft));
+        _cardBrush = Freeze(Rgb(palette.Card));
+        _borderBrush = Freeze(Rgb(palette.Border));
+        _nightBrush = Freeze(Rgb(palette.Night));
 
         Title = "Warden";
         WindowStyle = WindowStyle.None;
@@ -56,7 +87,7 @@ public class LockWindow : Window
         WindowState = WindowState.Normal;
         Topmost = true;
         ShowInTaskbar = false;
-        Background = BgBrush;
+        Background = SkyBrush(palette);
         FontFamily = new FontFamily("Segoe UI");
         Left = bounds.Left;
         Top = bounds.Top;
@@ -87,120 +118,136 @@ public class LockWindow : Window
             }
         };
 
+        var layers = new Grid();
+        layers.Children.Add(BuildStars(bounds.Width, bounds.Height, palette));
+
         if (!bounds.IsPrimary)
         {
-            Content = BuildSecondaryContent();
+            layers.Children.Add(BuildSecondaryContent());
+            Content = layers;
             return;
         }
 
+        var copy = LockCopy.For(null, _childName);
         var mainPanel = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,
-            MaxWidth = 480
+            MaxWidth = 560
         };
 
-        mainPanel.Children.Add(CreateShieldIcon(56, 28, bottomMargin: 16));
+        mainPanel.Children.Add(CreateMoon(84, bottomMargin: 18));
 
-        mainPanel.Children.Add(new TextBlock
+        _titleText = new TextBlock
         {
-            Text = "Time's up for today",
-            FontSize = 32,
-            FontWeight = FontWeights.Bold,
+            Text = copy.Title,
+            FontSize = 36,
+            FontWeight = FontWeights.ExtraBold,
             Foreground = TextBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 12)
-        });
+        };
+        mainPanel.Children.Add(_titleText);
 
         _statusText = new TextBlock
         {
-            Text = "Ask a parent for more time, or come back tomorrow.",
-            FontSize = 16,
-            Foreground = MutedBrush,
+            Text = copy.Body,
+            FontSize = 18,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = MoonBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
-            MaxWidth = 360,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 6)
         };
         mainPanel.Children.Add(_statusText);
 
         _timeText = new TextBlock
         {
-            FontSize = 13,
+            Text = copy.Detail,
+            FontSize = 14,
             Foreground = MutedBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 28)
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 4)
         };
         mainPanel.Children.Add(_timeText);
+
+        mainPanel.Children.Add(new TextBlock
+        {
+            Text = LockCopy.Tagline,
+            FontSize = 14,
+            Foreground = MutedBrush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 26)
+        });
+
+        var requestNote = new TextBlock
+        {
+            Text = "We'll unlock right away if your parent says yes.",
+            FontSize = 14,
+            FontWeight = FontWeights.Bold,
+            Foreground = _softBrush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 14, 0, 0),
+            Visibility = Visibility.Collapsed
+        };
 
         var actionRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 12)
+            HorizontalAlignment = HorizontalAlignment.Center
         };
-
-        actionRow.Children.Add(
-            CreateExtensionButton(15, onExtensionRequest, "Request +15 min", primary: true));
-
-        var shutdownPcButton = CreateShutdownPcButton(onShutdownPc);
-        actionRow.Children.Add(shutdownPcButton);
+        actionRow.Children.Add(CreateExtensionButton(15, onExtensionRequest, requestNote));
+        actionRow.Children.Add(CreateShutdownPcButton(onShutdownPc));
         mainPanel.Children.Add(actionRow);
+        mainPanel.Children.Add(requestNote);
 
-        var parentReveal = new TextBlock
+        layers.Children.Add(mainPanel);
+
+        // Parents corner: small link that reveals the PIN box (bottom-right).
+        var corner = new StackPanel
         {
-            Text = "For parents",
-            FontSize = 13,
-            Foreground = MutedBrush,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            TextDecorations = TextDecorations.Underline,
-            Cursor = Cursors.Hand,
-            Margin = new Thickness(0, 0, 0, 12)
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 24, 20)
         };
-        mainPanel.Children.Add(parentReveal);
 
-        var moreTimeRow = new StackPanel
+        var pinPanel = new StackPanel { Width = 260 };
+        var pinCard = new Border
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 28)
-        };
-        moreTimeRow.Children.Add(
-            CreateExtensionButton(30, onExtensionRequest, "+30 min", primary: false));
-        moreTimeRow.Children.Add(
-            CreateExtensionButton(60, onExtensionRequest, "+60 min", primary: false));
-        mainPanel.Children.Add(moreTimeRow);
-
-        var pinPanel = new StackPanel
-        {
-            HorizontalAlignment = HorizontalAlignment.Center,
+            Background = _cardBrush,
+            BorderBrush = _borderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(14),
+            Margin = new Thickness(0, 0, 0, 8),
             Visibility = Visibility.Collapsed,
-            Margin = new Thickness(0, 0, 0, 16)
+            Child = pinPanel
         };
 
         pinPanel.Children.Add(new TextBlock
         {
-            Text = "Enter parent PIN to shut down Warden",
-            FontSize = 14,
+            Text = "Parent PIN",
+            FontSize = 13,
             Foreground = MutedBrush,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 12)
+            Margin = new Thickness(0, 0, 0, 6)
         });
 
         var pinBox = new PasswordBox
         {
-            Width = 220,
             Height = 40,
             FontSize = 18,
             Padding = new Thickness(10, 6, 10, 6),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 12),
-            Background = CardBrush,
+            Margin = new Thickness(0, 0, 0, 10),
+            Background = _nightBrush,
             Foreground = TextBrush,
-            BorderBrush = PanelBorderBrush,
+            BorderBrush = _borderBrush,
             BorderThickness = new Thickness(1),
             CaretBrush = TextBrush
         };
@@ -213,31 +260,35 @@ public class LockWindow : Window
         {
             FontSize = 13,
             Foreground = MutedBrush,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 8, 0, 0)
         };
         pinPanel.Children.Add(_pinStatusText);
-        mainPanel.Children.Add(pinPanel);
+        corner.Children.Add(pinCard);
 
-        parentReveal.MouseLeftButtonUp += (_, _) =>
+        var parentsLink = new Button
         {
-            parentReveal.Visibility = Visibility.Collapsed;
-            pinPanel.Visibility = Visibility.Visible;
-            pinBox.Focus();
+            Content = IconLabel("", "Parents", FaintBrush, 13),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(10, 6, 10, 6),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Cursor = Cursors.Hand,
+            Template = CreateRoundedButtonTemplate(10)
         };
-
-        mainPanel.Children.Add(new TextBlock
+        parentsLink.Click += (_, _) =>
         {
-            Text = "WARDEN · WINDOWS AGENT",
-            FontSize = 11,
-            Foreground = FooterBrush,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 24, 0, 0)
-        });
+            var show = pinCard.Visibility != Visibility.Visible;
+            pinCard.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            if (show) pinBox.Focus();
+        };
+        corner.Children.Add(parentsLink);
+        layers.Children.Add(corner);
 
-        Content = mainPanel;
+        Content = layers;
     }
+
+    private static Color Rgb(Rgb c) => Color.FromRgb(c.R, c.G, c.B);
 
     private static SolidColorBrush Freeze(Color color)
     {
@@ -246,34 +297,89 @@ public class LockWindow : Window
         return brush;
     }
 
-    private static UIElement CreateShieldIcon(double size, double iconSize, double bottomMargin)
+    private static Brush SkyBrush(AccentPalette palette)
     {
-        var path = new Path
+        var sky = new RadialGradientBrush
         {
-            Data = Geometry.Parse(
-                "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"),
-            Stroke = ShieldStrokeBrush,
-            StrokeThickness = 2,
-            Fill = Brushes.Transparent,
-            Stretch = Stretch.Uniform,
-            Width = iconSize,
-            Height = iconSize,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
+            Center = new Point(0.5, 0.3),
+            GradientOrigin = new Point(0.5, 0.3),
+            RadiusX = 0.75,
+            RadiusY = 0.9,
+            GradientStops =
+            {
+                new GradientStop(Rgb(palette.Glow), 0),
+                new GradientStop(Rgb(palette.Night), 0.75)
+            }
         };
+        sky.Freeze();
+        return sky;
+    }
 
-        return new Border
+    private static UIElement BuildStars(double width, double height, AccentPalette palette)
+    {
+        var canvas = new Canvas { IsHitTestVisible = false };
+        var starBrush = Freeze(Rgb(palette.Star));
+        foreach (var (x, y, r, o) in Stars)
+        {
+            var star = new Ellipse { Width = r * 2, Height = r * 2, Fill = starBrush, Opacity = o };
+            Canvas.SetLeft(star, x * width - r);
+            Canvas.SetTop(star, y * height - r);
+            canvas.Children.Add(star);
+        }
+
+        return canvas;
+    }
+
+    private static UIElement CreateMoon(double size, double bottomMargin)
+    {
+        var grid = new Grid
         {
             Width = size,
             Height = size,
-            CornerRadius = new CornerRadius(size / 2),
-            Background = ShieldFillBrush,
-            BorderBrush = ShieldRingBrush,
-            BorderThickness = new Thickness(1),
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, bottomMargin),
-            Child = path
+            Margin = new Thickness(0, 0, 0, bottomMargin)
         };
+        grid.Children.Add(new Path
+        {
+            Data = Geometry.Parse(MoonGeometry),
+            Stroke = MoonBrush,
+            StrokeThickness = 1.4,
+            Fill = MoonFillBrush,
+            Stretch = Stretch.None,
+            RenderTransform = new ScaleTransform(size / 24, size / 24)
+        });
+        grid.Children.Add(new Path
+        {
+            Data = Geometry.Parse(SparkleGeometry),
+            Stroke = MoonBrush,
+            StrokeThickness = 1.4,
+            Stretch = Stretch.None,
+            RenderTransform = new ScaleTransform(size / 24, size / 24)
+        });
+        return grid;
+    }
+
+    private static StackPanel IconLabel(string glyph, string text, Brush brush, double size)
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(new TextBlock
+        {
+            Text = glyph,
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = size,
+            Foreground = brush,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = text,
+            FontSize = size,
+            FontWeight = FontWeights.Bold,
+            Foreground = brush,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        return panel;
     }
 
     private static void OnPreviewKeyDown(object sender, KeyEventArgs e)
@@ -302,7 +408,7 @@ public class LockWindow : Window
         }
     }
 
-    private static UIElement BuildSecondaryContent()
+    private UIElement BuildSecondaryContent()
     {
         var panel = new StackPanel
         {
@@ -310,13 +416,13 @@ public class LockWindow : Window
             HorizontalAlignment = HorizontalAlignment.Center
         };
 
-        panel.Children.Add(CreateShieldIcon(48, 24, bottomMargin: 16));
+        panel.Children.Add(CreateMoon(64, bottomMargin: 16));
 
         panel.Children.Add(new TextBlock
         {
-            Text = "Time's up for today",
-            FontSize = 24,
-            FontWeight = FontWeights.Bold,
+            Text = LockCopy.For(null, _childName).Title,
+            FontSize = 28,
+            FontWeight = FontWeights.ExtraBold,
             Foreground = TextBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center
@@ -324,23 +430,14 @@ public class LockWindow : Window
 
         panel.Children.Add(new TextBlock
         {
-            Text = "Use the primary display to request more time or shut down the PC.",
-            FontSize = 14,
+            Text = "Use the main screen to ask for more time or shut down the PC.",
+            FontSize = 15,
             Foreground = MutedBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
             Margin = new Thickness(24, 12, 24, 0),
             TextWrapping = TextWrapping.Wrap,
-            MaxWidth = 420
-        });
-
-        panel.Children.Add(new TextBlock
-        {
-            Text = "WARDEN · WINDOWS AGENT",
-            FontSize = 11,
-            Foreground = FooterBrush,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 28, 0, 0)
+            MaxWidth = 440
         });
 
         return panel;
@@ -349,33 +446,37 @@ public class LockWindow : Window
     private Button CreateExtensionButton(
         int minutes,
         Func<int, Task<bool>> onExtensionRequest,
-        string label,
-        bool primary)
+        TextBlock requestNote)
     {
-        var btn = primary
-            ? CreateFilledButton(label, AccentBrush)
-            : CreateOutlinedButton(label);
+        var label = $"Ask for {minutes} more minutes";
+        var btn = CreateFilledButton(label, _accentBrush, OnAccentBrush, "");
+        btn.MinWidth = 300;
         btn.Click += async (_, _) =>
         {
             btn.IsEnabled = false;
-            var previous = btn.Content;
-            btn.Content = "Requesting...";
+            SetButtonText(btn, "Asking…");
             try
             {
                 var success = await onExtensionRequest(minutes);
-                btn.Content = success ? "Request sent!" : "Failed - try again";
-                if (!success)
+                if (success)
                 {
+                    btn.Background = _softBrush;
+                    SetButtonText(btn, "Asked! Waiting for your parent…");
+                    requestNote.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    SetButtonText(btn, "Couldn't send. Try again");
                     await Task.Delay(2000);
-                    btn.Content = previous;
+                    SetButtonText(btn, label);
                     btn.IsEnabled = true;
                 }
             }
             catch (Exception)
             {
-                btn.Content = "Failed - try again";
+                SetButtonText(btn, "Couldn't send. Try again");
                 await Task.Delay(2000);
-                btn.Content = previous;
+                SetButtonText(btn, label);
                 btn.IsEnabled = true;
             }
         };
@@ -384,14 +485,17 @@ public class LockWindow : Window
 
     private Button CreateShutdownPcButton(Func<Task<(bool ok, string? error)>> onShutdownPc)
     {
-        var btn = CreateFilledButton("Shutdown PC", DangerBrush);
+        const string label = "Shut down";
+        var btn = CreateFilledButton(label, _cardBrush, TextBrush, "");
+        btn.BorderBrush = _borderBrush;
+        btn.BorderThickness = new Thickness(1);
         btn.Click += async (_, _) =>
         {
             btn.IsEnabled = false;
-            btn.Content = "Shutting down...";
+            SetButtonText(btn, "Shutting down…");
             if (_statusText != null)
             {
-                _statusText.Text = "Shutting down...";
+                _statusText.Text = "Shutting down…";
             }
 
             try
@@ -399,7 +503,7 @@ public class LockWindow : Window
                 var (ok, error) = await onShutdownPc();
                 if (!ok)
                 {
-                    btn.Content = "Shutdown PC";
+                    SetButtonText(btn, label);
                     btn.IsEnabled = true;
                     if (_statusText != null)
                     {
@@ -410,7 +514,7 @@ public class LockWindow : Window
             }
             catch (Exception ex)
             {
-                btn.Content = "Shutdown PC";
+                SetButtonText(btn, label);
                 btn.IsEnabled = true;
                 if (_statusText != null)
                 {
@@ -427,14 +531,15 @@ public class LockWindow : Window
         PasswordBox pinBox,
         Func<string, Task<(bool ok, string? error)>> onParentShutdown)
     {
-        var btn = CreateFilledButton("Shut down Warden", DangerBrush);
-        btn.HorizontalAlignment = HorizontalAlignment.Center;
+        var btn = CreateFilledButton("Turn off Warden", DangerBrush, Brushes.White, null);
+        btn.Margin = new Thickness(0);
+        btn.HorizontalAlignment = HorizontalAlignment.Stretch;
         btn.Click += async (_, _) =>
         {
             if (_pinStatusText != null)
             {
                 _pinStatusText.Foreground = MutedBrush;
-                _pinStatusText.Text = "Checking PIN...";
+                _pinStatusText.Text = "Checking PIN…";
             }
 
             btn.IsEnabled = false;
@@ -445,16 +550,16 @@ public class LockWindow : Window
                 {
                     if (_pinStatusText != null)
                     {
-                        _pinStatusText.Foreground = SuccessBrush;
-                        _pinStatusText.Text = "Shutting down...";
+                        _pinStatusText.Foreground = _softBrush;
+                        _pinStatusText.Text = "Turning off…";
                     }
                 }
                 else
                 {
                     if (_pinStatusText != null)
                     {
-                        _pinStatusText.Foreground = DangerBrush;
-                        _pinStatusText.Text = error ?? "Shutdown failed.";
+                        _pinStatusText.Foreground = DangerTextBrush;
+                        _pinStatusText.Text = error ?? "That didn't work. Try again.";
                     }
 
                     btn.IsEnabled = true;
@@ -464,7 +569,7 @@ public class LockWindow : Window
             {
                 if (_pinStatusText != null)
                 {
-                    _pinStatusText.Foreground = DangerBrush;
+                    _pinStatusText.Foreground = DangerTextBrush;
                     _pinStatusText.Text = "Unexpected error. Try again.";
                 }
 
@@ -475,41 +580,57 @@ public class LockWindow : Window
         return btn;
     }
 
-    private static Button CreateFilledButton(string content, SolidColorBrush background) =>
-        new()
+    private static Button CreateFilledButton(string text, Brush background, Brush foreground, string? glyph)
+    {
+        var btn = new Button
         {
-            Content = content,
-            Padding = new Thickness(20, 12, 20, 12),
+            Height = 52,
+            Padding = new Thickness(22, 0, 22, 0),
             Margin = new Thickness(6, 0, 6, 0),
-            FontSize = 14,
-            FontWeight = FontWeights.SemiBold,
+            FontSize = 16,
+            FontWeight = FontWeights.Bold,
             Background = background,
-            Foreground = ReferenceEquals(background, AccentBrush) ? AccentOnBrush : TextBrush,
+            Foreground = foreground,
             BorderThickness = new Thickness(0),
             Cursor = Cursors.Hand,
-            Template = CreateRoundedButtonTemplate()
+            Template = CreateRoundedButtonTemplate(16)
         };
-
-    private static Button CreateOutlinedButton(string content) =>
-        new()
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        if (glyph != null)
         {
-            Content = content,
-            Padding = new Thickness(20, 12, 20, 12),
-            Margin = new Thickness(6, 0, 6, 0),
-            FontSize = 14,
-            FontWeight = FontWeights.SemiBold,
-            Background = Brushes.Transparent,
-            Foreground = OutlineFgBrush,
-            BorderBrush = OutlineBorderBrush,
-            BorderThickness = new Thickness(1),
-            Cursor = Cursors.Hand,
-            Template = CreateRoundedButtonTemplate()
-        };
+            panel.Children.Add(new TextBlock
+            {
+                Text = glyph,
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 17,
+                Foreground = foreground,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0)
+            });
+        }
 
-    private static ControlTemplate CreateRoundedButtonTemplate()
+        panel.Children.Add(new TextBlock
+        {
+            Text = text,
+            Foreground = foreground,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        btn.Content = panel;
+        return btn;
+    }
+
+    private static void SetButtonText(Button btn, string text)
+    {
+        if (btn.Content is StackPanel panel && panel.Children[^1] is TextBlock label)
+        {
+            label.Text = text;
+        }
+    }
+
+    private static ControlTemplate CreateRoundedButtonTemplate(double radius)
     {
         var factory = new FrameworkElementFactory(typeof(Border));
-        factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+        factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(radius));
         factory.SetValue(Border.SnapsToDevicePixelsProperty, true);
         factory.SetBinding(
             Border.BackgroundProperty,
@@ -546,25 +667,15 @@ public class LockWindow : Window
 
     public void UpdateEvaluation(PolicyEvaluation evaluation)
     {
-        if (!_isPrimary || _statusText == null || _timeText == null) return;
+        if (!_isPrimary || _titleText == null || _statusText == null || _timeText == null) return;
 
         Dispatcher.Invoke(() =>
         {
-            _statusText.Text =
-                evaluation.Message ?? "Ask a parent for more time, or come back tomorrow.";
-            if (evaluation.Status == "outside_window" && evaluation.NextWindowStart != null)
-            {
-                var dailyLeft = evaluation.DailyRemainingMinutes;
-                _timeText.Text =
-                    dailyLeft > 0
-                        ? $"Available again: {evaluation.NextWindowStart} — {dailyLeft} min of today's time left"
-                        : $"Available again: {evaluation.NextWindowStart}";
-            }
-            else
-            {
-                _timeText.Text =
-                    $"Used {evaluation.UsedMinutes} of {evaluation.DailyLimitMinutes + evaluation.BonusMinutes} minutes today";
-            }
+            var copy = LockCopy.For(evaluation, _childName);
+            _titleText.Text = copy.Title;
+            _statusText.Text = copy.Body;
+            _timeText.Text = copy.Detail;
+            _timeText.Visibility = string.IsNullOrEmpty(copy.Detail) ? Visibility.Collapsed : Visibility.Visible;
         });
     }
 
@@ -592,6 +703,9 @@ public static class LockWindowManager
 
     /// <summary>Set true only while LockWindowManager is closing windows intentionally.</summary>
     internal static bool AllowClose { get; private set; }
+
+    /// <summary>Colour and child name for lock windows created from now on (set before <see cref="Show"/>).</summary>
+    public static LockAppearance Appearance { get; set; } = LockAppearance.Default;
 
     public static void Show(
         Func<int, Task<bool>> onExtensionRequest,
@@ -627,7 +741,7 @@ public static class LockWindowManager
             {
                 foreach (var screen in screens)
                 {
-                    var window = new LockWindow(screen, onExtensionRequest, onShutdownPc, onParentShutdown);
+                    var window = new LockWindow(screen, onExtensionRequest, onShutdownPc, onParentShutdown, Appearance);
                     if (evaluation != null && screen.IsPrimary)
                     {
                         window.UpdateEvaluation(evaluation);
@@ -817,7 +931,7 @@ public static class LockWindowManager
         {
             foreach (var screen in monitors)
             {
-                var window = new LockWindow(screen, onExtension, onShutdown, onParentShutdown);
+                var window = new LockWindow(screen, onExtension, onShutdown, onParentShutdown, Appearance);
                 if (_lastEvaluation != null && screen.IsPrimary)
                 {
                     window.UpdateEvaluation(_lastEvaluation);

@@ -2,72 +2,83 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using Warden.Core;
 using Warden.Core.Models;
 using Warden.Core.Services;
+using Warden.Core.Theming;
 using Brush = System.Windows.Media.Brush;
+using Brushes = System.Windows.Media.Brushes;
+using Color = System.Windows.Media.Color;
+using Cursors = System.Windows.Input.Cursors;
 using FontFamily = System.Windows.Media.FontFamily;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using MessageBox = System.Windows.MessageBox;
 using Orientation = System.Windows.Controls.Orientation;
+using Path = System.Windows.Shapes.Path;
+using Point = System.Windows.Point;
+using Size = System.Windows.Size;
 using WpfButton = System.Windows.Controls.Button;
 using WpfTextBox = System.Windows.Controls.TextBox;
 
 namespace Warden.Tray;
 
+/// <summary>
+/// The child's tray window ("Option B — Playful"): greeting, time-left ring,
+/// ask for more time, quick messages and a colour picker that re-themes the app.
+/// </summary>
 public class MainWindow : Window
 {
     private readonly EnforcementEngine _engine;
     private readonly ConfigStore _configStore;
+    private readonly UiPreferencesStore _uiPrefs = new();
     private readonly Func<string, (bool ok, string? error)> _tryExitWithPin;
-    private readonly TextBlock _childLabel;
-    private readonly TextBlock _statusValue;
-    private readonly TextBlock _timerHours;
-    private readonly TextBlock _timerMinutes;
-    private readonly TextBlock _timerSeconds;
-    private readonly TextBlock _usageDetail;
-    private readonly Border _usageFill;
-    private readonly Border _usageCard;
     private readonly DispatcherTimer _uiTimer;
-    private readonly WpfButton _requestToggleBtn;
-    private readonly StackPanel _requestPanel;
-    private readonly IReadOnlyList<WpfButton> _presetButtons;
-    private readonly WpfTextBox _customMinutesBox;
-    private readonly WpfButton _customSendBtn;
-    private readonly TextBlock _requestStatusLine;
-    private readonly TextBlock _requestValidationLine;
-    private readonly WpfButton _messageToggleBtn;
-    private readonly StackPanel _messagePanel;
-    private readonly IReadOnlyList<WpfButton> _quickMessageButtons;
-    private readonly WpfTextBox _messageBox;
-    private readonly UpdateBanner _updateBanner;
     private readonly DispatcherTimer _updateStatusTimer;
+
+    // Rebuilt whenever the colour changes (see BuildBody).
+    private UpdateBanner _updateBanner = null!;
+    private TextBlock _greeting = null!;
+    private TextBlock _moodLine = null!;
+    private Ellipse _ringFull = null!;
+    private Path _ringArc = null!;
+    private TextBlock _timeBig = null!;
+    private TextBlock _usedText = null!;
+    private TextBlock _usedOf = null!;
+    private Border _pill = null!;
+    private TextBlock _pillText = null!;
+    private WpfButton _askButton = null!;
+    private Grid _requestPanel = null!;
+    private List<WpfButton> _presetButtons = [];
+    private TextBlock _requestStatusLine = null!;
+    private List<WpfButton> _messageTiles = [];
+    private Grid _composeRow = null!;
+    private WpfTextBox _messageBox = null!;
+    private WpfButton _messageSendBtn = null!;
+    private TextBlock _messageStatusLine = null!;
+    private List<WpfButton> _colourButtons = [];
+
     private UpdatePhase _updatePhase = UpdatePhase.Idle;
     private DateTimeOffset? _updateStartedAt;
     private static readonly TimeSpan UpdateStatusPollLimit = TimeSpan.FromMinutes(20);
-    private readonly WpfButton _messageSendBtn;
-    private readonly TextBlock _messageStatusLine;
-    private readonly TextBlock _messageErrorLine;
     private bool _allowClose;
-    private bool _requestExpanded;
     private bool _requestBusy;
-    private bool _messageExpanded;
     private bool _messageBusy;
-    private double _remainingFraction = 1;
 
-    private const int ExtensionMinMinutes = 1;
-    private const int ExtensionMaxMinutes = 120;
+    private const double RingSize = 150;
+    private const double RingThickness = 18;
+
     private static readonly int[] ExtensionPresets = [15, 30, 60];
 
     private const int MessageMaxLength = 200;
 
-    /// <summary>Quick-button key (stored server-side) and short caption for the 3-up row.</summary>
-    private static readonly (string Key, string Caption)[] QuickMessages =
+    /// <summary>Quick-button key (stored server-side), caption and Segoe MDL2 glyph.</summary>
+    private static readonly (string Key, string Caption, string Glyph)[] QuickMessages =
     [
-        ("come_here", "Come here?"),
-        ("done", "I'm done"),
-        ("need_help", "Need help")
+        ("come_here", "Come here?", ""),
+        ("done", "I'm done", ""),
+        ("need_help", "Need help", "")
     ];
 
     public MainWindow(
@@ -84,357 +95,14 @@ public class MainWindow : Window
         SizeToContent = SizeToContent.Height;
         UiTheme.ApplyWindowChrome(this);
 
-        var root = new StackPanel { Margin = new Thickness(24) };
+        _updateStatusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        _updateStatusTimer.Tick += (_, _) => PollUpdateStatus();
 
-        _updateBanner = new UpdateBanner();
-        _updateBanner.UpdateClicked += StartUpdate;
-        root.Children.Add(_updateBanner);
-
-        var header = new StackPanel { Margin = new Thickness(0, 0, 0, 20) };
-        header.Children.Add(
-            new TextBlock
-            {
-                Text = "Warden",
-                FontSize = 28,
-                FontWeight = FontWeights.Bold,
-                Foreground = UiTheme.TextBrush
-            }
-        );
-        _childLabel = new TextBlock
-        {
-            FontSize = 14,
-            Foreground = UiTheme.MutedBrush,
-            Margin = new Thickness(0, 4, 0, 0)
-        };
-        header.Children.Add(_childLabel);
-        root.Children.Add(header);
-
-        var statusRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        statusRow.Children.Add(
-            new TextBlock
-            {
-                Text = "Status",
-                FontSize = 13,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = UiTheme.TextBrush,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 10, 0)
-            }
-        );
-        _statusValue = new TextBlock
-        {
-            FontSize = 16,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = UiTheme.SuccessBrush,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        statusRow.Children.Add(_statusValue);
-        var statusCard = UiTheme.CardPanel(statusRow);
-        statusCard.Padding = new Thickness(16, 12, 16, 12);
-        root.Children.Add(statusCard);
-
-        _usageCard = new Border
-        {
-            Background = UiTheme.CardBrush,
-            BorderBrush = UiTheme.BorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(UiTheme.CardRadius),
-            Margin = new Thickness(0, 0, 0, 12),
-            MinHeight = 130
-        };
-
-        var usageGrid = new Grid();
-        var radius = UiTheme.CardRadius;
-        _usageFill = new Border
-        {
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Stretch,
-            Background = UiTheme.AccentFillBrush,
-            CornerRadius = new CornerRadius(radius, 0, 0, radius),
-            Width = 0
-        };
-        usageGrid.Children.Add(_usageFill);
-
-        var usageContentPanel = new StackPanel
-        {
-            Margin = new Thickness(16, 18, 16, 14),
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
-
-        usageContentPanel.Children.Add(
-            new TextBlock
-            {
-                Text = "Time remaining",
-                FontSize = 13,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = UiTheme.MutedBrush,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 8)
-            }
-        );
-
-        var timerRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
-        _timerHours = CreateTimerDigit("00");
-        _timerMinutes = CreateTimerDigit("00");
-        _timerSeconds = CreateTimerDigit("00");
-        timerRow.Children.Add(_timerHours);
-        timerRow.Children.Add(CreateTimerColon());
-        timerRow.Children.Add(_timerMinutes);
-        timerRow.Children.Add(CreateTimerColon());
-        timerRow.Children.Add(_timerSeconds);
-        usageContentPanel.Children.Add(timerRow);
-
-        _usageDetail = new TextBlock
-        {
-            FontSize = 12,
-            Foreground = UiTheme.MutedBrush,
-            Margin = new Thickness(0, 10, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
-        usageContentPanel.Children.Add(_usageDetail);
-        usageGrid.Children.Add(usageContentPanel);
-
-        _usageCard.Child = usageGrid;
-        _usageCard.SizeChanged += (_, _) =>
-        {
-            UpdateUsageCardClip();
-            UpdateUsageFillWidth();
-        };
-        root.Children.Add(_usageCard);
-
-        var requestSection = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
-
-        var toggleRow = new Grid();
-        toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-        toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        _requestToggleBtn = UiTheme.GoldButton("Request");
-        _requestToggleBtn.Margin = new Thickness(0, 0, 0, 0);
-        _requestToggleBtn.Click += (_, _) => ToggleRequestPanel();
-        Grid.SetColumn(_requestToggleBtn, 0);
-        toggleRow.Children.Add(_requestToggleBtn);
-
-        _messageToggleBtn = UiTheme.SecondaryButton("Message");
-        _messageToggleBtn.Click += (_, _) => ToggleMessagePanel();
-        Grid.SetColumn(_messageToggleBtn, 2);
-        toggleRow.Children.Add(_messageToggleBtn);
-
-        requestSection.Children.Add(toggleRow);
-
-        _requestPanel = new StackPanel
-        {
-            Margin = new Thickness(0, 10, 0, 0),
-            Visibility = Visibility.Collapsed
-        };
-
-        var presetRow = new Grid();
-        for (var i = 0; i < ExtensionPresets.Length; i++)
-        {
-            presetRow.ColumnDefinitions.Add(
-                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
-            );
-        }
-
-        var presetButtons = new List<WpfButton>();
-        for (var i = 0; i < ExtensionPresets.Length; i++)
-        {
-            var minutes = ExtensionPresets[i];
-            var presetBtn = UiTheme.SecondaryButton($"+{minutes} mins");
-            presetBtn.Margin = new Thickness(i == 0 ? 0 : 8, 0, 0, 0);
-            var requestedMinutes = minutes;
-            presetBtn.Click += async (_, _) => await SendExtensionRequestAsync(requestedMinutes);
-            Grid.SetColumn(presetBtn, i);
-            presetRow.Children.Add(presetBtn);
-            presetButtons.Add(presetBtn);
-        }
-
-        _presetButtons = presetButtons;
-        _requestPanel.Children.Add(presetRow);
-
-        _requestStatusLine = new TextBlock
-        {
-            FontSize = 12,
-            Foreground = UiTheme.MutedBrush,
-            Margin = new Thickness(0, 10, 0, 0),
-            TextWrapping = TextWrapping.Wrap
-        };
-
-        _requestValidationLine = new TextBlock
-        {
-            FontSize = 12,
-            Foreground = UiTheme.DangerBrush,
-            Margin = new Thickness(0, 4, 0, 0),
-            TextWrapping = TextWrapping.Wrap
-        };
-
-        var customRow = new Grid { Margin = new Thickness(0, 10, 0, 0) };
-        customRow.ColumnDefinitions.Add(
-            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
-        );
-        customRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-        customRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        _customMinutesBox = UiTheme.TextField(placeholder: "Minutes (1–120)");
-        _customMinutesBox.MaxLength = 3;
-        _customMinutesBox.TextAlignment = TextAlignment.Center;
-        _customMinutesBox.PreviewTextInput += OnDigitsOnlyPreviewTextInput;
-        System.Windows.DataObject.AddPastingHandler(_customMinutesBox, OnDigitsOnlyPaste);
-        _customMinutesBox.TextChanged += (_, _) => _requestValidationLine.Text = "";
-        Grid.SetColumn(_customMinutesBox, 0);
-        customRow.Children.Add(_customMinutesBox);
-
-        _customSendBtn = UiTheme.PrimaryButton("Send");
-        _customSendBtn.Padding = new Thickness(16, 10, 16, 10);
-        _customSendBtn.Click += async (_, _) => await SendCustomExtensionRequestAsync();
-        Grid.SetColumn(_customSendBtn, 2);
-        customRow.Children.Add(_customSendBtn);
-
-        _requestPanel.Children.Add(customRow);
-        _requestPanel.Children.Add(_requestStatusLine);
-        _requestPanel.Children.Add(_requestValidationLine);
-
-        requestSection.Children.Add(_requestPanel);
-
-        _messagePanel = new StackPanel
-        {
-            Margin = new Thickness(0, 10, 0, 0),
-            Visibility = Visibility.Collapsed
-        };
-
-        _messagePanel.Children.Add(new TextBlock
-        {
-            Text = "Send a message to your parent",
-            FontSize = 12,
-            Foreground = UiTheme.MutedBrush,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-
-        var quickRow = new Grid();
-        var quickButtons = new List<WpfButton>();
-        for (var i = 0; i < QuickMessages.Length; i++)
-        {
-            quickRow.ColumnDefinitions.Add(
-                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
-            );
-            var (key, caption) = QuickMessages[i];
-            var quickBtn = UiTheme.SecondaryButton(caption);
-            quickBtn.Margin = new Thickness(i == 0 ? 0 : 8, 0, 0, 0);
-            quickBtn.Click += async (_, _) => await SendMessageAsync(key, null);
-            Grid.SetColumn(quickBtn, i);
-            quickRow.Children.Add(quickBtn);
-            quickButtons.Add(quickBtn);
-        }
-
-        _quickMessageButtons = quickButtons;
-        _messagePanel.Children.Add(quickRow);
-
-        var typedRow = new Grid { Margin = new Thickness(0, 10, 0, 0) };
-        typedRow.ColumnDefinitions.Add(
-            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
-        );
-        typedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-        typedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        _messageBox = UiTheme.TextField(placeholder: "Type a message…");
-        _messageBox.MaxLength = MessageMaxLength;
-        _messageBox.KeyDown += async (_, e) =>
-        {
-            if (e.Key == Key.Enter)
-            {
-                e.Handled = true;
-                await SendTypedMessageAsync();
-            }
-        };
-        Grid.SetColumn(_messageBox, 0);
-        typedRow.Children.Add(_messageBox);
-
-        _messageSendBtn = UiTheme.PrimaryButton("Send");
-        _messageSendBtn.Padding = new Thickness(16, 10, 16, 10);
-        _messageSendBtn.Click += async (_, _) => await SendTypedMessageAsync();
-        Grid.SetColumn(_messageSendBtn, 2);
-        typedRow.Children.Add(_messageSendBtn);
-
-        _messagePanel.Children.Add(typedRow);
-
-        _messageStatusLine = new TextBlock
-        {
-            FontSize = 12,
-            Foreground = UiTheme.MutedBrush,
-            Margin = new Thickness(0, 10, 0, 0),
-            TextWrapping = TextWrapping.Wrap
-        };
-        _messageErrorLine = new TextBlock
-        {
-            FontSize = 12,
-            Foreground = UiTheme.DangerBrush,
-            Margin = new Thickness(0, 4, 0, 0),
-            TextWrapping = TextWrapping.Wrap
-        };
-        _messagePanel.Children.Add(_messageStatusLine);
-        _messagePanel.Children.Add(_messageErrorLine);
-        _messageBox.TextChanged += (_, _) => _messageErrorLine.Text = "";
-
-        requestSection.Children.Add(_messagePanel);
-        root.Children.Add(requestSection);
-
-        var exitBtn = UiTheme.DangerButton("PARENT");
-        exitBtn.Content = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = "\uE72E",
-                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                    FontSize = 15,
-                    Foreground = UiTheme.TextBrush,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(0, 0, 8, 0)
-                },
-                new TextBlock
-                {
-                    Text = "PARENT",
-                    FontSize = 14,
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = UiTheme.TextBrush,
-                    VerticalAlignment = VerticalAlignment.Center
-                }
-            }
-        };
-        exitBtn.Margin = new Thickness(0, 4, 0, 0);
-        exitBtn.Click += (_, _) => RequestExit();
-        root.Children.Add(exitBtn);
-
-        var versionLabel = new TextBlock
-        {
-            Text = $"Made by JRAG v{AgentVersionInfo.Current}",
-            FontSize = 11,
-            Foreground = UiTheme.MutedBrush,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 16, 0, 0)
-        };
-        root.Children.Add(versionLabel);
-
-        UiTheme.WithCustomTitleBar(this, root, "Warden");
+        BuildBody();
 
         _engine.UpdateAvailabilityChanged += _ => Dispatcher.BeginInvoke(RefreshUpdateBanner);
         _engine.LockRequired += () => Dispatcher.BeginInvoke(RefreshUpdateBanner);
         _engine.UnlockRequired += () => Dispatcher.BeginInvoke(RefreshUpdateBanner);
-        _updateStatusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        _updateStatusTimer.Tick += (_, _) => PollUpdateStatus();
-        RefreshUpdateBanner();
 
         Closing += (_, e) =>
         {
@@ -465,6 +133,449 @@ public class MainWindow : Window
         };
         Closed += (_, _) => _uiTimer.Stop();
     }
+
+    // ── Layout ────────────────────────────────────────────────────────────
+
+    private void BuildBody()
+    {
+        Background = UiTheme.BgBrush;
+        var root = new StackPanel { Margin = new Thickness(22, 10, 22, 16) };
+
+        _updateBanner = new UpdateBanner();
+        _updateBanner.UpdateClicked += StartUpdate;
+        root.Children.Add(_updateBanner);
+
+        _greeting = new TextBlock
+        {
+            FontSize = 28,
+            FontWeight = FontWeights.ExtraBold,
+            Foreground = UiTheme.TextBrush,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        _moodLine = new TextBlock
+        {
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = UiTheme.MutedBrush,
+            Margin = new Thickness(0, 2, 0, 14),
+            TextWrapping = TextWrapping.Wrap
+        };
+        root.Children.Add(_greeting);
+        root.Children.Add(_moodLine);
+
+        root.Children.Add(BuildTimeCard());
+
+        _askButton = UiTheme.PrimaryButton("");
+        _askButton.Content = IconLabel("", "Ask for more time", UiTheme.AccentOnBrush, 16, FontWeights.Bold);
+        _askButton.Height = 52;
+        _askButton.Padding = new Thickness(0);
+        _askButton.Click += (_, _) => ToggleRequestPanel();
+        root.Children.Add(_askButton);
+
+        _requestPanel = new Grid { Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed };
+        _presetButtons = [];
+        for (var i = 0; i < ExtensionPresets.Length; i++)
+        {
+            _requestPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var minutes = ExtensionPresets[i];
+            var btn = UiTheme.SecondaryButton($"+{minutes} min");
+            btn.Background = Brushes.Transparent;
+            btn.BorderBrush = UiTheme.AccentBrush;
+            btn.BorderThickness = new Thickness(2);
+            btn.FontSize = 15;
+            btn.FontWeight = FontWeights.Bold;
+            btn.Height = 46;
+            btn.Padding = new Thickness(0);
+            btn.Margin = new Thickness(i == 0 ? 0 : 8, 0, 0, 0);
+            btn.Click += async (_, _) => await SendExtensionRequestAsync(minutes);
+            Grid.SetColumn(btn, i);
+            _requestPanel.Children.Add(btn);
+            _presetButtons.Add(btn);
+        }
+
+        root.Children.Add(_requestPanel);
+
+        _requestStatusLine = StatusLine();
+        root.Children.Add(_requestStatusLine);
+
+        root.Children.Add(new TextBlock
+        {
+            Text = "Quick message",
+            FontSize = 14,
+            FontWeight = FontWeights.Bold,
+            Foreground = UiTheme.MutedBrush,
+            Margin = new Thickness(0, 14, 0, 8)
+        });
+        root.Children.Add(BuildMessageTiles());
+
+        _composeRow = new Grid { Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Collapsed };
+        _composeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _composeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
+        _composeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        _messageBox = UiTheme.TextField(placeholder: "Type a message…");
+        _messageBox.MaxLength = MessageMaxLength;
+        _messageBox.BorderBrush = UiTheme.AccentBrush;
+        _messageBox.BorderThickness = new Thickness(2);
+        _messageBox.Background = UiTheme.BgBrush;
+        _messageBox.KeyDown += async (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                await SendTypedMessageAsync();
+            }
+        };
+        _messageBox.TextChanged += (_, _) =>
+        {
+            if (!_messageBusy) _messageStatusLine.Text = "";
+        };
+        Grid.SetColumn(_messageBox, 0);
+        _composeRow.Children.Add(_messageBox);
+
+        _messageSendBtn = UiTheme.PrimaryButton("");
+        _messageSendBtn.Content = Glyph("", UiTheme.AccentOnBrush, 16);
+        _messageSendBtn.Width = 46;
+        _messageSendBtn.Height = 46;
+        _messageSendBtn.Padding = new Thickness(0);
+        _messageSendBtn.ToolTip = "Send message";
+        System.Windows.Automation.AutomationProperties.SetName(_messageSendBtn, "Send message");
+        _messageSendBtn.Click += async (_, _) => await SendTypedMessageAsync();
+        Grid.SetColumn(_messageSendBtn, 2);
+        _composeRow.Children.Add(_messageSendBtn);
+        root.Children.Add(_composeRow);
+
+        _messageStatusLine = StatusLine();
+        root.Children.Add(_messageStatusLine);
+
+        root.Children.Add(BuildFooter());
+
+        root.Children.Add(new TextBlock
+        {
+            Text = $"v{AgentVersionInfo.Current}",
+            FontSize = 10,
+            Foreground = UiTheme.MutedBrush,
+            Opacity = 0.7,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 10, 0, 0)
+        });
+
+        UiTheme.WithCustomTitleBar(this, root, "Warden");
+        RefreshUpdateBanner();
+    }
+
+    private Border BuildTimeCard()
+    {
+        var ring = new Grid { Width = RingSize, Height = RingSize };
+        var inset = RingThickness / 2;
+        ring.Children.Add(new Ellipse
+        {
+            Stroke = UiTheme.TrackBrush,
+            StrokeThickness = RingThickness,
+            Margin = new Thickness(0)
+        });
+        _ringFull = new Ellipse
+        {
+            StrokeThickness = RingThickness,
+            Visibility = Visibility.Collapsed
+        };
+        ring.Children.Add(_ringFull);
+        _ringArc = new Path
+        {
+            StrokeThickness = RingThickness,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round
+        };
+        ring.Children.Add(_ringArc);
+
+        var centre = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        _timeBig = new TextBlock
+        {
+            FontSize = 28,
+            FontWeight = FontWeights.ExtraBold,
+            Foreground = UiTheme.TextBrush,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        centre.Children.Add(_timeBig);
+        centre.Children.Add(new TextBlock
+        {
+            Text = "left",
+            FontSize = 12,
+            FontWeight = FontWeights.Bold,
+            Foreground = UiTheme.MutedBrush,
+            HorizontalAlignment = HorizontalAlignment.Center
+        });
+        ring.Children.Add(centre);
+        _ = inset;
+
+        var side = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(18, 0, 0, 0) };
+        side.Children.Add(new TextBlock
+        {
+            Text = "TODAY",
+            FontSize = 12,
+            FontWeight = FontWeights.Bold,
+            Foreground = UiTheme.MutedBrush,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        _usedText = new TextBlock { FontSize = 18, FontWeight = FontWeights.ExtraBold, Foreground = UiTheme.TextBrush };
+        side.Children.Add(_usedText);
+        _usedOf = new TextBlock
+        {
+            FontSize = 13,
+            Foreground = UiTheme.MutedBrush,
+            Margin = new Thickness(0, 0, 0, 10),
+            TextWrapping = TextWrapping.Wrap
+        };
+        side.Children.Add(_usedOf);
+        _pillText = new TextBlock { FontSize = 13, FontWeight = FontWeights.ExtraBold, Foreground = UiTheme.AccentOnBrush };
+        _pill = new Border
+        {
+            CornerRadius = new CornerRadius(999),
+            Padding = new Thickness(12, 3, 12, 4),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Child = _pillText
+        };
+        side.Children.Add(_pill);
+
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(ring, 0);
+        Grid.SetColumn(side, 1);
+        row.Children.Add(ring);
+        row.Children.Add(side);
+
+        return new Border
+        {
+            Background = UiTheme.CardBrush,
+            BorderBrush = UiTheme.BorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(UiTheme.CardRadius),
+            Padding = new Thickness(18),
+            Margin = new Thickness(0, 0, 0, 14),
+            Child = row
+        };
+    }
+
+    private Grid BuildMessageTiles()
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(8) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        _messageTiles = [];
+        var tiles = QuickMessages
+            .Select(q => (q.Caption, q.Glyph, Action: (Func<Task>)(() => SendMessageAsync(q.Key, null))))
+            .Append(("Write my own", "", () => { ToggleCompose(); return Task.CompletedTask; }))
+            .ToList();
+
+        for (var i = 0; i < tiles.Count; i++)
+        {
+            var (caption, glyph, action) = tiles[i];
+            var tile = UiTheme.SecondaryButton("");
+            tile.Content = IconLabel(glyph, caption, UiTheme.TextBrush, 14, FontWeights.Bold, UiTheme.AccentBrush);
+            tile.Height = 56;
+            tile.Padding = new Thickness(0);
+            tile.Click += async (_, _) => await action();
+            Grid.SetColumn(tile, i % 2 == 0 ? 0 : 2);
+            Grid.SetRow(tile, i < 2 ? 0 : 2);
+            grid.Children.Add(tile);
+            _messageTiles.Add(tile);
+        }
+
+        return grid;
+    }
+
+    private DockPanel BuildFooter()
+    {
+        var footer = new DockPanel { Margin = new Thickness(0, 16, 0, 0), LastChildFill = false };
+
+        var parents = new WpfButton
+        {
+            Content = IconLabel("", "Parents", UiTheme.MutedBrush, 12, FontWeights.Bold),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(8, 6, 8, 6),
+            Cursor = Cursors.Hand,
+            Template = FlatTemplate()
+        };
+        parents.Click += (_, _) => RequestExit();
+        DockPanel.SetDock(parents, Dock.Right);
+        footer.Children.Add(parents);
+
+        var colours = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        colours.Children.Add(new TextBlock
+        {
+            Text = "My colour",
+            FontSize = 12,
+            FontWeight = FontWeights.Bold,
+            Foreground = UiTheme.MutedBrush,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        });
+
+        _colourButtons = [];
+        var current = UiTheme.AccentHex;
+        var matchedPreset = false;
+        foreach (var (name, hex) in AccentPalette.Presets)
+        {
+            var selected = hex == current;
+            matchedPreset |= selected;
+            var swatch = Swatch(UiTheme.Brush(UiTheme.ToColor(AccentPalette.FromHex(hex).Accent)), name, selected);
+            var chosen = hex;
+            swatch.Click += (_, _) => ApplyColour(chosen);
+            colours.Children.Add(swatch);
+            _colourButtons.Add(swatch);
+        }
+
+        var rainbow = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0),
+            EndPoint = new Point(1, 1),
+            GradientStops =
+            {
+                new GradientStop(Color.FromRgb(0xff, 0x5a, 0x5a), 0),
+                new GradientStop(Color.FromRgb(0xff, 0xd2, 0x3f), 0.3),
+                new GradientStop(Color.FromRgb(0x4f, 0xd6, 0x8b), 0.55),
+                new GradientStop(Color.FromRgb(0x4f, 0xb3, 0xff), 0.8),
+                new GradientStop(Color.FromRgb(0xb4, 0x8c, 0xff), 1)
+            }
+        };
+        rainbow.Freeze();
+        var picker = Swatch(rainbow, "Pick any colour", selected: !matchedPreset);
+        picker.Content = new TextBlock
+        {
+            Text = "+",
+            FontSize = 15,
+            FontWeight = FontWeights.ExtraBold,
+            Foreground = Brushes.White,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, -2, 0, 0)
+        };
+        picker.Click += (_, _) => PickCustomColour();
+        colours.Children.Add(picker);
+        _colourButtons.Add(picker);
+
+        footer.Children.Add(colours);
+        return footer;
+    }
+
+    private static WpfButton Swatch(Brush fill, string name, bool selected)
+    {
+        var btn = UiTheme.SecondaryButton("");
+        btn.Width = 26;
+        btn.Height = 26;
+        btn.Padding = new Thickness(0);
+        btn.Margin = new Thickness(0, 0, 6, 0);
+        btn.Background = fill;
+        btn.BorderBrush = selected ? Brushes.White : Brushes.Transparent;
+        btn.BorderThickness = new Thickness(3);
+        btn.ToolTip = name;
+        System.Windows.Automation.AutomationProperties.SetName(btn, name);
+        return btn;
+    }
+
+    private static TextBlock StatusLine() =>
+        new()
+        {
+            FontSize = 13,
+            FontWeight = FontWeights.Bold,
+            Foreground = UiTheme.MutedBrush,
+            Margin = new Thickness(2, 8, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+            Visibility = Visibility.Collapsed
+        };
+
+    private static void SetStatus(TextBlock line, string text, Brush? brush = null)
+    {
+        line.Text = text;
+        line.Foreground = brush ?? UiTheme.MutedBrush;
+        line.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private static TextBlock Glyph(string glyph, Brush brush, double size) =>
+        new()
+        {
+            Text = glyph,
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = size,
+            Foreground = brush,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+    private static StackPanel IconLabel(
+        string glyph,
+        string text,
+        Brush textBrush,
+        double size,
+        FontWeight weight,
+        Brush? glyphBrush = null)
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+        var icon = Glyph(glyph, glyphBrush ?? textBrush, size + 2);
+        icon.Margin = new Thickness(0, 0, 9, 0);
+        panel.Children.Add(icon);
+        panel.Children.Add(new TextBlock
+        {
+            Text = text,
+            FontSize = size,
+            FontWeight = weight,
+            Foreground = textBrush,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        return panel;
+    }
+
+    private static ControlTemplate FlatTemplate()
+    {
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+        border.SetBinding(Border.BackgroundProperty, new System.Windows.Data.Binding(nameof(Background))
+        {
+            RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent)
+        });
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetBinding(MarginProperty, new System.Windows.Data.Binding(nameof(Padding))
+        {
+            RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent)
+        });
+        border.AppendChild(presenter);
+        return new ControlTemplate(typeof(WpfButton)) { VisualTree = border };
+    }
+
+    // ── Colour ────────────────────────────────────────────────────────────
+
+    private void PickCustomColour()
+    {
+        var current = UiTheme.Accent;
+        using var dialog = new System.Windows.Forms.ColorDialog
+        {
+            FullOpen = true,
+            AnyColor = true,
+            Color = System.Drawing.Color.FromArgb(current.R, current.G, current.B)
+        };
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+
+        var c = dialog.Color;
+        ApplyColour($"#{c.R:x2}{c.G:x2}{c.B:x2}");
+    }
+
+    private void ApplyColour(string hex)
+    {
+        if (_requestBusy || _messageBusy) return;
+
+        _uiPrefs.SaveAccentHex(hex);
+        UiTheme.Apply(hex);
+        BuildBody();
+        RefreshStatus();
+    }
+
+    // ── Update banner ─────────────────────────────────────────────────────
 
     private void RefreshUpdateBanner()
     {
@@ -528,151 +639,95 @@ public class MainWindow : Window
         Close();
     }
 
+    // ── Status ────────────────────────────────────────────────────────────
+
     private void RefreshStatus()
     {
         var config = _configStore.Load();
-        _childLabel.Text = string.IsNullOrEmpty(config.ChildName)
-            ? "Device agent"
-            : $"Watching {config.ChildName}";
+        _greeting.Text = string.IsNullOrWhiteSpace(config.ChildName)
+            ? "Hey there!"
+            : $"Hey {config.ChildName.Trim()}!";
 
-        string status;
-        Brush statusBrush;
-        if (_engine.IsAdminLocked)
-        {
-            status = "Locked down by parent";
-            statusBrush = UiTheme.DangerBrush;
-        }
-        else if (_engine.IsLocked)
-        {
-            status = "Screen locked";
-            statusBrush = UiTheme.DangerBrush;
-        }
-        else
-        {
-            status = "Running";
-            statusBrush = UiTheme.SuccessBrush;
-        }
-
-        _statusValue.Text = status;
-        _statusValue.Foreground = statusBrush;
-
+        var locked = _engine.IsAdminLocked || _engine.IsLocked;
         var eval = _engine.CurrentEvaluation;
         if (eval == null)
         {
-            _statusValue.Text = "Syncing";
-            _statusValue.Foreground = UiTheme.MutedBrush;
-            _usageDetail.Text = "Syncing policy from dashboard...";
-            _remainingFraction = 0;
-            _usageFill.Background = UiTheme.AccentFillBrush;
-            SetTimerDisplay(0);
-            UpdateUsageFillWidth();
+            RenderMood(TrayMood.Compute(0, 1, locked, syncing: true), "…", "Getting today's time");
             return;
         }
 
         int usedMinutes;
         int limitMinutes;
-        string usageLabel;
+        string usedOf;
 
         var remainingSeconds = _engine.GetRemainingSeconds();
-        var extensionOutsideWindow = _engine.TryGetOutsideExtensionUsage(
-            out var extensionUsedMinutes,
-            out var extensionLimitMinutes
-        );
-
-        if (extensionOutsideWindow)
+        if (_engine.TryGetOutsideExtensionUsage(out var extensionUsedMinutes, out var extensionLimitMinutes))
         {
             usedMinutes = extensionUsedMinutes;
-            limitMinutes = extensionLimitMinutes;
-            usageLabel = $"{usedMinutes} / {limitMinutes} min extension";
+            limitMinutes = Math.Max(1, extensionLimitMinutes);
+            usedOf = $"used of {TrayMood.FormatMinutes(limitMinutes)} extra time";
         }
         else
         {
             usedMinutes = eval.UsedMinutes;
             limitMinutes = Math.Max(1, eval.DailyLimitMinutes + eval.BonusMinutes);
-            usageLabel = $"{usedMinutes} / {limitMinutes} min used";
+            usedOf = $"used of {TrayMood.FormatMinutes(limitMinutes)}";
         }
 
-        var limitSeconds = Math.Max(1, limitMinutes) * 60.0;
-
-        _remainingFraction = Math.Clamp(remainingSeconds / limitSeconds, 0, 1);
-        SetTimerDisplay(remainingSeconds);
-
-        if (remainingSeconds <= 0)
-        {
-            _usageDetail.Text = extensionOutsideWindow
-                ? $"{usedMinutes} / {limitMinutes} min extension · time is up"
-                : $"{usedMinutes} / {limitMinutes} min used · time is up";
-            _usageFill.Background = UiTheme.DangerFillBrush;
-            _remainingFraction = 0;
-        }
-        else
-        {
-            _usageDetail.Text = usageLabel;
-            _usageFill.Background =
-                _remainingFraction <= 0.2 ? UiTheme.DangerFillBrush : UiTheme.AccentFillBrush;
-        }
-
-        UpdateUsageFillWidth();
+        var mood = TrayMood.Compute(remainingSeconds, limitMinutes * 60, locked, syncing: false);
+        RenderMood(mood, TrayMood.FormatMinutes(usedMinutes), usedOf);
     }
 
-    private static TextBlock CreateTimerDigit(string text) =>
-        new()
+    private void RenderMood(TrayMoodView mood, string used, string usedOf)
+    {
+        _moodLine.Text = mood.Line;
+        _timeBig.Text = mood.TimeLabel;
+        _usedText.Text = used;
+        _usedOf.Text = usedOf;
+        _pillText.Text = mood.Pill;
+
+        var brush = mood.Kind switch
         {
-            Text = text,
-            FontSize = 48,
-            FontWeight = FontWeights.Bold,
-            Foreground = UiTheme.TextBrush,
-            FontFamily = new FontFamily("Segoe UI"),
-            VerticalAlignment = VerticalAlignment.Center
+            TrayMoodKind.AllGood => UiTheme.AccentBrush,
+            TrayMoodKind.HeadsUp => UiTheme.HeadsUpBrush,
+            TrayMoodKind.AlmostDone => UiTheme.AlmostDoneBrush,
+            _ => UiTheme.TimesUpBrush
         };
+        _pill.Background = brush;
+        DrawRing(mood.Fraction, brush);
+    }
 
-    private static TextBlock CreateTimerColon() =>
-        new()
+    private void DrawRing(double fraction, Brush brush)
+    {
+        _ringFull.Stroke = brush;
+        _ringArc.Stroke = brush;
+
+        if (fraction >= 0.999)
         {
-            Text = ":",
-            FontSize = 42,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = UiTheme.MutedBrush,
-            Margin = new Thickness(8, 0, 8, 2),
-            VerticalAlignment = VerticalAlignment.Center
-        };
+            _ringFull.Visibility = Visibility.Visible;
+            _ringArc.Visibility = Visibility.Collapsed;
+            return;
+        }
 
-    private void SetTimerDisplay(int totalSeconds)
-    {
-        var hours = totalSeconds / 3600;
-        var minutes = totalSeconds % 3600 / 60;
-        var seconds = totalSeconds % 60;
-        _timerHours.Text = hours.ToString("D2");
-        _timerMinutes.Text = minutes.ToString("D2");
-        _timerSeconds.Text = seconds.ToString("D2");
+        _ringFull.Visibility = Visibility.Collapsed;
+        if (fraction <= 0.005)
+        {
+            _ringArc.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var radius = (RingSize - RingThickness) / 2;
+        var centre = RingSize / 2;
+        var angle = fraction * 2 * Math.PI;
+        var start = new Point(centre, centre - radius);
+        var end = new Point(centre + radius * Math.Sin(angle), centre - radius * Math.Cos(angle));
+        var figure = new PathFigure { StartPoint = start, IsClosed = false };
+        figure.Segments.Add(new ArcSegment(end, new Size(radius, radius), 0, fraction > 0.5, SweepDirection.Clockwise, true));
+        _ringArc.Data = new PathGeometry([figure]);
+        _ringArc.Visibility = Visibility.Visible;
     }
 
-    private void UpdateUsageCardClip()
-    {
-        // ClipToBounds ignores CornerRadius in WPF — clip to a rounded rect instead.
-        var w = _usageCard.ActualWidth;
-        var h = _usageCard.ActualHeight;
-        if (w <= 0 || h <= 0) return;
-
-        var radius = UiTheme.CardRadius;
-        _usageCard.Clip = new RectangleGeometry(new Rect(0, 0, w, h), radius, radius);
-    }
-
-    private void UpdateUsageFillWidth()
-    {
-        var width = _usageCard.ActualWidth;
-        if (width <= 0) return;
-
-        var fillWidth = width * _remainingFraction;
-        _usageFill.Width = fillWidth;
-
-        var radius = UiTheme.CardRadius;
-        // When nearly full, also round the trailing edge to match the card.
-        _usageFill.CornerRadius =
-            fillWidth >= width - 1
-                ? new CornerRadius(radius)
-                : new CornerRadius(radius, 0, 0, radius);
-    }
+    // ── Parent exit ───────────────────────────────────────────────────────
 
     private void RequestExit()
     {
@@ -691,46 +746,15 @@ public class MainWindow : Window
         }
     }
 
+    // ── Ask for more time ─────────────────────────────────────────────────
+
     private void ToggleRequestPanel()
     {
         if (_requestBusy) return;
 
-        if (!_requestExpanded && _messageExpanded && !_messageBusy)
-        {
-            CollapseMessagePanel();
-        }
-
-        _requestExpanded = !_requestExpanded;
-        _requestPanel.Visibility = _requestExpanded ? Visibility.Visible : Visibility.Collapsed;
-        if (!_requestExpanded)
-        {
-            _requestStatusLine.Text = "";
-            _requestValidationLine.Text = "";
-            _customMinutesBox.Text = "";
-        }
-    }
-
-    private async Task SendCustomExtensionRequestAsync()
-    {
-        if (_requestBusy) return;
-
-        var raw = _customMinutesBox.Text.Trim();
-        if (string.IsNullOrEmpty(raw))
-        {
-            _requestValidationLine.Text = "Enter minutes (1–120).";
-            return;
-        }
-
-        if (!int.TryParse(raw, out var minutes)
-            || minutes < ExtensionMinMinutes
-            || minutes > ExtensionMaxMinutes)
-        {
-            _requestValidationLine.Text = $"Enter {ExtensionMinMinutes}–{ExtensionMaxMinutes} minutes.";
-            return;
-        }
-
-        _requestValidationLine.Text = "";
-        await SendExtensionRequestAsync(minutes);
+        var open = _requestPanel.Visibility != Visibility.Visible;
+        _requestPanel.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        SetStatus(_requestStatusLine, "");
     }
 
     private async Task SendExtensionRequestAsync(int minutes)
@@ -739,8 +763,7 @@ public class MainWindow : Window
 
         _requestBusy = true;
         SetRequestControlsEnabled(false);
-        _requestStatusLine.Text = "Requesting…";
-        _requestValidationLine.Text = "";
+        SetStatus(_requestStatusLine, "Asking…");
 
         var success = false;
         try
@@ -759,21 +782,12 @@ public class MainWindow : Window
 
         if (success)
         {
-            _requestStatusLine.Text = "Request sent!";
-            await Task.Delay(1000);
-            if (!IsLoaded)
-            {
-                return;
-            }
-
-            _requestExpanded = false;
             _requestPanel.Visibility = Visibility.Collapsed;
-            _requestStatusLine.Text = "";
-            _customMinutesBox.Text = "";
+            SetStatus(_requestStatusLine, $"Asked for {minutes} more minutes! Your parent will see it.", UiTheme.AccentBrush);
         }
         else
         {
-            _requestStatusLine.Text = "Couldn't send — try again";
+            SetStatus(_requestStatusLine, "Couldn't send. Try again.", UiTheme.AlmostDoneBrush);
         }
 
         _requestBusy = false;
@@ -782,43 +796,31 @@ public class MainWindow : Window
 
     private void SetRequestControlsEnabled(bool enabled)
     {
-        _requestToggleBtn.IsEnabled = enabled;
+        _askButton.IsEnabled = enabled;
         foreach (var btn in _presetButtons)
         {
             btn.IsEnabled = enabled;
         }
-
-        _customMinutesBox.IsEnabled = enabled;
-        _customSendBtn.IsEnabled = enabled;
     }
 
-    private void ToggleMessagePanel()
+    // ── Messages ──────────────────────────────────────────────────────────
+
+    private void ToggleCompose()
     {
         if (_messageBusy) return;
 
-        if (_messageExpanded)
+        var open = _composeRow.Visibility != Visibility.Visible;
+        _composeRow.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        _messageTiles[^1].BorderBrush = open ? UiTheme.AccentBrush : UiTheme.BorderBrush;
+        SetStatus(_messageStatusLine, "");
+        if (open)
         {
-            CollapseMessagePanel();
-            return;
+            _messageBox.Focus();
         }
-
-        if (_requestExpanded && !_requestBusy)
+        else
         {
-            ToggleRequestPanel();
+            _messageBox.Text = "";
         }
-
-        _messageExpanded = true;
-        _messagePanel.Visibility = Visibility.Visible;
-        _messageBox.Focus();
-    }
-
-    private void CollapseMessagePanel()
-    {
-        _messageExpanded = false;
-        _messagePanel.Visibility = Visibility.Collapsed;
-        _messageStatusLine.Text = "";
-        _messageErrorLine.Text = "";
-        _messageBox.Text = "";
     }
 
     private async Task SendTypedMessageAsync()
@@ -828,7 +830,7 @@ public class MainWindow : Window
         var text = _messageBox.Text.Trim();
         if (text.Length == 0)
         {
-            _messageErrorLine.Text = "Type a message or tap a quick button.";
+            SetStatus(_messageStatusLine, "Type a message first.", UiTheme.AlmostDoneBrush);
             return;
         }
 
@@ -841,8 +843,7 @@ public class MainWindow : Window
 
         _messageBusy = true;
         SetMessageControlsEnabled(false);
-        _messageStatusLine.Text = "Sending…";
-        _messageErrorLine.Text = "";
+        SetStatus(_messageStatusLine, "Sending…");
 
         ChildMessageSendResult result;
         try
@@ -861,27 +862,26 @@ public class MainWindow : Window
 
         if (result.Ok)
         {
-            _messageStatusLine.Text = "Sent to your parent!";
+            SetStatus(_messageStatusLine, "Sent to your parent!", UiTheme.AccentBrush);
             _messageBox.Text = "";
-            await Task.Delay(1200);
-            if (!IsLoaded)
+            if (_composeRow.Visibility == Visibility.Visible)
             {
-                return;
+                _composeRow.Visibility = Visibility.Collapsed;
+                _messageTiles[^1].BorderBrush = UiTheme.BorderBrush;
             }
-
-            CollapseMessagePanel();
         }
         else if (result.IsRateLimited)
         {
-            _messageStatusLine.Text = "";
-            _messageErrorLine.Text = result.RetryAfterSeconds >= 120
-                ? $"Too many messages. Try again in {result.RetryAfterSeconds / 60} min."
-                : $"Please wait {result.RetryAfterSeconds}s before sending another message.";
+            SetStatus(
+                _messageStatusLine,
+                result.RetryAfterSeconds >= 120
+                    ? $"Too many messages. Try again in {result.RetryAfterSeconds / 60} min."
+                    : $"Please wait {result.RetryAfterSeconds}s before sending another message.",
+                UiTheme.AlmostDoneBrush);
         }
         else
         {
-            _messageStatusLine.Text = "";
-            _messageErrorLine.Text = "Couldn't send. Try again.";
+            SetStatus(_messageStatusLine, "Couldn't send. Try again.", UiTheme.AlmostDoneBrush);
         }
 
         _messageBusy = false;
@@ -890,33 +890,12 @@ public class MainWindow : Window
 
     private void SetMessageControlsEnabled(bool enabled)
     {
-        _messageToggleBtn.IsEnabled = enabled;
-        foreach (var btn in _quickMessageButtons)
+        foreach (var btn in _messageTiles)
         {
             btn.IsEnabled = enabled;
         }
 
         _messageBox.IsEnabled = enabled;
         _messageSendBtn.IsEnabled = enabled;
-    }
-
-    private static void OnDigitsOnlyPreviewTextInput(object sender, TextCompositionEventArgs e)
-    {
-        e.Handled = e.Text.Length == 0 || e.Text.Any(c => !char.IsDigit(c));
-    }
-
-    private static void OnDigitsOnlyPaste(object sender, DataObjectPastingEventArgs e)
-    {
-        if (!e.DataObject.GetDataPresent(typeof(string)))
-        {
-            e.CancelCommand();
-            return;
-        }
-
-        var text = e.DataObject.GetData(typeof(string)) as string ?? "";
-        if (text.Length == 0 || text.Any(c => !char.IsDigit(c)))
-        {
-            e.CancelCommand();
-        }
     }
 }
