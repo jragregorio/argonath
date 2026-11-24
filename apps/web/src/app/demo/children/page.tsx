@@ -90,7 +90,9 @@ export default function DemoChildrenPage() {
                   <span className="truncate">{child.displayName}</span>
                 </CardTitle>
                 <CardDescription>
-                  {child.devices.length} device(s) paired
+                  {child.devices.length === 0
+                    ? "No devices paired"
+                    : `${child.devices.length} ${child.devices.length === 1 ? "device" : "devices"} paired`}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">

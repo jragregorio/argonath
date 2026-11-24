@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { SwipeToLock } from "@/components/swipe-to-lock";
-import { getDeviceDisplayName } from "@warden/shared";
+import { compareAgentVersions, getDeviceDisplayName } from "@warden/shared";
 import {
   Camera,
   Copy,
@@ -28,6 +28,10 @@ import { NudgeControls } from "@/components/nudge-controls";
 import { useToast } from "@/lib/toast";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useIsDesktopMd } from "@/lib/use-is-desktop-md";
+import {
+  formatAbsoluteTime,
+  formatRelativeTime,
+} from "@/lib/format-relative-time";
 import {
   captureToneClass,
   formatCountdown,
@@ -95,8 +99,13 @@ export function ChildDevicesSection({
     },
   });
 
-  const { data: latestRelease, isLoading: latestReleaseLoading } =
-    trpc.agentRelease.latest.useQuery();
+  const {
+    data: latestRelease,
+    isLoading: latestReleaseLoading,
+    isError: latestReleaseError,
+    refetch: refetchLatestRelease,
+    isFetching: latestReleaseFetching,
+  } = trpc.agentRelease.latest.useQuery();
 
   const {
     pendingLocks,
@@ -480,10 +489,30 @@ export function ChildDevicesSection({
                           <p>
                             {child.displayName} Agent v
                             {device.agentVersion ?? "?"}
+                            {latestRelease &&
+                              device.agentVersion &&
+                              compareAgentVersions(
+                                device.agentVersion,
+                                latestRelease.version
+                              ) < 0 && (
+                                <span
+                                  className="text-primary"
+                                  title="The agent installs updates on its own once the PC is online"
+                                >
+                                  {" "}
+                                  · v{latestRelease.version} available
+                                </span>
+                              )}
                           </p>
-                          <p>
+                          <p
+                            title={
+                              device.lastSeenAt
+                                ? formatAbsoluteTime(device.lastSeenAt)
+                                : undefined
+                            }
+                          >
                             {device.lastSeenAt
-                              ? new Date(device.lastSeenAt).toLocaleString()
+                              ? `${device.isOnline ? "Checked in" : "Last seen"} ${formatRelativeTime(device.lastSeenAt)}`
                               : "Never connected"}
                           </p>
                         </div>
@@ -738,7 +767,9 @@ export function ChildDevicesSection({
               }}
               title={
                 latestRelease
-                    ? `Download Warden ${latestRelease.version} for Windows`
+                  ? `Download Warden ${latestRelease.version} for Windows`
+                  : latestReleaseError
+                    ? "Could not check for the installer"
                     : "Installer not published yet"
               }
             >
@@ -748,6 +779,18 @@ export function ChildDevicesSection({
             {latestReleaseLoading ? (
               <p className="text-xs text-muted-foreground">
                 Checking for installer…
+              </p>
+            ) : latestReleaseError ? (
+              <p className="text-xs text-muted-foreground">
+                Couldn&apos;t check for the installer.{" "}
+                <button
+                  type="button"
+                  className="underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+                  onClick={() => void refetchLatestRelease()}
+                  disabled={latestReleaseFetching}
+                >
+                  {latestReleaseFetching ? "Retrying…" : "Retry"}
+                </button>
               </p>
             ) : latestRelease ? (
               <p className="text-xs text-muted-foreground">

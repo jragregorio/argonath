@@ -3075,7 +3075,14 @@ export const agentReleaseRouter = router({
         };
       } catch (error) {
         console.error("[agentRelease] latest lookup failed", error);
-        return null;
+        // Surface as an error, not `null`: null means "nothing published" and
+        // the dashboard used to show "Installer not published yet" whenever
+        // the DB lookup hiccupped.
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Could not check for the latest installer",
+          cause: error,
+        });
       }
     }),
 

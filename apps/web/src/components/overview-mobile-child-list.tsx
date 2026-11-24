@@ -19,7 +19,7 @@ import {
   PolicyRemainingMobileCaption,
   PolicyRemainingMobileHero,
 } from "@/components/policy-remaining-status";
-import { formatClockInText } from "@/lib/time-format";
+import { formatNextWindowStart } from "@/lib/time-format";
 
 function progressBarClass(status: PolicyStatus) {
   if (status === "blocked") return "bg-destructive";
@@ -83,7 +83,10 @@ function getAwaySubtitle(
 ): string {
   if (devices.length === 0) return "No devices paired";
   if (evaluation.nextWindowStart) {
-    return `Offline · ${formatClockInText(evaluation.nextWindowStart)}`;
+    return `Offline · Next: ${formatNextWindowStart(
+      evaluation.nextWindowStart,
+      evaluation.nextWindowStartDaysAhead
+    )}`;
   }
   return "Offline";
 }

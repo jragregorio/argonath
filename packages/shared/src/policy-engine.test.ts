@@ -153,6 +153,54 @@ describe("policy engine", () => {
     expect(shouldLock(result)).toBe(true);
   });
 
+  describe("nextWindowStartDaysAhead", () => {
+    const evalAt = (
+      windows: ScreenTimePolicyInput["allowedWindows"],
+      iso: string
+    ) =>
+      evaluatePolicy(
+        { dailyLimitMinutes: 600, allowedWindows: windows, isActive: true },
+        0,
+        [],
+        new Date(iso),
+        "UTC"
+      );
+
+    it("is 0 when the next window starts later today", () => {
+      // Monday 04:00, Monday window at 05:00
+      const r = evalAt([{ day: 1, start: "05:00", end: "18:00" }], "2026-01-05T04:00:00.000Z");
+      expect(r.nextWindowStart).toBe("Mon 05:00");
+      expect(r.nextWindowStartDaysAhead).toBe(0);
+    });
+
+    it("is 1 when the next window is tomorrow", () => {
+      // Monday 20:00, next is Tuesday
+      const r = evalAt(
+        [
+          { day: 1, start: "05:00", end: "18:00" },
+          { day: 2, start: "05:00", end: "18:00" },
+        ],
+        "2026-01-05T20:00:00.000Z"
+      );
+      expect(r.nextWindowStart).toBe("Tue 05:00");
+      expect(r.nextWindowStartDaysAhead).toBe(1);
+    });
+
+    it("wraps across the week end", () => {
+      // Saturday 20:00, only a Monday window → 2 days ahead
+      const r = evalAt([{ day: 1, start: "05:00", end: "18:00" }], "2026-01-10T20:00:00.000Z");
+      expect(r.nextWindowStart).toBe("Mon 05:00");
+      expect(r.nextWindowStartDaysAhead).toBe(2);
+    });
+
+    it("is 7 when today's only window already ended", () => {
+      // Monday 20:00, only a Monday window → next Monday, not "today"
+      const r = evalAt([{ day: 1, start: "05:00", end: "18:00" }], "2026-01-05T20:00:00.000Z");
+      expect(r.nextWindowStart).toBe("Mon 05:00");
+      expect(r.nextWindowStartDaysAhead).toBe(7);
+    });
+  });
+
   it("merges adjacent windows into one run for session remaining", () => {
     const policy: ScreenTimePolicyInput = {
       dailyLimitMinutes: 300,

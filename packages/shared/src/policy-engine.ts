@@ -118,6 +118,8 @@ export function getPolicyReach(
 type WindowState = {
   inWindow: boolean;
   nextStart?: string;
+  /** Calendar days from today to `nextStart` (0–7). */
+  nextStartDaysAhead?: number;
   /** End minute of the current merged run (only when inWindow and windows non-empty). */
   windowEndMinutes?: number;
 };
@@ -154,15 +156,18 @@ function resolveWindowState(
       return {
         inWindow: false,
         nextStart: `${DAY_NAMES[window.day]} ${window.start}`,
+        nextStartDaysAhead: window.day - currentDay,
       };
     }
   }
 
   if (merged.length > 0) {
     const first = merged[0];
+    // Wrapped into next week; same weekday means 7 days out, not today.
     return {
       inWindow: false,
       nextStart: `${DAY_NAMES[first.day]} ${first.start}`,
+      nextStartDaysAhead: (first.day - currentDay + 7) % 7 || 7,
     };
   }
 
@@ -549,11 +554,8 @@ export function evaluatePolicy(
     };
   }
 
-  const { inWindow, nextStart, windowEndMinutes } = resolveWindowState(
-    policy.allowedWindows,
-    now,
-    timeZone
-  );
+  const { inWindow, nextStart, nextStartDaysAhead, windowEndMinutes } =
+    resolveWindowState(policy.allowedWindows, now, timeZone);
 
   if (!inWindow) {
     const baselineUsedMinutes = getOutsideGrantBaselineUsedMinutes(
@@ -626,6 +628,7 @@ export function evaluatePolicy(
       dailyLimitMinutes: policy.dailyLimitMinutes,
       bonusMinutes,
       nextWindowStart: nextStart,
+      nextWindowStartDaysAhead: nextStartDaysAhead,
       message: nextStart
         ? `Not available until ${nextStart}`
         : "Outside allowed hours",

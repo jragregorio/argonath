@@ -99,7 +99,15 @@ function isCustomNudge(metadata?: Record<string, unknown> | null) {
   );
 }
 
-export function getActivityLabel(action: string, metadata?: Record<string, unknown> | null) {
+export function getActivityLabel(
+  action: string,
+  metadata?: Record<string, unknown> | null,
+  childName?: string | null
+) {
+  // Child-authored rows lead with who sent it; parent actions stay implicit.
+  if (action === "child_message" && childName?.trim()) {
+    return `${childName.trim()} sent you a message`;
+  }
   if (action === "nudge_sent" && typeof metadata?.replyToMessageId === "string") {
     return "Replied to a message";
   }

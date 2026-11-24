@@ -251,7 +251,9 @@ function RunningAppsSnapshotTimestamp({
       className="mt-3 text-right text-sm text-muted-foreground md:text-xs"
       title={formatAbsoluteTime(runningAppsAt)}
     >
-      {prefix} {relative} · {clock}
+      {prefix} {relative}
+      {/* "Yesterday 10:11 PM" / dated forms already carry the clock. */}
+      {/\d:\d{2}/.test(relative) ? null : ` · ${clock}`}
     </p>
   );
 }

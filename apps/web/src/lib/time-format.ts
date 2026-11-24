@@ -39,6 +39,25 @@ export function formatClockInText(text: string): string {
   );
 }
 
+/**
+ * Engine `nextWindowStart` (`"Tue 05:00"`) → `"Today 5:00 AM"`,
+ * `"Tomorrow 5:00 AM"`, `"Tue 5:00 AM"`, or `"next Tue 5:00 AM"` (7 days out).
+ * Without `daysAhead` (older API) the weekday is kept as-is.
+ */
+export function formatNextWindowStart(
+  nextWindowStart: string,
+  daysAhead?: number
+): string {
+  const clock = formatClockInText(nextWindowStart);
+  const match = /^([A-Za-z]{3})\s+(.*)$/.exec(clock);
+  if (!match || daysAhead === undefined) return clock;
+  const [, day, time] = match;
+  if (daysAhead === 0) return `Today ${time}`;
+  if (daysAhead === 1) return `Tomorrow ${time}`;
+  if (daysAhead >= 7) return `next ${day} ${time}`;
+  return clock;
+}
+
 export type WindowRangeGroup = {
   start: string;
   end: string;

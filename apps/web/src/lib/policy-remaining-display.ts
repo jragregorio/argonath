@@ -4,7 +4,7 @@ import {
   isAfterHoursBonusActive,
   type PolicyEvaluation,
 } from "@warden/shared";
-import { formatClockInText } from "@/lib/time-format";
+import { formatClockInText, formatNextWindowStart } from "@/lib/time-format";
 
 export type PolicyRemainingDisplayInput = Pick<
   PolicyEvaluation,
@@ -17,6 +17,7 @@ export type PolicyRemainingDisplayInput = Pick<
   | "reachableMinutesToday"
   | "inWindow"
   | "nextWindowStart"
+  | "nextWindowStartDaysAhead"
   | "message"
   | "usedMinutes"
   | "dailyLimitMinutes"
@@ -174,7 +175,7 @@ function buildDefaultStatusText(
     // end today's budget no longer applies. Used/limit is shown separately.
     const next = evaluation.nextWindowStart;
     if (next && evaluation.dailyRemainingMinutes > 0) {
-      return `Available again: ${formatClockInText(next)}`;
+      return `Available again: ${formatNextWindowStart(next, evaluation.nextWindowStartDaysAhead)}`;
     }
     return formatClockInText(
       evaluation.message ?? getPolicyStatusLabel(evaluation.status)

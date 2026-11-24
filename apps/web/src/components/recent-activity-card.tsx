@@ -141,7 +141,7 @@ export function RecentActivityCard({
               >
                 <div className="min-w-0 space-y-0.5">
                   <p className="text-sm font-medium">
-                    {getActivityLabel(item.action, item.metadata)}
+                    {getActivityLabel(item.action, item.metadata, item.childName)}
                   </p>
                   {message && (
                     <p className="text-sm text-foreground/90">

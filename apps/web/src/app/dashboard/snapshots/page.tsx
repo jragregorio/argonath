@@ -16,6 +16,10 @@ import { ZoomableImage } from "@/components/zoomable-image";
 import { POLL_LIVE_MS, POLL_SAFETY_MS } from "@/lib/query-defaults";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
+  formatAbsoluteTime,
+  formatRelativeTime,
+} from "@/lib/format-relative-time";
+import {
   notifyBlockingOverlayClose,
   notifyBlockingOverlayOpen,
 } from "@/lib/overlay-events";
@@ -402,9 +406,11 @@ export default function SnapshotsPage() {
                       </Badge>
                     </div>
                   </div>
-                  <CardDescription>
+                  <CardDescription
+                    title={formatAbsoluteTime(snapshot.capturedAt)}
+                  >
                     {getDeviceDisplayName(snapshot.device)} ·{" "}
-                    {new Date(snapshot.capturedAt).toLocaleString()}
+                    {formatRelativeTime(snapshot.capturedAt)}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="px-5 pb-4 pt-0 flex gap-2">

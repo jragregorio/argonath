@@ -41,6 +41,12 @@ export type PolicyEvaluation = {
   dailyLimitMinutes: number;
   bonusMinutes: number;
   nextWindowStart?: string;
+  /**
+   * Calendar days (family time zone) from today to `nextWindowStart`:
+   * 0 = later today, 1 = tomorrow, 7 = same weekday next week.
+   * Lets the dashboard say "Today 5:00 AM" instead of an ambiguous "Tue".
+   */
+  nextWindowStartDaysAhead?: number;
   message?: string;
 };
 
