@@ -42,15 +42,6 @@ public class LockWindow : Window
     private static readonly FontFamily DisplayFont = new("Segoe UI");
 
 
-    /// <summary>Star positions as fractions of the screen (x, y, radius px, opacity).</summary>
-    private static readonly (double X, double Y, double R, double O)[] Stars =
-    [
-        (0.12, 0.15, 2, 0.7), (0.22, 0.30, 1.5, 0.5), (0.85, 0.20, 2, 0.7), (0.79, 0.10, 1.5, 0.5),
-        (0.92, 0.42, 1.5, 0.5), (0.08, 0.55, 1.5, 0.5), (0.31, 0.12, 1.2, 0.6), (0.69, 0.33, 1.2, 0.6),
-        (0.16, 0.83, 1.5, 0.4), (0.88, 0.80, 1.5, 0.4), (0.45, 0.06, 1.2, 0.5), (0.58, 0.88, 1.2, 0.4),
-        (0.04, 0.30, 1.2, 0.5), (0.96, 0.62, 1.2, 0.5)
-    ];
-
     private readonly SolidColorBrush _accentBrush;
     private readonly SolidColorBrush _softBrush;
     private readonly SolidColorBrush _cardBrush;
@@ -65,7 +56,8 @@ public class LockWindow : Window
     private readonly bool _isPrimary;
 
     /// <summary>Elements whose looping animation starts once the window is loaded.</summary>
-    private readonly List<(FrameworkElement Element, LoopKind Kind, TimeSpan Offset)> _loops = new();
+    private readonly List<(FrameworkElement Element, LoopKind Kind, TimeSpan Offset, TimeSpan? Duration)> _loops = new();
+    private (FrameworkElement Trail, Vector Travel)? _shootingStar;
 
     private FrameworkElement? _content;
     private readonly bool _preview;
@@ -349,42 +341,168 @@ public class LockWindow : Window
         return sky;
     }
 
+    /// <summary>Pixel cloud silhouettes ('#' = block), drawn at different sizes for depth.</summary>
+    private static readonly string[] PuffCloud =
+    [
+        "......####......",
+        "...#########....",
+        "..###########.##",
+        ".###############",
+        "################",
+        ".##############."
+    ];
+
+    private static readonly string[] WispCloud =
+    [
+        "....######.......",
+        ".##############..",
+        "#################",
+        "..############..."
+    ];
+
+    /// <summary>Clouds across the middle of the sky: shape, block size (per 500 px of height), top, opacity, drift time, start offset.</summary>
+    private static readonly (string[] Shape, double Cell, double Top, double Opacity, double Seconds, double Offset)[] Clouds =
+    [
+        (PuffCloud, 5, 0.30, 0.16, 70, -10),
+        (WispCloud, 7, 0.60, 0.22, 48, -30),
+        (PuffCloud, 9, 0.41, 0.28, 36, -5)
+    ];
+
+    private const int StarCount = 34;
+    private const int GlintCount = 6;
+
+    /// <summary>
+    /// Night sky layer: pixel clouds drifting across the middle at different depths,
+    /// 34 twinkling square stars (6 with a "+" glint), and a shooting star.
+    /// Positions are fixed (seeded) so every lock looks the same.
+    /// </summary>
     private UIElement BuildStars(double width, double height, AccentPalette palette)
     {
         var canvas = new Canvas { IsHitTestVisible = false };
         var starBrush = Freeze(Rgb(palette.Star));
+        var k = Math.Max(1, height / 800.0);
+        var unit = height / 500.0;
 
-        // Faint block clouds drift behind everything.
-        var cloudBrush = Freeze(Color.FromArgb(31, palette.Star.R, palette.Star.G, palette.Star.B));
-        foreach (var (w, y, offset) in new[] { (70.0, 0.58, 0.0), (44.0, 0.22, -7.0) })
+        var cloudTop = Freeze(Rgb(palette.Star));
+        var cloudBody = Freeze(Mix(palette.Night, palette.Star, 0.62));
+        foreach (var (shape, cellUnits, top, opacity, seconds, offset) in Clouds)
         {
-            var cloud = new Rectangle { Width = w, Height = 10, Fill = cloudBrush, Tag = "cloud", SnapsToDevicePixels = true };
+            var cloud = BuildCloud(shape, cellUnits * unit, cloudTop, cloudBody);
+            cloud.Opacity = opacity;
             Canvas.SetLeft(cloud, 0);
-            Canvas.SetTop(cloud, y * height);
+            Canvas.SetTop(cloud, top * height);
             canvas.Children.Add(cloud);
-            _loops.Add((cloud, LoopKind.Drift, TimeSpan.FromSeconds(offset)));
+            _loops.Add((cloud, LoopKind.Drift, TimeSpan.FromSeconds(offset), TimeSpan.FromSeconds(seconds)));
         }
 
-        var i = 0;
-        foreach (var (x, y, r, o) in Stars)
+        var glintBrush = Freeze(Colors.White);
+        var seed = 11L;
+        double Next()
         {
-            var star = new Rectangle { Width = r * 2, Height = r * 2, Fill = starBrush, Opacity = o, Tag = "star", SnapsToDevicePixels = true };
-            Canvas.SetLeft(star, x * width - r);
-            Canvas.SetTop(star, y * height - r);
-            canvas.Children.Add(star);
-            _loops.Add((star, LoopKind.Twinkle, TimeSpan.FromSeconds(i * 0.37 % 2.4)));
-            i++;
+            seed = seed * 16807 % 2147483647;
+            return (seed - 1) / 2147483646.0;
         }
+
+        var placed = 0;
+        while (placed < StarCount)
+        {
+            var fx = 0.0125 + Next() * 0.975;
+            var fy = 0.02 + Next() * 0.94;
+            if (fx > 0.375 && fx < 0.625 && fy > 0.28 && fy < 0.76) continue; // keep clear of the text
+            var size = (Next() < 0.25 ? 4 : (Next() < 0.5 ? 3 : 2)) * k;
+            var star = new Rectangle { Width = size, Height = size, Fill = starBrush, Opacity = 0.7, Tag = "star", SnapsToDevicePixels = true };
+            Canvas.SetLeft(star, fx * width);
+            Canvas.SetTop(star, fy * height);
+            canvas.Children.Add(star);
+            _loops.Add((star, LoopKind.Twinkle, TimeSpan.FromSeconds(-(Next() * 2.4)), null));
+
+            if (placed < GlintCount)
+            {
+                var glint = BuildGlint(k, glintBrush);
+                Canvas.SetLeft(glint, fx * width + size / 2 - glint.Width / 2);
+                Canvas.SetTop(glint, fy * height + size / 2 - glint.Height / 2);
+                canvas.Children.Add(glint);
+                _loops.Add((glint, LoopKind.Glint, TimeSpan.FromSeconds(-(Next() * 5)), TimeSpan.FromSeconds(4.5 + Next() * 3)));
+            }
+
+            placed++;
+        }
+
+        var trail = new Canvas { Width = 70 * k, Height = 40 * k, Opacity = 0, Tag = "shooting-star", IsHitTestVisible = false };
+        for (var j = 0; j < 7; j++)
+        {
+            var sz = Math.Max(2, 6 - j) * k;
+            var dot = new Rectangle { Width = sz, Height = sz, Fill = glintBrush, Opacity = 1 - j / 8.0, SnapsToDevicePixels = true };
+            Canvas.SetLeft(dot, (60 - j * 9) * k);
+            Canvas.SetTop(dot, (24 - j * 4) * k);
+            trail.Children.Add(dot);
+        }
+
+        Canvas.SetLeft(trail, 0.04 * width);
+        Canvas.SetTop(trail, 0.06 * height);
+        canvas.Children.Add(trail);
+        _shootingStar = (trail, new Vector(330 * unit, 140 * unit));
 
         return canvas;
     }
 
-    /// <summary>Starts the twinkles, drifts and moon bob, and fades the content in (all skipped when animations are off).</summary>
+    private static Canvas BuildCloud(string[] shape, double cell, Brush top, Brush body)
+    {
+        var cols = shape.Max(r => r.Length);
+        var cloud = new Canvas { Width = cols * cell, Height = shape.Length * cell, Tag = "cloud", SnapsToDevicePixels = true };
+        for (var y = 0; y < shape.Length; y++)
+        {
+            for (var x = 0; x < shape[y].Length; x++)
+            {
+                if (shape[y][x] != '#') continue;
+                var isTop = y == 0 || x >= shape[y - 1].Length || shape[y - 1][x] != '#';
+                var block = new Rectangle { Width = cell, Height = cell, Fill = isTop ? top : body };
+                Canvas.SetLeft(block, x * cell);
+                Canvas.SetTop(block, y * cell);
+                cloud.Children.Add(block);
+            }
+        }
+
+        return cloud;
+    }
+
+    /// <summary>A small white "+" that flashes over a star now and then (hidden until animated).</summary>
+    private static Canvas BuildGlint(double k, Brush brush)
+    {
+        var arm = 18 * k;
+        var thick = 2 * k;
+        var glint = new Canvas { Width = arm, Height = arm, Opacity = 0, Tag = "glint", IsHitTestVisible = false };
+        void Add(double x, double y, double w, double h)
+        {
+            var r = new Rectangle { Width = w, Height = h, Fill = brush };
+            Canvas.SetLeft(r, x);
+            Canvas.SetTop(r, y);
+            glint.Children.Add(r);
+        }
+
+        Add(arm / 2 - thick / 2, 0, thick, arm);
+        Add(0, arm / 2 - thick / 2, arm, thick);
+        Add(arm / 2 - thick, arm / 2 - thick, thick * 2, thick * 2);
+        return glint;
+    }
+
+    private static Color Mix(Rgb a, Rgb b, double t) =>
+        Color.FromRgb(
+            (byte)Math.Round(a.R + (b.R - a.R) * t),
+            (byte)Math.Round(a.G + (b.G - a.G) * t),
+            (byte)Math.Round(a.B + (b.B - a.B) * t));
+
+    /// <summary>Starts the twinkles, glints, drifts, shooting star and moon bob, and fades the content in (all skipped when animations are off).</summary>
     private void StartSkyMotion()
     {
-        foreach (var (element, kind, offset) in _loops)
+        foreach (var (element, kind, offset, duration) in _loops)
         {
-            BlockyMotion.Loop(element, kind, offset);
+            BlockyMotion.Loop(element, kind, offset, duration);
+        }
+
+        if (_shootingStar is { } shooting)
+        {
+            BlockyMotion.ShootingStar(shooting.Trail, shooting.Travel, TimeSpan.FromSeconds(7), TimeSpan.FromSeconds(2));
         }
 
         if (_content != null) BlockyMotion.FadeUp(_content, TimeSpan.FromMilliseconds(1400));
@@ -420,7 +538,7 @@ public class LockWindow : Window
             canvas.Children.Add(rect);
         }
 
-        _loops.Add((canvas, LoopKind.Bob, TimeSpan.Zero));
+        _loops.Add((canvas, LoopKind.Bob, TimeSpan.Zero, null));
         return canvas;
     }
 

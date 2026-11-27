@@ -23,7 +23,9 @@ public enum LoopKind
     /// <summary>Small hop (typing dots).</summary>
     Hop,
     /// <summary>Slow drift across the parent, left to right (clouds).</summary>
-    Drift
+    Drift,
+    /// <summary>Mostly hidden; now and then flashes in and fades (a star's "+" glint).</summary>
+    Glint
 }
 
 /// <summary>
@@ -278,8 +280,12 @@ public static class BlockyMotion
         return Begin(life, sb);
     }
 
-    /// <summary>Starts a looping effect. A negative offset starts it part-way through.</summary>
-    public static Storyboard? Loop(FrameworkElement el, LoopKind kind, TimeSpan? beginOffset = null)
+    /// <summary>
+    /// Starts a looping effect. A negative offset starts it part-way through.
+    /// <paramref name="duration"/> sets the cycle length for <see cref="LoopKind.Drift"/>
+    /// (default 16 s) and <see cref="LoopKind.Glint"/> (default 5.5 s).
+    /// </summary>
+    public static Storyboard? Loop(FrameworkElement el, LoopKind kind, TimeSpan? beginOffset = null, TimeSpan? duration = null)
     {
         if (!Enabled) return null;
         var sb = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
@@ -291,9 +297,9 @@ public static class BlockyMotion
             case LoopKind.Twinkle:
             {
                 var (s, _, _) = Transforms(el);
-                sb.Children.Add(Keys(el, Own(UIElement.OpacityProperty), z, (0, 0.3), (1200, 1), (2400, 0.3)));
-                sb.Children.Add(Keys(el, Part(el, s, ScaleTransform.ScaleXProperty), z, (0, 1), (1200, 1.6), (2400, 1)));
-                sb.Children.Add(Keys(el, Part(el, s, ScaleTransform.ScaleYProperty), z, (0, 1), (1200, 1.6), (2400, 1)));
+                sb.Children.Add(Keys(el, Own(UIElement.OpacityProperty), z, (0, 0.2), (1200, 1), (2400, 0.2)));
+                sb.Children.Add(Keys(el, Part(el, s, ScaleTransform.ScaleXProperty), z, (0, 1), (1200, 1.8), (2400, 1)));
+                sb.Children.Add(Keys(el, Part(el, s, ScaleTransform.ScaleYProperty), z, (0, 1), (1200, 1.8), (2400, 1)));
                 break;
             }
             case LoopKind.Bob:
@@ -329,10 +335,20 @@ public static class BlockyMotion
                 var (_, _, t) = Transforms(el);
                 var width = (VisualTreeHelper.GetParent(el) as FrameworkElement)?.ActualWidth ?? 0;
                 if (width <= 0) width = SystemParameters.PrimaryScreenWidth;
-                var drift = new DoubleAnimation(-120, width + 120, new Duration(Ms(16000)));
+                var own = el.ActualWidth > 0 ? el.ActualWidth : (double.IsNaN(el.Width) ? 120 : el.Width);
+                var drift = new DoubleAnimation(-own - 20, width + 20, new Duration(duration ?? Ms(16000)));
                 Storyboard.SetTarget(drift, el);
                 Storyboard.SetTargetProperty(drift, Part(el, t, TranslateTransform.XProperty));
                 sb.Children.Add(drift);
+                break;
+            }
+            case LoopKind.Glint:
+            {
+                var (s, _, _) = Transforms(el);
+                var total = (duration ?? Ms(5500)).TotalMilliseconds;
+                sb.Children.Add(Keys(el, Own(UIElement.OpacityProperty), z, (0, 0), (total * 0.78, 0), (total * 0.86, 1), (total * 0.94, 0.4), (total, 0)));
+                sb.Children.Add(Keys(el, Part(el, s, ScaleTransform.ScaleXProperty), z, (0, 0.2), (total * 0.78, 0.2), (total * 0.86, 1), (total * 0.94, 1.15), (total, 0.2)));
+                sb.Children.Add(Keys(el, Part(el, s, ScaleTransform.ScaleYProperty), z, (0, 0.2), (total * 0.78, 0.2), (total * 0.86, 1), (total * 0.94, 1.15), (total, 0.2)));
                 break;
             }
         }
@@ -342,6 +358,39 @@ public static class BlockyMotion
         Begin(el, sb);
         if (offset < TimeSpan.Zero) sb.Seek(el, offset.Negate(), TimeSeekOrigin.BeginTime);
         return sb;
+    }
+
+    /// <summary>
+    /// A shooting star: every <paramref name="every"/>, <paramref name="trail"/> fades in,
+    /// streaks by <paramref name="travel"/> in about 15% of the cycle, and fades out.
+    /// Hidden (nothing runs) when animations are off.
+    /// </summary>
+    public static Storyboard? ShootingStar(FrameworkElement trail, Vector travel, TimeSpan every, TimeSpan offset)
+    {
+        if (!Enabled) return null;
+        var (_, _, t) = Transforms(trail);
+        var total = every.TotalMilliseconds;
+        var streak = total * 0.15;
+        var sb = new Storyboard { RepeatBehavior = RepeatBehavior.Forever, BeginTime = offset };
+        // A fast streak needs a few more frames than the calm loops.
+        Timeline.SetDesiredFrameRate(sb, 30);
+        var ease = new QuadraticEase { EasingMode = EasingMode.EaseIn };
+        sb.Children.Add(Keys(trail, Own(UIElement.OpacityProperty), TimeSpan.Zero, (0, 0), (total * 0.03, 1), (streak, 0), (total, 0)));
+        var x = new DoubleAnimationUsingKeyFrames();
+        x.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+        x.KeyFrames.Add(new EasingDoubleKeyFrame(travel.X, KeyTime.FromTimeSpan(Ms(streak)), ease));
+        x.KeyFrames.Add(new DiscreteDoubleKeyFrame(travel.X, KeyTime.FromTimeSpan(every)));
+        Storyboard.SetTarget(x, trail);
+        Storyboard.SetTargetProperty(x, Part(trail, t, TranslateTransform.XProperty));
+        var y = new DoubleAnimationUsingKeyFrames();
+        y.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+        y.KeyFrames.Add(new EasingDoubleKeyFrame(travel.Y, KeyTime.FromTimeSpan(Ms(streak)), ease));
+        y.KeyFrames.Add(new DiscreteDoubleKeyFrame(travel.Y, KeyTime.FromTimeSpan(every)));
+        Storyboard.SetTarget(y, trail);
+        Storyboard.SetTargetProperty(y, Part(trail, t, TranslateTransform.YProperty));
+        sb.Children.Add(x);
+        sb.Children.Add(y);
+        return Begin(trail, sb);
     }
 
     /// <summary>

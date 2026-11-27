@@ -85,7 +85,7 @@ public class LockWindowMotionTests
         var ellipses = Count<Ellipse>(w);
         var animated = stars.Count(s => s.HasAnimatedProperties);
         w.Close();
-        Assert.Equal(14, stars.Count);
+        Assert.Equal(34, stars.Count);
         Assert.All(stars, s => Assert.IsType<Rectangle>(s));
         Assert.Equal(0, ellipses);
         if (BlockyMotion.Enabled) Assert.True(animated > 0);
@@ -138,15 +138,43 @@ public class LockWindowMotionTests
     });
 
     [Fact]
-    public void Two_block_clouds_drift() => RunSta(() =>
+    public void Three_pixel_clouds_drift_across_the_middle() => RunSta(() =>
     {
         var w = ShowPreview();
         Pump(TimeSpan.FromMilliseconds(300));
         var clouds = Tagged(w, "cloud");
+        var tops = clouds.Select(c => System.Windows.Controls.Canvas.GetTop(c) / 800).ToList();
+        var puffs = clouds.Select(c => Count<Rectangle>(c)).ToList();
         var drifting = clouds.Count(c => c.RenderTransform is TransformGroup g && g.Children[^1].HasAnimatedProperties);
         w.Close();
-        Assert.Equal(2, clouds.Count);
-        if (BlockyMotion.Enabled) Assert.Equal(2, drifting);
+        Assert.Equal(3, clouds.Count);
+        Assert.All(tops, t => Assert.InRange(t, 0.25, 0.65));
+        Assert.All(puffs, n => Assert.True(n > 20, "clouds are built from many pixel blocks"));
+        if (BlockyMotion.Enabled) Assert.Equal(3, drifting);
+    });
+
+    [Fact]
+    public void Six_stars_flash_a_glint() => RunSta(() =>
+    {
+        var w = ShowPreview();
+        Pump(TimeSpan.FromMilliseconds(300));
+        var glints = Tagged(w, "glint");
+        var animated = glints.Count(g => g.HasAnimatedProperties);
+        w.Close();
+        Assert.Equal(6, glints.Count);
+        if (BlockyMotion.Enabled) Assert.Equal(6, animated);
+    });
+
+    [Fact]
+    public void A_shooting_star_crosses_now_and_then() => RunSta(() =>
+    {
+        var w = ShowPreview();
+        Pump(TimeSpan.FromMilliseconds(300));
+        var shooting = Tagged(w, "shooting-star");
+        var animated = shooting.Count(s => s.HasAnimatedProperties);
+        w.Close();
+        Assert.Single(shooting);
+        if (BlockyMotion.Enabled) Assert.Equal(1, animated);
     });
 
     [Fact]
@@ -173,9 +201,13 @@ public class LockWindowMotionTests
         var content = Tagged(w, "lock-content").Single();
         var opacity = content.Opacity;
         var animated = Tagged(w, "star").Count(s => s.HasAnimatedProperties);
+        var glintsShown = Tagged(w, "glint").Count(g => g.Opacity > 0);
+        var shootingShown = Tagged(w, "shooting-star").Count(g => g.Opacity > 0);
         w.Close();
         Assert.Equal(1, opacity, 2);
         Assert.Equal(0, animated);
+        Assert.Equal(0, glintsShown);
+        Assert.Equal(0, shootingShown);
     });
 
     /// <summary>
