@@ -1,6 +1,6 @@
 # Agent "smooth Blocky" animations
 
-**Status:** built on branch `feat/agent-blocky-animations` (agent **0.6.36**), not merged or released
+**Status:** shipped: agent **0.6.36** merged to `main` and published to the stable channel on 2026-11-28 (GitHub release `agent-v0.6.36` on `jragregorio/warden-releases`)
 **Started:** 2026-11-27
 **Spec:** [docs/superpowers/specs/2026-11-27-agent-blocky-animations-design.md](../../superpowers/specs/2026-11-27-agent-blocky-animations-design.md)
 **Plan:** [docs/superpowers/plans/2026-11-27-agent-blocky-animations.md](../../superpowers/plans/2026-11-27-agent-blocky-animations.md)
@@ -42,6 +42,13 @@ Make the child's popups and lock screen less boring with game-inspired ("smooth 
   - Popups: `Warden.Tray.exe --preview-popups --snapshot <dir>`
   - Lock screen: set `WARDEN_LOCK_SNAPSHOT_DIR` and run `dotnet test --filter Lock_snapshot`
 
-## Not yet verified live
+## Release
 
-On a real paired child PC: a dashboard nudge with a reply, a bonus grant, a time run-down through 10/5/1, and a parent lock-down/unlock. These need a test child account. They weren't run on the developer's paired PC so it wouldn't be locked or interrupted.
+- MSI `Warden-0.6.36-x64.msi`, SHA-256 `544b3710dc44e8cfc8df5d4d3418a89a307bbb67f813ff69d8775d00d287e6f7`, 88,759,269 bytes, channel `stable`, not mandatory.
+- `GET /api/agent/release/latest?channel=stable` returned 0.6.36 right after publishing, and the GitHub download returned 200.
+- The owner tested the portable build locally before release and was happy with the animations.
+
+## Still to confirm
+
+- The child's PC picks up the in-app update from 0.6.35 to 0.6.36.
+- Live checks on the child PC: a dashboard nudge with a reply, a bonus grant, a time run-down through 10/5/1, and a parent lock-down/unlock.
