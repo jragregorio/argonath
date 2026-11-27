@@ -53,7 +53,11 @@ Make the child's popups and lock screen less boring with game-inspired ("smooth 
 - The child's PC picks up the in-app update from 0.6.35 to 0.6.36.
 - Live checks on the child PC: a dashboard nudge with a reply, a bonus grant, a time run-down through 10/5/1, and a parent lock-down/unlock.
 
-## 0.6.37 (built, not yet published)
+## 0.6.37 (published 2026-11-28, stable)
+
+- MSI `Warden-0.6.37-x64.msi`, SHA-256 `3915981e8aaaf0bf1e1735ef474e4e9e755edc2732b2033d93a567e9a876e99d`, 88,767,461 bytes, not mandatory; GitHub release `agent-v0.6.37`. The latest-release endpoint returned 0.6.37 right after publishing.
+- Still to confirm: the child's PC updates from 0.6.36 to 0.6.37, and a live parent lock-down shows the desk scene.
+
 
 - **Moon:** the stray "sparkle" dot by the top tip is gone, and the bottom row reaches under the lower horn so the crescent is one joined shape (test: every moon pixel joins along an edge).
 - **Night sky:** three pixel clouds drift across the middle at different depths; 34 square stars twinkle more clearly, 6 flash a "+" glint; a pixel shooting star crosses about every 7 s (30 fps; other loops stay at 20 fps).
