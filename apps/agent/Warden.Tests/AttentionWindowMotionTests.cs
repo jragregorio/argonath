@@ -73,6 +73,7 @@ public class AttentionWindowMotionTests
         if (!BlockyMotion.Enabled) return;
         var w = ShowOffscreen(new AttentionWindow("NUDGE", "Dinner's ready, come downstairs", okDelaySeconds: 5, enableNudgeReply: true));
         Pump(TimeSpan.FromMilliseconds(400));
+        while (!w.IsLoaded) Pump(TimeSpan.FromMilliseconds(50));
         w.SkipTyping();
         var text = MessageText(w);
         Pump(TimeSpan.FromMilliseconds(2500));
@@ -128,6 +129,53 @@ public class AttentionWindowMotionTests
         w.Close();
         Assert.Equal("Your parent added extra screen time", text);
         Assert.Null(count);
+    });
+
+    private static List<System.Windows.Shapes.Rectangle> Lives(AttentionWindow w) =>
+        (List<System.Windows.Shapes.Rectangle>)typeof(AttentionWindow).GetField("_lives", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(w)!;
+
+    private static AttentionWindow TimeCheck(int minutes) =>
+        new("Time remaining", $"{minutes} minutes of screen time left", okDelaySeconds: 3,
+            extensionMinutes: [15, 30, 60], onExtensionRequest: _ => Task.FromResult(true), thresholdMinutes: minutes);
+
+    [Theory]
+    [InlineData(10, 3)]
+    [InlineData(5, 6)]
+    [InlineData(1, 9)]
+    public void Time_check_loses_one_life_per_used_block(int minutes, int lost) => RunSta(() =>
+    {
+        var w = ShowOffscreen(TimeCheck(minutes));
+        var lives = Lives(w);
+        Assert.Equal(lost, lives.Count);
+        Pump(TimeSpan.FromMilliseconds(2900));
+        var allGone = lives.All(l => l.Opacity < 0.01);
+        w.Close();
+        Assert.True(allGone);
+    });
+
+    [Fact]
+    public void One_minute_check_glows_and_closes_cleanly() => RunSta(() =>
+    {
+        if (!BlockyMotion.Enabled) return;
+        var w = ShowOffscreen(TimeCheck(1));
+        var card = (System.Windows.Controls.Border)typeof(AttentionWindow).GetField("_card", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(w)!;
+        var before = ((System.Windows.Media.SolidColorBrush)card.BorderBrush).Color;
+        Pump(TimeSpan.FromMilliseconds(700));
+        var during = ((System.Windows.Media.SolidColorBrush)card.BorderBrush).Color;
+        w.Close();
+        Pump(TimeSpan.FromMilliseconds(300));
+        Assert.NotEqual(before, during);
+    });
+
+    [Fact]
+    public void Five_minute_check_pulses_from_the_icon() => RunSta(() =>
+    {
+        if (!BlockyMotion.Enabled) return;
+        var w = ShowOffscreen(TimeCheck(5));
+        Pump(TimeSpan.FromMilliseconds(900));
+        var rings = Particles(w).Children.Count;
+        w.Close();
+        Assert.Equal(1, rings);
     });
 
     [Fact]

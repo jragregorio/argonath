@@ -57,6 +57,15 @@ public class BlockyMotionTests
     });
 
     [Fact]
+    public void Disabled_pulse_adds_no_ring() => RunSta(() =>
+    {
+        BlockyMotion.ForceDisabled = true;
+        var c = new Canvas();
+        Assert.Null(BlockyMotion.Pulse(c, new Point(20, 20), 38, Colors.Gold, TimeSpan.Zero, 3));
+        Assert.Empty(c.Children);
+    });
+
+    [Fact]
     public void Disabled_life_lost_hides_block() => RunSta(() =>
     {
         BlockyMotion.ForceDisabled = true;

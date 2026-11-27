@@ -39,8 +39,12 @@ public sealed class AttentionWindow : Window
     private readonly WpfButton _ok;
     private System.Windows.Media.Animation.Storyboard? _typing;
     private FrameworkElement? _typingDots;
+    private bool _typingSkipped;
     private readonly int? _bonusMinutes;
     private readonly TextBlock? _countText;
+    /// <summary>Yellow "life" overlays on the used-up time blocks, in block order.</summary>
+    private readonly List<System.Windows.Shapes.Rectangle> _lives = new();
+    private int _litBlocks;
 
     public string? Response { get; private set; }
 
@@ -174,6 +178,11 @@ public sealed class AttentionWindow : Window
         _messageHost = new Grid { Margin = new Thickness(0, 0, 0, 20) };
         _messageHost.Children.Add(_messageText);
         stack.Children.Add(_messageHost);
+
+        if (style.Motion == AttentionMotion.TimeCheck && thresholdMinutes is { } threshold)
+        {
+            stack.Children.Add(BuildLivesBar(threshold));
+        }
 
         var hasExtensionButtons =
             extensionMinutes is { Count: > 0 } && onExtensionRequest != null;
@@ -510,10 +519,67 @@ public sealed class AttentionWindow : Window
                 StartNudgeMotion();
                 break;
             case AttentionMotion.TimeCheck:
-                BlockyMotion.DropIn(_card);
+                StartTimeCheckMotion();
                 break;
             case AttentionMotion.Celebrate:
                 StartCelebrateMotion();
+                break;
+        }
+    }
+
+    /// <summary>Ten time blocks: lit ones yellow, used-up ones a dark slot with a yellow "life" on top.</summary>
+    private UIElement BuildLivesBar(int threshold)
+    {
+        _litBlocks = Warden.Core.Theming.BlockyTimeline.LitBlocks(threshold);
+        var yellow = (SolidColorBrush)UiTheme.HeadsUpBrush;
+        var row = new System.Windows.Controls.Primitives.UniformGrid
+        {
+            Columns = Warden.Core.Theming.BlockyTimeline.TimeBlocks,
+            Margin = new Thickness(-1.5, -6, -1.5, 16)
+        };
+        for (var i = 0; i < Warden.Core.Theming.BlockyTimeline.TimeBlocks; i++)
+        {
+            var cell = new Grid { Height = 9, Margin = new Thickness(1.5, 0, 1.5, 0) };
+            var lit = i < _litBlocks;
+            cell.Children.Add(new System.Windows.Shapes.Rectangle
+            {
+                Fill = lit ? yellow : UiTheme.TrackBrush,
+                RadiusX = 1,
+                RadiusY = 1
+            });
+            if (!lit)
+            {
+                var life = new System.Windows.Shapes.Rectangle { Fill = yellow, RadiusX = 1, RadiusY = 1 };
+                cell.Children.Add(life);
+                _lives.Add(life);
+            }
+
+            row.Children.Add(cell);
+        }
+
+        return row;
+    }
+
+    /// <summary>Time check: drop in, used blocks lose a life right to left; pulses at 5 min, glow and tick at 1 min.</summary>
+    private void StartTimeCheckMotion()
+    {
+        // Icon centre before the drop-in moves the card.
+        var iconCentre = _icon.TranslatePoint(new System.Windows.Point(_icon.ActualWidth / 2, _icon.ActualHeight / 2), _particleLayer);
+        BlockyMotion.DropIn(_card);
+        foreach (var (index, delay) in Warden.Core.Theming.BlockyTimeline.LifeLostOrder(_litBlocks))
+        {
+            var life = index - _litBlocks;
+            if (life >= 0 && life < _lives.Count) BlockyMotion.LifeLost(_lives[life], delay);
+        }
+
+        switch (_thresholdMinutes)
+        {
+            case 5:
+                BlockyMotion.Pulse(_particleLayer, iconCentre, _icon.ActualWidth, ((SolidColorBrush)UiTheme.HeadsUpBrush).Color, TimeSpan.FromMilliseconds(600), 3);
+                break;
+            case 1:
+                BlockyMotion.Loop(_card, LoopKind.Glow);
+                BlockyMotion.Loop(_iconGlyph, LoopKind.Tick);
                 break;
         }
     }
@@ -554,7 +620,7 @@ public sealed class AttentionWindow : Window
     /// <summary>Nudge: hopping "typing" dots, then the message types itself out, then the icon pops.</summary>
     private void StartNudgeMotion()
     {
-        if (!BlockyMotion.Enabled) return;
+        if (!BlockyMotion.Enabled || _typingSkipped) return;
 
         // Keep the card from changing height while the text types in.
         _messageHost.MinHeight = _messageText.ActualHeight;
@@ -612,6 +678,7 @@ public sealed class AttentionWindow : Window
     /// <summary>Shows the whole nudge message at once (Reply, OK, or any answer while typing).</summary>
     internal void SkipTyping()
     {
+        _typingSkipped = true;
         if (_typing == null && _typingDots == null) return;
         BlockyMotion.Finish(_typing, _messageText, () =>
         {

@@ -134,6 +134,17 @@ public static class BlockyMotion
 
             sb.Stop(on);
             sb.Remove(on);
+
+            // Belt and braces: drop any clock still holding a property the storyboard animated on the element itself.
+            foreach (var child in sb.Children)
+            {
+                if (Storyboard.GetTarget(child) is UIElement target
+                    && Storyboard.GetTargetProperty(child) is { PathParameters.Count: 1 } path
+                    && path.PathParameters[0] is DependencyProperty dp)
+                {
+                    target.BeginAnimation(dp, null);
+                }
+            }
         }
 
         setFinal();
@@ -184,6 +195,36 @@ public static class BlockyMotion
         {
             foreach (var rect in added) layer.Children.Remove(rect);
         };
+        return Begin(layer, sb);
+    }
+
+    /// <summary>
+    /// Square rings ripple out from <paramref name="center"/> <paramref name="times"/> times
+    /// (scale 1→2, fading), starting after <paramref name="delay"/>. The ring is removed when done.
+    /// </summary>
+    public static Storyboard? Pulse(Canvas layer, Point center, double size, Color color, TimeSpan delay, int times)
+    {
+        if (!Enabled || times <= 0) return null;
+        var ring = new Border
+        {
+            Width = size,
+            Height = size,
+            BorderThickness = new Thickness(3),
+            CornerRadius = new CornerRadius(7),
+            BorderBrush = new SolidColorBrush(color),
+            Opacity = 0,
+            IsHitTestVisible = false
+        };
+        Canvas.SetLeft(ring, center.X - size / 2);
+        Canvas.SetTop(ring, center.Y - size / 2);
+        layer.Children.Add(ring);
+        var (s, _, _) = Transforms(ring);
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var sb = new Storyboard { BeginTime = delay, RepeatBehavior = new RepeatBehavior(times) };
+        sb.Children.Add(Tween(ring, Part(ring, s, ScaleTransform.ScaleXProperty), 1, 2, TimeSpan.Zero, Ms(1400), ease));
+        sb.Children.Add(Tween(ring, Part(ring, s, ScaleTransform.ScaleYProperty), 1, 2, TimeSpan.Zero, Ms(1400), ease));
+        sb.Children.Add(Tween(ring, Own(UIElement.OpacityProperty), 0.9, 0, TimeSpan.Zero, Ms(1400), ease));
+        sb.Completed += (_, _) => layer.Children.Remove(ring);
         return Begin(layer, sb);
     }
 
