@@ -37,6 +37,8 @@ public sealed class AttentionWindow : Window
     private readonly Grid _messageHost;
     private readonly List<(WpfButton Button, bool Primary)> _delayedButtons;
     private readonly WpfButton _ok;
+    private System.Windows.Media.Animation.Storyboard? _typing;
+    private FrameworkElement? _typingDots;
 
     public string? Response { get; private set; }
 
@@ -355,6 +357,7 @@ public sealed class AttentionWindow : Window
                     return;
                 }
 
+                SkipTyping();
                 expandPanel.Visibility = Visibility.Visible;
                 replyToggle.Visibility = Visibility.Collapsed;
                 Grid.SetColumn(okHost, 0);
@@ -484,10 +487,89 @@ public sealed class AttentionWindow : Window
         switch (_style.Motion)
         {
             case AttentionMotion.Nudge:
+                BlockyMotion.DropIn(_card);
+                StartNudgeMotion();
+                break;
             case AttentionMotion.TimeCheck:
                 BlockyMotion.DropIn(_card);
                 break;
         }
+    }
+
+    /// <summary>Nudge: hopping "typing" dots, then the message types itself out, then the icon pops.</summary>
+    private void StartNudgeMotion()
+    {
+        if (!BlockyMotion.Enabled) return;
+
+        // Keep the card from changing height while the text types in.
+        _messageHost.MinHeight = _messageText.ActualHeight;
+
+        var dotsPanel = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+        var dots = new List<System.Windows.Shapes.Rectangle>();
+        for (var i = 0; i < 3; i++)
+        {
+            var dot = new System.Windows.Shapes.Rectangle
+            {
+                Width = 6,
+                Height = 6,
+                Fill = UiTheme.AccentBrush,
+                Margin = new Thickness(i == 0 ? 0 : 5, 0, 0, 0)
+            };
+            dots.Add(dot);
+            dotsPanel.Children.Add(dot);
+        }
+
+        var chip = new Border
+        {
+            Background = UiTheme.TrackBrush,
+            CornerRadius = new CornerRadius(UiTheme.BlockyButtonRadius),
+            Padding = new Thickness(8, 7, 8, 5),
+            HorizontalAlignment = WpfHorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            IsHitTestVisible = false,
+            Opacity = 0,
+            Child = dotsPanel
+        };
+        _messageHost.Children.Add(chip);
+        _typingDots = chip;
+
+        var typingStart = TimeSpan.FromMilliseconds(2050);
+        var fade = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames();
+        foreach (var (ms, value) in new[] { (0.0, 0.0), (550, 0), (700, 1), (1900, 1), (2050, 0) })
+        {
+            fade.KeyFrames.Add(new System.Windows.Media.Animation.LinearDoubleKeyFrame(value, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms))));
+        }
+
+        chip.BeginAnimation(OpacityProperty, fade);
+        for (var i = 0; i < dots.Count; i++)
+        {
+            BlockyMotion.Loop(dots[i], LoopKind.Hop, TimeSpan.FromMilliseconds(150 * i));
+        }
+
+        var frames = Warden.Core.Theming.BlockyTimeline.TypingFrames(_message, typingStart);
+        _typing = BlockyMotion.PlayText(_messageText, frames, _message);
+        if (frames.Count > 0)
+        {
+            BlockyMotion.Bump(_icon, frames[^1].At, peak: 1.35, tiltDeg: -8);
+        }
+    }
+
+    /// <summary>Shows the whole nudge message at once (Reply, OK, or any answer while typing).</summary>
+    internal void SkipTyping()
+    {
+        if (_typing == null && _typingDots == null) return;
+        BlockyMotion.Finish(_typing, _messageText, () =>
+        {
+            if (_typingDots != null)
+            {
+                _typingDots.BeginAnimation(OpacityProperty, null);
+                _typingDots.Visibility = Visibility.Collapsed;
+            }
+
+            _messageText.Text = _message;
+        });
+        _typing = null;
+        _typingDots = null;
     }
 
     private static void SetButtonDelayed(WpfButton btn, bool enabled, bool primary)
@@ -546,6 +628,7 @@ public sealed class AttentionWindow : Window
     private void CloseWithResponse(string response)
     {
         if (_closed) return;
+        SkipTyping();
         Response = response;
         if (response != "auto" && _replyField != null)
         {

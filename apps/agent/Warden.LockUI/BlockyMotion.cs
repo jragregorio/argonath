@@ -133,6 +133,7 @@ public static class BlockyMotion
             }
 
             sb.Stop(on);
+            sb.Remove(on);
         }
 
         setFinal();
