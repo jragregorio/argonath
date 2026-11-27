@@ -390,11 +390,15 @@ public class LockWindow : Window
         if (_content != null) BlockyMotion.FadeUp(_content, TimeSpan.FromMilliseconds(1400));
     }
 
-    /// <summary>Pixel moon cells on a 12x12 grid (x, y, width, height).</summary>
+    /// <summary>
+    /// Pixel moon cells on a 12x12 grid (x, y, width, height). Every cell joins its
+    /// neighbours along an edge (the bottom row reaches under the lower horn), so
+    /// nothing looks detached.
+    /// </summary>
     private static readonly (int X, int Y, int W, int H)[] MoonCells =
     [
         (4, 1, 3, 1), (2, 2, 3, 1), (1, 3, 3, 2), (1, 5, 3, 2),
-        (1, 7, 4, 1), (2, 8, 6, 1), (3, 9, 5, 1), (8, 7, 2, 1)
+        (1, 7, 4, 1), (2, 8, 7, 1), (3, 9, 5, 1), (8, 7, 2, 1)
     ];
 
     private UIElement CreateMoon(double size, double bottomMargin)
@@ -416,13 +420,7 @@ public class LockWindow : Window
             canvas.Children.Add(rect);
         }
 
-        var sparkle = new Rectangle { Width = cell, Height = cell, Fill = MoonBrush, Tag = "sparkle" };
-        Canvas.SetLeft(sparkle, 9 * cell);
-        Canvas.SetTop(sparkle, 2 * cell);
-        canvas.Children.Add(sparkle);
-
         _loops.Add((canvas, LoopKind.Bob, TimeSpan.Zero));
-        _loops.Add((sparkle, LoopKind.Twinkle, TimeSpan.Zero));
         return canvas;
     }
 

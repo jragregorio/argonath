@@ -94,7 +94,7 @@ public class LockWindowMotionTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void Pixel_moon_with_sparkle_on_every_monitor(bool primary) => RunSta(() =>
+    public void Pixel_moon_has_no_stray_dot_on_any_monitor(bool primary) => RunSta(() =>
     {
         var w = ShowPreview(primary);
         Pump(TimeSpan.FromMilliseconds(200));
@@ -102,7 +102,39 @@ public class LockWindowMotionTests
         var sparkles = Tagged(w, "sparkle").Count;
         w.Close();
         Assert.Equal(8, cells);
-        Assert.Equal(1, sparkles);
+        Assert.Equal(0, sparkles);
+    });
+
+    [Fact]
+    public void Pixel_moon_is_one_piece_joined_along_edges() => RunSta(() =>
+    {
+        var w = ShowPreview();
+        Pump(TimeSpan.FromMilliseconds(200));
+        var rects = Tagged(w, "moon-cell");
+        var cell = rects.Min(r => r.Height);
+        var pixels = new HashSet<(int X, int Y)>();
+        foreach (var r in rects)
+        {
+            var x0 = (int)Math.Round(System.Windows.Controls.Canvas.GetLeft(r) / cell);
+            var y0 = (int)Math.Round(System.Windows.Controls.Canvas.GetTop(r) / cell);
+            for (var dx = 0; dx < (int)Math.Round(r.Width / cell); dx++)
+                for (var dy = 0; dy < (int)Math.Round(r.Height / cell); dy++)
+                    pixels.Add((x0 + dx, y0 + dy));
+        }
+
+        w.Close();
+        var seen = new HashSet<(int X, int Y)> { pixels.First() };
+        var stack = new Stack<(int X, int Y)>(seen);
+        while (stack.Count > 0)
+        {
+            var (x, y) = stack.Pop();
+            foreach (var n in new[] { (x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1) })
+            {
+                if (pixels.Contains(n) && seen.Add(n)) stack.Push(n);
+            }
+        }
+
+        Assert.Equal(pixels.Count, seen.Count);
     });
 
     [Fact]
