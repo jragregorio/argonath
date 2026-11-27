@@ -47,6 +47,10 @@ internal static class UiTheme
     public static readonly WpfFontFamily DisplayFont = new("Segoe UI");
 
     public const double ButtonRadius = 14;
+    // "Smooth Blocky" popups: chunkier, squarer shapes.
+    public const double BlockyCardRadius = 6;
+    public const double BlockyButtonRadius = 4;
+    public const double BlockyIconRadius = 5;
     public const double CardRadius = 20;
     public const double TileRadius = 16;
     public const double WindowRadius = 12;
@@ -431,11 +435,11 @@ internal static class UiTheme
             CaretBrush = TextBrush
         };
 
-    public static WpfButton PrimaryButton(string content) =>
-        CreateRoundedButton(content, AccentBrush, AccentOnBrush, null);
+    public static WpfButton PrimaryButton(string content, double radius = ButtonRadius) =>
+        CreateRoundedButton(content, AccentBrush, AccentOnBrush, null, radius);
 
-    public static WpfButton SecondaryButton(string content) =>
-        CreateRoundedButton(content, CardBrush, TextBrush, BorderBrush);
+    public static WpfButton SecondaryButton(string content, double radius = ButtonRadius) =>
+        CreateRoundedButton(content, CardBrush, TextBrush, BorderBrush, radius);
 
     public static WpfButton GoldButton(string content) =>
         CreateRoundedButton(content, GoldLightBrush, AccentOnBrush, null);
@@ -447,7 +451,8 @@ internal static class UiTheme
         string content,
         WpfBrush background,
         WpfBrush foreground,
-        WpfBrush? borderBrush)
+        WpfBrush? borderBrush,
+        double radius = ButtonRadius)
     {
         var button = new WpfButton
         {
@@ -461,7 +466,7 @@ internal static class UiTheme
             BorderThickness = new Thickness(borderBrush == null ? 0 : 1),
             Cursor = System.Windows.Input.Cursors.Hand,
             HorizontalAlignment = WpfHorizontalAlignment.Stretch,
-            Template = CreateRoundedButtonTemplate()
+            Template = CreateRoundedButtonTemplate(radius)
         };
 
         // Lift on hover: filled buttons cast a shadow in their own colour, the rest a dark one.
@@ -530,10 +535,10 @@ internal static class UiTheme
         return template;
     }
 
-    private static ControlTemplate CreateRoundedButtonTemplate()
+    private static ControlTemplate CreateRoundedButtonTemplate(double radius = ButtonRadius)
     {
         var factory = new FrameworkElementFactory(typeof(WpfBorder));
-        factory.SetValue(WpfBorder.CornerRadiusProperty, new CornerRadius(ButtonRadius));
+        factory.SetValue(WpfBorder.CornerRadiusProperty, new CornerRadius(radius));
         factory.SetValue(WpfBorder.SnapsToDevicePixelsProperty, true);
         factory.SetBinding(
             WpfBorder.BackgroundProperty,
@@ -573,7 +578,7 @@ internal static class UiTheme
                 RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
             }
         );
-        factory.AppendChild(LiftEffect.WrapWithHighlight(presenter, ButtonRadius));
+        factory.AppendChild(LiftEffect.WrapWithHighlight(presenter, radius));
 
         return new ControlTemplate(typeof(WpfButton)) { VisualTree = factory };
     }

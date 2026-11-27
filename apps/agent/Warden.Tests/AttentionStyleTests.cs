@@ -49,4 +49,13 @@ public class AttentionStyleTests
         Assert.Equal(AttentionTone.Accent, style.Tone);
         Assert.False(string.IsNullOrEmpty(style.Glyph));
     }
+
+    [Theory]
+    [InlineData("NUDGE", AttentionMotion.Nudge)]
+    [InlineData("Extra time", AttentionMotion.Celebrate)]
+    [InlineData("Time remaining", AttentionMotion.TimeCheck)]
+    [InlineData("App blocked", AttentionMotion.None)]
+    [InlineData("", AttentionMotion.None)]
+    public void Motion_follows_popup_kind(string title, AttentionMotion motion) =>
+        Assert.Equal(motion, AttentionStyle.For(title).Motion);
 }

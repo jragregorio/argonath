@@ -78,6 +78,12 @@ static class Program
     [STAThread]
     static void Main()
     {
+        if (PopupPreview.Requested(Environment.GetCommandLineArgs()))
+        {
+            PopupPreview.Run(Environment.GetCommandLineArgs());
+            return;
+        }
+
         InstallGlobalExceptionHandlers();
 
         try

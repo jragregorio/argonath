@@ -51,7 +51,7 @@ public static class BlockyMotion
         var (_, _, t) = Transforms(card);
         var height = card.ActualHeight > 0 ? card.ActualHeight : 150;
         var sb = new Storyboard();
-        sb.Children.Add(Tween(t, TranslateTransform.YProperty, -(height + 40), 0, TimeSpan.Zero, Ms(600), new BackEase { Amplitude = 0.5, EasingMode = EasingMode.EaseOut }));
+        sb.Children.Add(Tween(card, Part(card, t, TranslateTransform.YProperty), -(height + 40), 0, TimeSpan.Zero, Ms(600), new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut }));
         return Begin(card, sb);
     }
 
@@ -63,9 +63,9 @@ public static class BlockyMotion
         var (s, _, _) = Transforms(el);
         var ease = new BackEase { Amplitude = 0.7, EasingMode = EasingMode.EaseOut };
         var sb = new Storyboard();
-        sb.Children.Add(Tween(s, ScaleTransform.ScaleXProperty, 0.3, 1, d, Ms(600), ease));
-        sb.Children.Add(Tween(s, ScaleTransform.ScaleYProperty, 0.3, 1, d, Ms(600), ease));
-        sb.Children.Add(Tween(el, UIElement.OpacityProperty, 0, 1, d, Ms(300), new CubicEase { EasingMode = EasingMode.EaseOut }));
+        sb.Children.Add(Tween(el, Part(el, s, ScaleTransform.ScaleXProperty), 0.3, 1, d, Ms(600), ease));
+        sb.Children.Add(Tween(el, Part(el, s, ScaleTransform.ScaleYProperty), 0.3, 1, d, Ms(600), ease));
+        sb.Children.Add(Tween(el, Own(UIElement.OpacityProperty), 0, 1, d, Ms(300), new CubicEase { EasingMode = EasingMode.EaseOut }));
         return Begin(el, sb);
     }
 
@@ -75,9 +75,9 @@ public static class BlockyMotion
         if (!Enabled) return null;
         var (s, r, _) = Transforms(el);
         var sb = new Storyboard();
-        sb.Children.Add(Keys(s, ScaleTransform.ScaleXProperty, delay, (0, 1), (200, peak), (500, 1)));
-        sb.Children.Add(Keys(s, ScaleTransform.ScaleYProperty, delay, (0, 1), (200, peak), (500, 1)));
-        if (tiltDeg != 0) sb.Children.Add(Keys(r, RotateTransform.AngleProperty, delay, (0, 0), (200, tiltDeg), (500, 0)));
+        sb.Children.Add(Keys(el, Part(el, s, ScaleTransform.ScaleXProperty), delay, (0, 1), (200, peak), (500, 1)));
+        sb.Children.Add(Keys(el, Part(el, s, ScaleTransform.ScaleYProperty), delay, (0, 1), (200, peak), (500, 1)));
+        if (tiltDeg != 0) sb.Children.Add(Keys(el, Part(el, r, RotateTransform.AngleProperty), delay, (0, 0), (200, tiltDeg), (500, 0)));
         return Begin(el, sb);
     }
 
@@ -88,9 +88,9 @@ public static class BlockyMotion
         var (s, r, _) = Transforms(el);
         var ease = new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut };
         var sb = new Storyboard();
-        sb.Children.Add(Tween(r, RotateTransform.AngleProperty, -270, 0, delay, Ms(900), ease));
-        sb.Children.Add(Tween(s, ScaleTransform.ScaleXProperty, 0.3, 1, delay, Ms(900), ease));
-        sb.Children.Add(Tween(s, ScaleTransform.ScaleYProperty, 0.3, 1, delay, Ms(900), ease));
+        sb.Children.Add(Tween(el, Part(el, r, RotateTransform.AngleProperty), -270, 0, delay, Ms(900), ease));
+        sb.Children.Add(Tween(el, Part(el, s, ScaleTransform.ScaleXProperty), 0.3, 1, delay, Ms(900), ease));
+        sb.Children.Add(Tween(el, Part(el, s, ScaleTransform.ScaleYProperty), 0.3, 1, delay, Ms(900), ease));
         return Begin(el, sb);
     }
 
@@ -168,12 +168,12 @@ public static class BlockyMotion
             var angle = (double)i / count * Math.PI * 2 + rng.NextDouble() * 0.4;
             var dist = 55 + rng.NextDouble() * 45;
             var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-            sb.Children.Add(Tween(t, TranslateTransform.XProperty, 0, Math.Cos(angle) * dist, delay, fly, ease));
-            sb.Children.Add(Tween(t, TranslateTransform.YProperty, 0, Math.Sin(angle) * dist + 18, delay, fly, ease));
-            sb.Children.Add(Tween(r, RotateTransform.AngleProperty, 0, rng.Next(-270, 271), delay, fly, ease));
-            sb.Children.Add(Tween(s, ScaleTransform.ScaleXProperty, 0.5, 1, delay, fly, ease));
-            sb.Children.Add(Tween(s, ScaleTransform.ScaleYProperty, 0.5, 1, delay, fly, ease));
-            sb.Children.Add(Keys(rect, UIElement.OpacityProperty, delay, (0, 1), (770, 1), (1100, 0)));
+            sb.Children.Add(Tween(rect, Part(rect, t, TranslateTransform.XProperty), 0, Math.Cos(angle) * dist, delay, fly, ease));
+            sb.Children.Add(Tween(rect, Part(rect, t, TranslateTransform.YProperty), 0, Math.Sin(angle) * dist + 18, delay, fly, ease));
+            sb.Children.Add(Tween(rect, Part(rect, r, RotateTransform.AngleProperty), 0, rng.Next(-270, 271), delay, fly, ease));
+            sb.Children.Add(Tween(rect, Part(rect, s, ScaleTransform.ScaleXProperty), 0.5, 1, delay, fly, ease));
+            sb.Children.Add(Tween(rect, Part(rect, s, ScaleTransform.ScaleYProperty), 0.5, 1, delay, fly, ease));
+            sb.Children.Add(Keys(rect, Own(UIElement.OpacityProperty), delay, (0, 1), (770, 1), (1100, 0)));
 
             layer.Children.Add(rect);
             added.Add(rect);
@@ -199,12 +199,12 @@ public static class BlockyMotion
         life.Fill = brush;
         var (s, r, t) = Transforms(life);
         var sb = new Storyboard();
-        sb.Children.Add(Keys(life, UIElement.OpacityProperty, delay, (0, 1), (450, 1), (700, 0)));
-        sb.Children.Add(Keys(s, ScaleTransform.ScaleXProperty, delay, (0, 1), (140, 1.4), (315, 1.15), (700, 0.2)));
-        sb.Children.Add(Keys(s, ScaleTransform.ScaleYProperty, delay, (0, 1), (140, 1.4), (315, 1.15), (700, 0.2)));
-        sb.Children.Add(Keys(t, TranslateTransform.YProperty, delay, (0, 0), (315, -3), (700, 14)));
-        sb.Children.Add(Keys(r, RotateTransform.AngleProperty, delay, (0, 0), (315, 0), (700, 35)));
-        sb.Children.Add(ColorKeys(brush, delay, (0, HeadsUp), (140, Colors.White), (315, Colors.White), (700, HeadsUp)));
+        sb.Children.Add(Keys(life, Own(UIElement.OpacityProperty), delay, (0, 1), (450, 1), (700, 0)));
+        sb.Children.Add(Keys(life, Part(life, s, ScaleTransform.ScaleXProperty), delay, (0, 1), (140, 1.4), (315, 1.15), (700, 0.2)));
+        sb.Children.Add(Keys(life, Part(life, s, ScaleTransform.ScaleYProperty), delay, (0, 1), (140, 1.4), (315, 1.15), (700, 0.2)));
+        sb.Children.Add(Keys(life, Part(life, t, TranslateTransform.YProperty), delay, (0, 0), (315, -3), (700, 14)));
+        sb.Children.Add(Keys(life, Part(life, r, RotateTransform.AngleProperty), delay, (0, 0), (315, 0), (700, 35)));
+        sb.Children.Add(ColorKeys(life, new PropertyPath("(0).(1)", Shape.FillProperty, SolidColorBrush.ColorProperty), delay, (0, HeadsUp), (140, Colors.White), (315, Colors.White), (700, HeadsUp)));
         return Begin(life, sb);
     }
 
@@ -219,22 +219,22 @@ public static class BlockyMotion
             case LoopKind.Twinkle:
             {
                 var (s, _, _) = Transforms(el);
-                sb.Children.Add(Keys(el, UIElement.OpacityProperty, z, (0, 0.3), (1200, 1), (2400, 0.3)));
-                sb.Children.Add(Keys(s, ScaleTransform.ScaleXProperty, z, (0, 1), (1200, 1.6), (2400, 1)));
-                sb.Children.Add(Keys(s, ScaleTransform.ScaleYProperty, z, (0, 1), (1200, 1.6), (2400, 1)));
+                sb.Children.Add(Keys(el, Own(UIElement.OpacityProperty), z, (0, 0.3), (1200, 1), (2400, 0.3)));
+                sb.Children.Add(Keys(el, Part(el, s, ScaleTransform.ScaleXProperty), z, (0, 1), (1200, 1.6), (2400, 1)));
+                sb.Children.Add(Keys(el, Part(el, s, ScaleTransform.ScaleYProperty), z, (0, 1), (1200, 1.6), (2400, 1)));
                 break;
             }
             case LoopKind.Bob:
             {
                 var (_, r, t) = Transforms(el);
-                sb.Children.Add(Keys(t, TranslateTransform.YProperty, z, (0, 0), (2000, -5), (4000, 0)));
-                sb.Children.Add(Keys(r, RotateTransform.AngleProperty, z, (0, 0), (2000, -4), (4000, 0)));
+                sb.Children.Add(Keys(el, Part(el, t, TranslateTransform.YProperty), z, (0, 0), (2000, -5), (4000, 0)));
+                sb.Children.Add(Keys(el, Part(el, r, RotateTransform.AngleProperty), z, (0, 0), (2000, -4), (4000, 0)));
                 break;
             }
             case LoopKind.Tick:
             {
                 var (_, r, _) = Transforms(el);
-                sb.Children.Add(Keys(r, RotateTransform.AngleProperty, z, (0, 0), (100, -12), (200, 12), (300, 0), (1000, 0)));
+                sb.Children.Add(Keys(el, Part(el, r, RotateTransform.AngleProperty), z, (0, 0), (100, -12), (200, 12), (300, 0), (1000, 0)));
                 break;
             }
             case LoopKind.Glow:
@@ -243,13 +243,13 @@ public static class BlockyMotion
                 var start = (border.BorderBrush as SolidColorBrush)?.Color ?? Color.FromArgb(153, HeadsUp.R, HeadsUp.G, HeadsUp.B);
                 var brush = new SolidColorBrush(start);
                 border.BorderBrush = brush;
-                sb.Children.Add(ColorKeys(brush, z, (0, start), (700, HeadsUp), (1400, start)));
+                sb.Children.Add(ColorKeys(border, new PropertyPath("(0).(1)", Border.BorderBrushProperty, SolidColorBrush.ColorProperty), z, (0, start), (700, HeadsUp), (1400, start)));
                 break;
             }
             case LoopKind.Hop:
             {
                 var (_, _, t) = Transforms(el);
-                sb.Children.Add(Keys(t, TranslateTransform.YProperty, z, (0, 0), (240, -5), (600, 0)));
+                sb.Children.Add(Keys(el, Part(el, t, TranslateTransform.YProperty), z, (0, 0), (240, -5), (600, 0)));
                 break;
             }
             case LoopKind.Drift:
@@ -258,8 +258,8 @@ public static class BlockyMotion
                 var width = (VisualTreeHelper.GetParent(el) as FrameworkElement)?.ActualWidth ?? 0;
                 if (width <= 0) width = SystemParameters.PrimaryScreenWidth;
                 var drift = new DoubleAnimation(-120, width + 120, new Duration(Ms(16000)));
-                Storyboard.SetTarget(drift, t);
-                Storyboard.SetTargetProperty(drift, new PropertyPath(TranslateTransform.XProperty));
+                Storyboard.SetTarget(drift, el);
+                Storyboard.SetTargetProperty(drift, Part(el, t, TranslateTransform.XProperty));
                 sb.Children.Add(drift);
                 break;
             }
@@ -273,15 +273,19 @@ public static class BlockyMotion
     }
 
     /// <summary>
-    /// Grows <paramref name="bar"/>'s width from 0 to <paramref name="width"/> linearly,
-    /// then calls <paramref name="onCompleted"/>. Returns null (does nothing) when off.
+    /// Fills a stretched <paramref name="bar"/> from its left edge to full width linearly
+    /// (so it follows the bar if it is resized), then calls <paramref name="onCompleted"/>.
+    /// Returns null (does nothing) when off.
     /// </summary>
-    public static Storyboard? Fill(FrameworkElement bar, double width, TimeSpan duration, Action onCompleted)
+    public static Storyboard? Fill(FrameworkElement bar, TimeSpan duration, Action onCompleted)
     {
         if (!Enabled) return null;
-        var anim = new DoubleAnimation(0, width, new Duration(duration));
+        var scale = new ScaleTransform(0, 1);
+        bar.RenderTransform = scale;
+        bar.RenderTransformOrigin = new Point(0, 0.5);
+        var anim = new DoubleAnimation(0, 1, new Duration(duration));
         Storyboard.SetTarget(anim, bar);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(FrameworkElement.WidthProperty));
+        Storyboard.SetTargetProperty(anim, new PropertyPath("(0).(1)", UIElement.RenderTransformProperty, ScaleTransform.ScaleXProperty));
         var sb = new Storyboard();
         sb.Children.Add(anim);
         sb.Completed += (_, _) => onCompleted();
@@ -363,19 +367,19 @@ public static class BlockyMotion
     }
 
     /// <summary>Holds <paramref name="from"/> until <paramref name="delay"/>, then eases to <paramref name="to"/>.</summary>
-    private static DoubleAnimationUsingKeyFrames Tween(DependencyObject target, DependencyProperty property, double from, double to, TimeSpan delay, TimeSpan duration, IEasingFunction ease)
+    private static DoubleAnimationUsingKeyFrames Tween(DependencyObject target, PropertyPath path, double from, double to, TimeSpan delay, TimeSpan duration, IEasingFunction ease)
     {
         var anim = new DoubleAnimationUsingKeyFrames();
         anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(from, KeyTime.FromTimeSpan(TimeSpan.Zero)));
         if (delay > TimeSpan.Zero) anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(from, KeyTime.FromTimeSpan(delay)));
         anim.KeyFrames.Add(new EasingDoubleKeyFrame(to, KeyTime.FromTimeSpan(delay + duration), ease));
         Storyboard.SetTarget(anim, target);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(property));
+        Storyboard.SetTargetProperty(anim, path);
         return anim;
     }
 
     /// <summary>Key frames at (milliseconds after <paramref name="delay"/>, value), smoothly eased; holds the first value until then.</summary>
-    private static DoubleAnimationUsingKeyFrames Keys(DependencyObject target, DependencyProperty property, TimeSpan delay, params (double Ms, double Value)[] points)
+    private static DoubleAnimationUsingKeyFrames Keys(DependencyObject target, PropertyPath path, TimeSpan delay, params (double Ms, double Value)[] points)
     {
         var anim = new DoubleAnimationUsingKeyFrames();
         anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(points[0].Value, KeyTime.FromTimeSpan(TimeSpan.Zero)));
@@ -387,11 +391,11 @@ public static class BlockyMotion
         }
 
         Storyboard.SetTarget(anim, target);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(property));
+        Storyboard.SetTargetProperty(anim, path);
         return anim;
     }
 
-    private static ColorAnimationUsingKeyFrames ColorKeys(SolidColorBrush brush, TimeSpan delay, params (double Ms, Color Value)[] points)
+    private static ColorAnimationUsingKeyFrames ColorKeys(DependencyObject target, PropertyPath path, TimeSpan delay, params (double Ms, Color Value)[] points)
     {
         var anim = new ColorAnimationUsingKeyFrames();
         anim.KeyFrames.Add(new DiscreteColorKeyFrame(points[0].Value, KeyTime.FromTimeSpan(TimeSpan.Zero)));
@@ -402,10 +406,19 @@ public static class BlockyMotion
             anim.KeyFrames.Add(new LinearColorKeyFrame(value, KeyTime.FromTimeSpan(at)));
         }
 
-        Storyboard.SetTarget(anim, brush);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(SolidColorBrush.ColorProperty));
+        Storyboard.SetTarget(anim, target);
+        Storyboard.SetTargetProperty(anim, path);
         return anim;
     }
 
     private static TimeSpan Ms(double ms) => TimeSpan.FromMilliseconds(ms);
+
+    /// <summary>Path from <paramref name="el"/> to <paramref name="property"/> on one part of its render-transform group.</summary>
+    private static PropertyPath Part(UIElement el, Transform part, DependencyProperty property)
+    {
+        var index = ((TransformGroup)el.RenderTransform).Children.IndexOf(part);
+        return new PropertyPath($"(0).(1)[{index}].(2)", UIElement.RenderTransformProperty, TransformGroup.ChildrenProperty, property);
+    }
+
+    private static PropertyPath Own(DependencyProperty property) => new(property);
 }
