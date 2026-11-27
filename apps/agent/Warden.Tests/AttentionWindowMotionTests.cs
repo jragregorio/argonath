@@ -154,6 +154,16 @@ public class AttentionWindowMotionTests
     });
 
     [Fact]
+    public void Engine_time_warning_window_gets_the_lives_bar() => RunSta(() =>
+    {
+        var payload = new Warden.Core.Models.TimeWarningPayload { ThresholdMinutes = 5, Message = "5 minutes of screen time left" };
+        var w = ShowOffscreen(Program.CreateTimeWarningWindow(payload, _ => Task.FromResult(true)));
+        var lives = Lives(w).Count;
+        w.Close();
+        Assert.Equal(6, lives);
+    });
+
+    [Fact]
     public void One_minute_check_glows_and_closes_cleanly() => RunSta(() =>
     {
         if (!BlockyMotion.Enabled) return;

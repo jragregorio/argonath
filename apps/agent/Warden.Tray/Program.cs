@@ -1236,6 +1236,22 @@ static class Program
         window.Show();
     }
 
+    /// <summary>The time-check popup for an engine warning (lives bar keyed by its threshold).</summary>
+    internal static AttentionWindow CreateTimeWarningWindow(
+        Warden.Core.Models.TimeWarningPayload payload,
+        Func<int, Task<bool>> requestExtension)
+    {
+        var allowExtensionRequest = payload.ThresholdMinutes is 10 or 5 or 1;
+        return new AttentionWindow(
+            "Time remaining",
+            payload.Message,
+            okDelaySeconds: 3,
+            extensionMinutes: allowExtensionRequest ? [15, 30, 60] : null,
+            onExtensionRequest: allowExtensionRequest ? requestExtension : null,
+            thresholdMinutes: payload.ThresholdMinutes
+        );
+    }
+
     private static void ShowTimeWarning(Warden.Core.Models.TimeWarningPayload payload)
     {
         if (DateTime.UtcNow < _suppressTimeWarningUiUntil)
@@ -1244,16 +1260,7 @@ static class Program
             return;
         }
 
-        var allowExtensionRequest = payload.ThresholdMinutes is 10 or 5 or 1;
-        var window = new AttentionWindow(
-            "Time remaining",
-            payload.Message,
-            okDelaySeconds: 3,
-            extensionMinutes: allowExtensionRequest ? [15, 30, 60] : null,
-            onExtensionRequest: allowExtensionRequest
-                ? minutes => _engine!.RequestExtensionAsync(minutes)
-                : null
-        );
+        var window = CreateTimeWarningWindow(payload, minutes => _engine!.RequestExtensionAsync(minutes));
 
         _activeTimeWarningWindow = window;
         window.Closed += (_, _) =>
