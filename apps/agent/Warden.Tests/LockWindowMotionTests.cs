@@ -210,6 +210,114 @@ public class LockWindowMotionTests
         Assert.Equal(0, shootingShown);
     });
 
+    private static Warden.Core.Models.PolicyEvaluation ParentLock() =>
+        new() { Status = "blocked", Message = Warden.Core.Theming.LockCopy.AdminLockMessage };
+
+    private static Warden.Core.Models.PolicyEvaluation TimesUp() =>
+        new() { Status = "blocked", Message = "Daily limit reached", UsedMinutes = 120, DailyLimitMinutes = 120 };
+
+    private static bool Shown(FrameworkElement e) => e.Visibility == Visibility.Visible;
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Parent_lock_shows_the_buddy_dozing_by_his_desk(bool primary) => RunSta(() =>
+    {
+        var w = ShowPreview(primary);
+        w.UpdateEvaluation(ParentLock());
+        Pump(TimeSpan.FromMilliseconds(200));
+        var scene = Tagged(w, "paused-scene").Single();
+        var backdrop = Tagged(w, "paused-backdrop").Single();
+        var night = Tagged(w, "night-sky").Single();
+        var moon = Tagged(w, "moon").Single();
+        var parts = new[] { "desk", "crt", "tower", "keyboard", "mouse", "controller", "buddy" }
+            .ToDictionary(t => t, t => Tagged(w, t).Count);
+        var zs = Tagged(w, "zzz").Count;
+        var title = Texts(w).Contains("Game paused");
+        w.Close();
+        Assert.True(Shown(scene));
+        Assert.True(Shown(backdrop));
+        Assert.False(Shown(night));
+        Assert.False(Shown(moon));
+        Assert.All(parts, kv => Assert.True(kv.Value == 1, $"{kv.Key} count {kv.Value}"));
+        Assert.Equal(3, zs);
+        Assert.True(title);
+    });
+
+    [Fact]
+    public void Times_up_keeps_the_starry_night() => RunSta(() =>
+    {
+        var w = ShowPreview();
+        w.UpdateEvaluation(TimesUp());
+        Pump(TimeSpan.FromMilliseconds(200));
+        var scene = Shown(Tagged(w, "paused-scene").Single());
+        var night = Shown(Tagged(w, "night-sky").Single());
+        var moon = Shown(Tagged(w, "moon").Single());
+        w.Close();
+        Assert.False(scene);
+        Assert.True(night);
+        Assert.True(moon);
+    });
+
+    [Fact]
+    public void Lifting_a_parent_lock_into_times_up_switches_back_to_night() => RunSta(() =>
+    {
+        var w = ShowPreview();
+        w.UpdateEvaluation(ParentLock());
+        Pump(TimeSpan.FromMilliseconds(150));
+        w.UpdateEvaluation(TimesUp());
+        Pump(TimeSpan.FromMilliseconds(150));
+        var scene = Shown(Tagged(w, "paused-scene").Single());
+        var night = Shown(Tagged(w, "night-sky").Single());
+        var title = Texts(w).Any(t => t.StartsWith("That's a wrap"));
+        w.Close();
+        Assert.False(scene);
+        Assert.True(night);
+        Assert.True(title);
+    });
+
+    [Fact]
+    public void Sleeping_buddy_breathes_and_snores() => RunSta(() =>
+    {
+        if (!BlockyMotion.Enabled) return;
+        var w = ShowPreview();
+        w.UpdateEvaluation(ParentLock());
+        Pump(TimeSpan.FromMilliseconds(400));
+        var buddy = Tagged(w, "buddy").Single();
+        var breathing = buddy.RenderTransform is TransformGroup g && g.Children.Any(c => c.HasAnimatedProperties);
+        var snoring = Tagged(w, "zzz").Count(z => z.HasAnimatedProperties);
+        w.Close();
+        Assert.True(breathing);
+        Assert.Equal(3, snoring);
+    });
+
+    [Fact]
+    public void Animations_off_shows_a_still_sleeping_scene() => RunSta(() =>
+    {
+        BlockyMotion.ForceDisabled = true;
+        var w = ShowPreview();
+        w.UpdateEvaluation(ParentLock());
+        Pump(TimeSpan.FromMilliseconds(150));
+        var zsVisible = Tagged(w, "zzz").Count(z => z.Opacity > 0);
+        var buddyStill = !(Tagged(w, "buddy").Single().RenderTransform is TransformGroup g && g.Children.Any(c => c.HasAnimatedProperties));
+        w.Close();
+        Assert.Equal(3, zsVisible);
+        Assert.True(buddyStill);
+    });
+
+    private static List<string> Texts(DependencyObject root)
+    {
+        var found = new List<string>();
+        void Walk(DependencyObject node)
+        {
+            if (node is System.Windows.Controls.TextBlock tb && tb.IsVisible && !string.IsNullOrEmpty(tb.Text)) found.Add(tb.Text);
+            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++) Walk(VisualTreeHelper.GetChild(node, i));
+        }
+
+        Walk(root);
+        return found;
+    }
+
     /// <summary>
     /// Opt-in visual check: set WARDEN_LOCK_SNAPSHOT_DIR to save a contact sheet of the
     /// preview lock window (rendered off-screen, nothing else on the desktop is captured).
@@ -220,9 +328,10 @@ public class LockWindowMotionTests
         var dir = Environment.GetEnvironmentVariable("WARDEN_LOCK_SNAPSHOT_DIR");
         if (string.IsNullOrWhiteSpace(dir)) return;
         Directory.CreateDirectory(dir);
-        foreach (var primary in new[] { true, false })
+        foreach (var (primary, parent) in new[] { (true, false), (false, false), (true, true), (false, true) })
         {
             var w = ShowPreview(primary);
+            if (parent) w.UpdateEvaluation(ParentLock());
             var frames = new List<System.Windows.Media.Imaging.BitmapSource>();
             var start = DateTime.UtcNow;
             foreach (var t in new[] { 0.15, 0.6, 1.4, 2.6, 4.0 })
@@ -254,7 +363,7 @@ public class LockWindowMotionTests
             outBmp.Render(sheet);
             var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
             enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(outBmp));
-            using var file = File.Create(System.IO.Path.Combine(dir, primary ? "lock-primary.png" : "lock-secondary.png"));
+            using var file = File.Create(System.IO.Path.Combine(dir, (parent ? "parent-" : "") + (primary ? "lock-primary.png" : "lock-secondary.png")));
             enc.Save(file);
         }
     });

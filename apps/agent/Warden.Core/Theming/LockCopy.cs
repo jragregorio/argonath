@@ -10,14 +10,17 @@ public sealed record LockCopy(string Title, string Body, string Detail)
 
     public const string Tagline = "Good time to stretch, grab a snack, or read a book.";
 
+    /// <summary>True when a parent locked the screen from the dashboard (not the clock).</summary>
+    public static bool IsParentLock(PolicyEvaluation? evaluation) => evaluation?.Message == AdminLockMessage;
+
     public static LockCopy For(PolicyEvaluation? evaluation, string? childName)
     {
         var name = string.IsNullOrWhiteSpace(childName) ? null : childName.Trim();
 
-        if (evaluation?.Message == AdminLockMessage)
+        if (IsParentLock(evaluation))
         {
             return new LockCopy(
-                name is null ? "Time for a break" : $"Time for a break, {name}",
+                "Game paused",
                 "Your parent has paused the screen for now.",
                 "");
         }

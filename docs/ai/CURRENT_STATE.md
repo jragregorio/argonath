@@ -38,7 +38,7 @@ Application and package directories **unchanged** (ADR-0001). Added AI guardrail
 
 ## Active work
 
-- [Agent smooth Blocky animations](../work/active/agent-blocky-animations.md) — popups (typing nudge, bonus celebration, time-check lives bar) and animated lock-screen sky; agent 0.6.36 merged to `main` and published (stable) 2026-11-28.
+- [Agent smooth Blocky animations](../work/active/agent-blocky-animations.md) — popups (typing nudge, bonus celebration, time-check lives bar) and animated lock-screen sky; agent 0.6.36 published (stable) 2026-11-28; 0.6.37 on `main` adds the fixed moon, clouds/shooting star and the parent lock-down "Game paused" desk scene (not yet published).
 - [Mobile Capacitor Android shell](../work/active/mobile-capacitor-android.md) — `apps/mobile`, remote URL `https://warden-alpha.vercel.app/sign-in`, package `com.warden.gard`, FCM client wired (needs `google-services.json`).
 
 Completed task: [docs/work/archive/repository-restructure.md](../work/archive/repository-restructure.md).

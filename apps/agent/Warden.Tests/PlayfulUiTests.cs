@@ -192,8 +192,17 @@ public class LockCopyTests
         var copy = LockCopy.For(
             new PolicyEvaluation { Status = "blocked", Message = LockCopy.AdminLockMessage },
             "Mia");
-        Assert.Equal("Time for a break, Mia", copy.Title);
+        Assert.Equal("Game paused", copy.Title);
         Assert.Equal("Your parent has paused the screen for now.", copy.Body);
+    }
+
+    [Fact]
+    public void Only_a_parent_lock_counts_as_parent_lock()
+    {
+        Assert.True(LockCopy.IsParentLock(new PolicyEvaluation { Status = "blocked", Message = LockCopy.AdminLockMessage }));
+        Assert.False(LockCopy.IsParentLock(new PolicyEvaluation { Status = "blocked", Message = "Daily limit reached" }));
+        Assert.False(LockCopy.IsParentLock(new PolicyEvaluation { Status = "outside_window" }));
+        Assert.False(LockCopy.IsParentLock(null));
     }
 
     [Fact]

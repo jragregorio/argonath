@@ -25,7 +25,17 @@ public enum LoopKind
     /// <summary>Slow drift across the parent, left to right (clouds).</summary>
     Drift,
     /// <summary>Mostly hidden; now and then flashes in and fades (a star's "+" glint).</summary>
-    Glint
+    Glint,
+    /// <summary>Slow sleepy breathing: grows a little taller from its bottom edge.</summary>
+    Breathe,
+    /// <summary>On/off power light.</summary>
+    Blink,
+    /// <summary>Old-screen brightness flicker (two quick dips per cycle).</summary>
+    Flicker,
+    /// <summary>Soft brightness pulse (paused bars).</summary>
+    Pulse,
+    /// <summary>Busy drive light: two quick blinks then rest.</summary>
+    DriveLight
 }
 
 /// <summary>
@@ -342,6 +352,25 @@ public static class BlockyMotion
                 sb.Children.Add(drift);
                 break;
             }
+            case LoopKind.Breathe:
+            {
+                var (s, _, _) = Transforms(el);
+                el.RenderTransformOrigin = new Point(0.5, 1);
+                sb.Children.Add(Keys(el, Part(el, s, ScaleTransform.ScaleYProperty), z, (0, 1), (1600, 1.05), (3200, 1)));
+                break;
+            }
+            case LoopKind.Blink:
+                sb.Children.Add(Steps(el, Own(UIElement.OpacityProperty), (0, 1), (800, 0.2), (1600, 0.2)));
+                break;
+            case LoopKind.Flicker:
+                sb.Children.Add(Steps(el, Own(UIElement.OpacityProperty), (0, 1), (1880, 0.82), (1920, 1), (2920, 0.9), (2960, 1), (4000, 1)));
+                break;
+            case LoopKind.Pulse:
+                sb.Children.Add(Keys(el, Own(UIElement.OpacityProperty), z, (0, 0.75), (1200, 1), (2400, 0.75)));
+                break;
+            case LoopKind.DriveLight:
+                sb.Children.Add(Steps(el, Own(UIElement.OpacityProperty), (0, 0.2), (220, 1), (310, 0.2), (480, 1), (570, 0.2), (2200, 0.2)));
+                break;
             case LoopKind.Glint:
             {
                 var (s, _, _) = Transforms(el);
@@ -358,6 +387,40 @@ public static class BlockyMotion
         Begin(el, sb);
         if (offset < TimeSpan.Zero) sb.Seek(el, offset.Negate(), TimeSeekOrigin.BeginTime);
         return sb;
+    }
+
+    /// <summary>
+    /// A floating "Z": every <paramref name="cycle"/> it fades in, drifts by
+    /// <paramref name="travel"/> while growing, and fades out. Starts after <paramref name="offset"/>.
+    /// </summary>
+    public static Storyboard? FloatUp(FrameworkElement el, Vector travel, TimeSpan cycle, TimeSpan offset)
+    {
+        if (!Enabled) return null;
+        var (s, _, t) = Transforms(el);
+        var total = cycle.TotalMilliseconds;
+        var sb = new Storyboard { RepeatBehavior = RepeatBehavior.Forever, BeginTime = offset };
+        Timeline.SetDesiredFrameRate(sb, 20);
+        var z = TimeSpan.Zero;
+        sb.Children.Add(Keys(el, Own(UIElement.OpacityProperty), z, (0, 0), (total * 0.2, 1), (total, 0)));
+        sb.Children.Add(Keys(el, Part(el, t, TranslateTransform.XProperty), z, (0, 0), (total, travel.X)));
+        sb.Children.Add(Keys(el, Part(el, t, TranslateTransform.YProperty), z, (0, 0), (total, travel.Y)));
+        sb.Children.Add(Keys(el, Part(el, s, ScaleTransform.ScaleXProperty), z, (0, 0.6), (total, 1.2)));
+        sb.Children.Add(Keys(el, Part(el, s, ScaleTransform.ScaleYProperty), z, (0, 0.6), (total, 1.2)));
+        return Begin(el, sb);
+    }
+
+    /// <summary>Moves <paramref name="el"/> down from <paramref name="fromY"/> to <paramref name="toY"/> again and again (a CRT's rolling band).</summary>
+    public static Storyboard? Roll(FrameworkElement el, double fromY, double toY, TimeSpan cycle)
+    {
+        if (!Enabled) return null;
+        var (_, _, t) = Transforms(el);
+        var sb = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
+        Timeline.SetDesiredFrameRate(sb, 20);
+        var roll = new DoubleAnimation(fromY, toY, new Duration(cycle));
+        Storyboard.SetTarget(roll, el);
+        Storyboard.SetTargetProperty(roll, Part(el, t, TranslateTransform.YProperty));
+        sb.Children.Add(roll);
+        return Begin(el, sb);
     }
 
     /// <summary>
@@ -525,6 +588,20 @@ public static class BlockyMotion
             var at = delay + Ms(ms);
             if (at == TimeSpan.Zero) continue;
             anim.KeyFrames.Add(new EasingDoubleKeyFrame(value, KeyTime.FromTimeSpan(at), new SineEase { EasingMode = EasingMode.EaseInOut }));
+        }
+
+        Storyboard.SetTarget(anim, target);
+        Storyboard.SetTargetProperty(anim, path);
+        return anim;
+    }
+
+    /// <summary>Hold-then-jump key frames (on/off lights, flicker) at milliseconds from the start.</summary>
+    private static DoubleAnimationUsingKeyFrames Steps(DependencyObject target, PropertyPath path, params (double Ms, double Value)[] points)
+    {
+        var anim = new DoubleAnimationUsingKeyFrames();
+        foreach (var (ms, value) in points)
+        {
+            anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(value, KeyTime.FromTimeSpan(Ms(ms))));
         }
 
         Storyboard.SetTarget(anim, target);

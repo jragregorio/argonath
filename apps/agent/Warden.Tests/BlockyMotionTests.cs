@@ -78,6 +78,18 @@ public class BlockyMotionTests
     });
 
     [Fact]
+    public void Disabled_float_and_roll_do_nothing() => RunSta(() =>
+    {
+        BlockyMotion.ForceDisabled = true;
+        var z = new TextBlock();
+        var band = new Border();
+        Assert.Null(BlockyMotion.FloatUp(z, new Vector(5, -11), TimeSpan.FromSeconds(3.6), TimeSpan.Zero));
+        Assert.Null(BlockyMotion.Roll(band, -4, 14, TimeSpan.FromSeconds(3)));
+        Assert.Null(BlockyMotion.Loop(band, LoopKind.Breathe));
+        Assert.Null(BlockyMotion.Loop(band, LoopKind.Blink));
+    });
+
+    [Fact]
     public void Disabled_pulse_adds_no_ring() => RunSta(() =>
     {
         BlockyMotion.ForceDisabled = true;

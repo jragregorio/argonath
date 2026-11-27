@@ -58,6 +58,13 @@ public class LockWindow : Window
     /// <summary>Elements whose looping animation starts once the window is loaded.</summary>
     private readonly List<(FrameworkElement Element, LoopKind Kind, TimeSpan Offset, TimeSpan? Duration)> _loops = new();
     private (FrameworkElement Trail, Vector Travel)? _shootingStar;
+    private readonly List<Action> _sceneStarters = new();
+    private readonly AccentPalette _palette;
+    private FrameworkElement? _nightSky;
+    private FrameworkElement? _moon;
+    private FrameworkElement? _pausedBackdrop;
+    private FrameworkElement? _deskScene;
+    private TextBlock? _secondaryTitle;
 
     private FrameworkElement? _content;
     private readonly bool _preview;
@@ -92,6 +99,7 @@ public class LockWindow : Window
         _childName = appearance.ChildName;
 
         var palette = AccentPalette.FromHex(appearance.AccentHex);
+        _palette = palette;
         _accentBrush = Freeze(Rgb(palette.Accent));
         _softBrush = Freeze(Rgb(palette.Soft));
         _cardBrush = Freeze(Rgb(palette.Card));
@@ -138,7 +146,11 @@ public class LockWindow : Window
 
         var layers = new Grid();
         System.Windows.Documents.TextElement.SetFontFamily(layers, BodyFont);
-        layers.Children.Add(BuildStars(bounds.Width, bounds.Height, palette));
+        _nightSky = (FrameworkElement)BuildStars(bounds.Width, bounds.Height, palette);
+        _nightSky.Tag = "night-sky";
+        layers.Children.Add(_nightSky);
+        _pausedBackdrop = BuildPausedBackdrop(bounds.Width, bounds.Height);
+        layers.Children.Add(_pausedBackdrop);
         Loaded += (_, _) => BlockyMotion.Guard(StartSkyMotion, "LockUI");
         Closed += (_, _) => BlockyMotion.Guard(() => BlockyMotion.StopAll(this), "LockUI");
 
@@ -161,6 +173,7 @@ public class LockWindow : Window
         mainPanel.Tag = "lock-content";
         _content = mainPanel;
         mainPanel.Children.Add(CreateMoon(84, bottomMargin: 18));
+        mainPanel.Children.Add(BuildDeskScene(6.5, bottomMargin: 14));
 
         _titleText = new TextBlock
         {
@@ -492,12 +505,228 @@ public class LockWindow : Window
             (byte)Math.Round(a.G + (b.G - a.G) * t),
             (byte)Math.Round(a.B + (b.B - a.B) * t));
 
+    /// <summary>
+    /// Parent lock-down scene: the sleeping pixel buddy dozing beside a retro gaming desk
+    /// (CRT monitor showing a paused game, tower PC, keyboard, mouse, controller).
+    /// Drawn in units of <paramref name="u"/> px on a 78x40 grid, in the child's colours.
+    /// Hidden until <see cref="SetScene"/> shows it; its motion starts with the rest of the sky.
+    /// </summary>
+    private UIElement BuildDeskScene(double u, double bottomMargin)
+    {
+        var p = _palette;
+        var accent = Freeze(Rgb(p.Accent));
+        var soft = Freeze(Rgb(p.Soft));
+        var deep = Freeze(Mix(p.Night, p.Accent, 0.55));
+        var cheek = Freeze(Mix(p.Accent, p.Star, 0.3));
+        var caseMid = Freeze(Rgb(p.Track));
+        var caseLight = Freeze(Mix(p.Track, p.Star, 0.15));
+        var caseDark = Freeze(Rgb(p.Card));
+        var screenBack = Freeze(Rgb(p.Night));
+        var ink = Freeze(Color.FromRgb(0x10, 0x14, 0x1a));
+        var white = Freeze(Colors.White);
+        var black = Freeze(Colors.Black);
+        var amber = Freeze(Color.FromRgb(0xf2, 0xc1, 0x4e));
+        var coral = Freeze(Color.FromRgb(0xff, 0x7f, 0x6e));
+        var sky = Freeze(Color.FromRgb(0x71, 0xb8, 0xe3));
+        var wood = Freeze(Color.FromRgb(0x53, 0x42, 0x32));
+        var woodLight = Freeze(Color.FromRgb(0x6c, 0x57, 0x41));
+        var woodDark = Freeze(Color.FromRgb(0x36, 0x2b, 0x21));
+        var animate = BlockyMotion.Enabled;
+
+        var scene = new Canvas
+        {
+            Width = 78 * u,
+            Height = 40 * u,
+            Tag = "paused-scene",
+            Visibility = Visibility.Collapsed,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, bottomMargin),
+            SnapsToDevicePixels = true,
+            IsHitTestVisible = false
+        };
+
+        Rectangle R(Panel parent, double x, double y, double w, double h, Brush fill, double opacity = 1)
+        {
+            var r = new Rectangle { Width = w * u, Height = h * u, Fill = fill, Opacity = opacity };
+            Canvas.SetLeft(r, x * u);
+            Canvas.SetTop(r, y * u);
+            parent.Children.Add(r);
+            return r;
+        }
+
+        Canvas Group(Panel parent, string? tag, double x, double y, double w, double h, bool clip = false)
+        {
+            var c = new Canvas { Width = w * u, Height = h * u, Tag = tag, ClipToBounds = clip };
+            Canvas.SetLeft(c, x * u);
+            Canvas.SetTop(c, y * u);
+            parent.Children.Add(c);
+            return c;
+        }
+
+        // Desk
+        var desk = Group(scene, "desk", 20, 27, 56, 13);
+        R(desk, 0, 0, 56, 2, woodLight);
+        R(desk, 0, 2, 56, 1, wood);
+        R(desk, 1, 3, 2, 10, woodDark);
+        R(desk, 53, 3, 2, 10, woodDark);
+
+        // CRT monitor with the paused game on screen
+        var crt = Group(scene, "crt", 32, 5, 24, 21.5);
+        R(crt, 0, 0, 24, 18, caseMid);
+        R(crt, 0, 0, 24, 1, caseLight);
+        R(crt, 0, 17, 24, 1, caseDark);
+        var screen = Group(crt, null, 2, 2, 20, 13, clip: true);
+        R(screen, 0, 0, 20, 13, screenBack);
+        var glow = Group(screen, null, 0, 0, 20, 13);
+        R(glow, 0, 0, 20, 13, accent, 0.12);
+        var bars = Group(glow, null, 0, 0, 20, 13);
+        R(bars, 6.5, 3, 2.5, 7, soft);
+        R(bars, 11, 3, 2.5, 7, soft);
+        for (var k = 0; k < 13; k++) R(screen, 0, k, 20, 0.35, black, 0.28);
+        var band = R(screen, 0, 0, 20, 3, soft, 0.12);
+        R(screen, 1, 1, 3, 1, white, 0.25);
+        R(screen, 1, 2, 1, 2, white, 0.25);
+        var monitorLed = R(crt, 20, 15.5, 2, 1, accent);
+        R(crt, 9, 18, 6, 2, caseDark);
+        R(crt, 6, 20, 12, 1.5, caseMid);
+
+        // Tower PC
+        var tower = Group(scene, "tower", 62, 7, 9, 20);
+        R(tower, 0, 0, 9, 20, caseMid);
+        R(tower, 0, 0, 9, 1, caseLight);
+        R(tower, 8, 0, 1, 20, caseDark);
+        R(tower, 1.5, 3, 6, 1.5, caseDark);
+        R(tower, 1.5, 5.5, 6, 1.5, caseDark);
+        R(tower, 2, 6, 2, 0.5, caseLight);
+        R(tower, 1.5, 9, 4, 1, caseDark);
+        for (var v = 0; v < 3; v++) R(tower, 1.5, 13 + v * 1.5, 6, 0.6, caseDark);
+        var driveLight = R(tower, 6, 9, 1, 1, amber);
+        R(tower, 6, 17, 1.2, 1.2, accent);
+
+        // Keyboard
+        var keyboard = Group(scene, "keyboard", 32, 23.5, 20, 4.2);
+        R(keyboard, 0, 0, 20, 4, caseMid);
+        R(keyboard, 0, 0, 20, 0.6, caseLight);
+        for (var row = 0; row < 2; row++)
+            for (var col = 0; col < 8; col++)
+                R(keyboard, 1 + col * 2.3, 1 + row * 1.4, 1.6, 0.9, caseLight);
+        R(keyboard, 5, 3.6, 9, 0.6, caseLight);
+
+        // Corded mouse
+        var mouse = Group(scene, "mouse", 55, 20, 3, 7);
+        R(mouse, 0, 3, 3, 4, caseLight);
+        R(mouse, 1.4, 3, 0.3, 1.6, caseDark);
+        R(mouse, 0, 6.4, 3, 0.6, caseMid);
+        for (var i = 0; i < 3; i++) R(mouse, 1.2, 2 - i, 0.4, 1, caseDark);
+
+        // Controller (an original design)
+        var pad = Group(scene, "controller", 22, 22, 12, 5.5);
+        R(pad, 1, 0, 10, 4, caseLight);
+        R(pad, 0, 1, 12, 3, caseLight);
+        R(pad, 0, 4, 3, 1.5, caseLight);
+        R(pad, 9, 4, 3, 1.5, caseLight);
+        R(pad, 2, 1.6, 2.6, 0.8, caseDark);
+        R(pad, 2.9, 0.7, 0.8, 2.6, caseDark);
+        R(pad, 8.4, 1, 1, 1, accent);
+        R(pad, 9.6, 2.2, 1, 1, amber);
+        R(pad, 7.2, 2.2, 1, 1, coral);
+        R(pad, 8.4, 3.2, 1, 1, sky);
+        R(pad, 5.2, 2, 0.8, 0.5, caseDark);
+        R(pad, 6.2, 2, 0.8, 0.5, caseDark);
+
+        // Sleeping buddy beside the desk
+        var buddy = Group(scene, "buddy", 0, 18, 18, 22);
+        foreach (var (x, y, w, h) in new[] { (4.0, 8.0, 10.0, 1.0), (3, 9, 12, 1), (2, 10, 14, 9), (3, 19, 12, 1), (4, 20, 10, 1) })
+            R(buddy, x, y, w, h, accent);
+        R(buddy, 4, 9, 4, 1, soft);
+        R(buddy, 3, 10, 2, 2, soft);
+        foreach (var (x, y, w) in new[] { (5.0, 14.0, 1.0), (6, 15, 2), (8, 14, 1), (10, 14, 1), (11, 15, 2), (13, 14, 1) })
+            R(buddy, x, y, w, 1, ink);
+        R(buddy, 4, 16, 2, 1, cheek);
+        R(buddy, 13, 16, 2, 1, cheek);
+        R(buddy, 9, 17, 2, 1, deep);
+
+        var zs = new List<TextBlock>();
+        for (var i = 0; i < 3; i++)
+        {
+            var size = (4 + i) * u;
+            var z = new TextBlock
+            {
+                Text = "Z",
+                FontFamily = new FontFamily("Consolas"),
+                FontWeight = FontWeights.Bold,
+                FontSize = size,
+                Foreground = soft,
+                Tag = "zzz",
+                Opacity = animate ? 0 : 1 - i * 0.25
+            };
+            // Animated: all start at the same spot and float up in turn. Still: a little stack.
+            Canvas.SetLeft(z, (14 + (animate ? 0 : i * 2.5)) * u);
+            Canvas.SetTop(z, (25 - (4 + i) - (animate ? 0 : i * 4)) * u);
+            scene.Children.Add(z);
+            zs.Add(z);
+        }
+
+        _sceneStarters.Add(() =>
+        {
+            BlockyMotion.Loop(glow, LoopKind.Flicker);
+            BlockyMotion.Loop(bars, LoopKind.Pulse);
+            BlockyMotion.Loop(monitorLed, LoopKind.Blink);
+            BlockyMotion.Loop(driveLight, LoopKind.DriveLight);
+            BlockyMotion.Loop(buddy, LoopKind.Breathe);
+            BlockyMotion.Roll(band, -4 * u, 14 * u, TimeSpan.FromSeconds(3));
+            for (var i = 0; i < zs.Count; i++)
+            {
+                BlockyMotion.FloatUp(zs[i], new Vector(5 * u, -11 * u), TimeSpan.FromSeconds(3.6), TimeSpan.FromSeconds(1.2 * i));
+            }
+        });
+
+        _deskScene = scene;
+        return scene;
+    }
+
+    /// <summary>Faint scattered dots in the child's colour behind the parent lock-down scene.</summary>
+    private Canvas BuildPausedBackdrop(double width, double height)
+    {
+        var canvas = new Canvas { IsHitTestVisible = false, Tag = "paused-backdrop", Visibility = Visibility.Collapsed };
+        var dot = Freeze(Rgb(_palette.Accent));
+        var k = Math.Max(1, height / 800.0);
+        for (var i = 0; i < 40; i++)
+        {
+            var fx = (i * 137 % 790 + 5) / 800.0;
+            var fy = (i * 71 % 490 + 5) / 500.0;
+            if (fx > 0.3 && fx < 0.7 && fy > 0.15 && fy < 0.85) continue;
+            var r = new Rectangle { Width = 2 * k, Height = 2 * k, Fill = dot, Opacity = 0.25 };
+            Canvas.SetLeft(r, fx * width);
+            Canvas.SetTop(r, fy * height);
+            canvas.Children.Add(r);
+        }
+
+        return canvas;
+    }
+
+    /// <summary>Shows the parent lock-down desk scene, or the starry night for every other lock.</summary>
+    private void SetScene(bool parentLock)
+    {
+        var night = parentLock ? Visibility.Collapsed : Visibility.Visible;
+        var paused = parentLock ? Visibility.Visible : Visibility.Collapsed;
+        if (_nightSky != null) _nightSky.Visibility = night;
+        if (_moon != null) _moon.Visibility = night;
+        if (_pausedBackdrop != null) _pausedBackdrop.Visibility = paused;
+        if (_deskScene != null) _deskScene.Visibility = paused;
+    }
+
     /// <summary>Starts the twinkles, glints, drifts, shooting star and moon bob, and fades the content in (all skipped when animations are off).</summary>
     private void StartSkyMotion()
     {
         foreach (var (element, kind, offset, duration) in _loops)
         {
             BlockyMotion.Loop(element, kind, offset, duration);
+        }
+
+        foreach (var start in _sceneStarters)
+        {
+            start();
         }
 
         if (_shootingStar is { } shooting)
@@ -528,8 +757,10 @@ public class LockWindow : Window
             Height = size,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 0, 0, bottomMargin),
-            SnapsToDevicePixels = true
+            SnapsToDevicePixels = true,
+            Tag = "moon"
         };
+        _moon = canvas;
         foreach (var (x, y, w, h) in MoonCells)
         {
             var rect = new Rectangle { Width = w * cell, Height = h * cell, Fill = MoonBrush, Tag = "moon-cell" };
@@ -601,8 +832,9 @@ public class LockWindow : Window
         };
 
         panel.Children.Add(CreateMoon(64, bottomMargin: 16));
+        panel.Children.Add(BuildDeskScene(4.5, bottomMargin: 12));
 
-        panel.Children.Add(new TextBlock
+        panel.Children.Add(_secondaryTitle = new TextBlock
         {
             Text = LockCopy.For(null, _childName).Title,
             FontSize = 28,
@@ -856,11 +1088,13 @@ public class LockWindow : Window
 
     public void UpdateEvaluation(PolicyEvaluation evaluation)
     {
-        if (!_isPrimary || _titleText == null || _statusText == null || _timeText == null) return;
-
         Dispatcher.Invoke(() =>
         {
             var copy = LockCopy.For(evaluation, _childName);
+            SetScene(LockCopy.IsParentLock(evaluation));
+            if (_secondaryTitle != null) _secondaryTitle.Text = copy.Title;
+            if (!_isPrimary || _titleText == null || _statusText == null || _timeText == null) return;
+
             _titleText.Text = copy.Title;
             _statusText.Text = copy.Body;
             _timeText.Text = copy.Detail;
@@ -931,7 +1165,7 @@ public static class LockWindowManager
                 foreach (var screen in screens)
                 {
                     var window = new LockWindow(screen, onExtensionRequest, onShutdownPc, onParentShutdown, Appearance);
-                    if (evaluation != null && screen.IsPrimary)
+                    if (evaluation != null)
                     {
                         window.UpdateEvaluation(evaluation);
                     }
@@ -1121,7 +1355,7 @@ public static class LockWindowManager
             foreach (var screen in monitors)
             {
                 var window = new LockWindow(screen, onExtension, onShutdown, onParentShutdown, Appearance);
-                if (_lastEvaluation != null && screen.IsPrimary)
+                if (_lastEvaluation != null)
                 {
                     window.UpdateEvaluation(_lastEvaluation);
                 }

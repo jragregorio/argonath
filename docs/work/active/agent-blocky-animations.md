@@ -52,3 +52,12 @@ Make the child's popups and lock screen less boring with game-inspired ("smooth 
 
 - The child's PC picks up the in-app update from 0.6.35 to 0.6.36.
 - Live checks on the child PC: a dashboard nudge with a reply, a bonus grant, a time run-down through 10/5/1, and a parent lock-down/unlock.
+
+## 0.6.37 (built, not yet published)
+
+- **Moon:** the stray "sparkle" dot by the top tip is gone, and the bottom row reaches under the lower horn so the crescent is one joined shape (test: every moon pixel joins along an edge).
+- **Night sky:** three pixel clouds drift across the middle at different depths; 34 square stars twinkle more clearly, 6 flash a "+" glint; a pixel shooting star crosses about every 7 s (30 fps; other loops stay at 20 fps).
+- **Parent lock-down scene:** when a parent locks from the dashboard, the lock screen shows "Game paused" with the sleeping pixel buddy dozing beside a retro gaming desk (CRT monitor with the paused game, tower PC, keyboard, corded mouse, controller), in the child's colours. Time's up and outside allowed hours keep the starry night. The scene switches both ways while locked and applies to every monitor.
+- Options explored and set aside: inferno/punishment look (makes everyday locks feel like trouble), gaming chair, buddy slumped at the keyboard.
+- Follow-up idea: a parent-chosen "Serious" lock (stern, still screen with a typed reason) would need dashboard + API + agent changes.
+
