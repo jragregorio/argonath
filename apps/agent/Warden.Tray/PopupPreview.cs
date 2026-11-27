@@ -148,7 +148,7 @@ internal static class PopupPreview
         }
 
         yield return ("1-nudge", () => new AttentionWindow("NUDGE", "Dinner's ready, come downstairs", okDelaySeconds: 5, enableNudgeReply: true, autoDismissSeconds: 45));
-        yield return ("2-bonus", () => new AttentionWindow("Extra time", "Your parent added +30 minutes", okDelaySeconds: 0));
+        yield return ("2-bonus", () => new AttentionWindow("Extra time", "Your parent added +30 minutes", okDelaySeconds: 0, bonusMinutes: 30));
         foreach (var minutes in new[] { 10, 5, 1 })
         {
             var m = minutes;

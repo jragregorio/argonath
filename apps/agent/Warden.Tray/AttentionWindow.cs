@@ -39,6 +39,8 @@ public sealed class AttentionWindow : Window
     private readonly WpfButton _ok;
     private System.Windows.Media.Animation.Storyboard? _typing;
     private FrameworkElement? _typingDots;
+    private readonly int? _bonusMinutes;
+    private readonly TextBlock? _countText;
 
     public string? Response { get; private set; }
 
@@ -56,9 +58,11 @@ public sealed class AttentionWindow : Window
         Func<int, Task<bool>>? onExtensionRequest = null,
         bool enableNudgeReply = false,
         int autoDismissSeconds = 0,
-        int? thresholdMinutes = null
+        int? thresholdMinutes = null,
+        int? bonusMinutes = null
     )
     {
+        _bonusMinutes = bonusMinutes;
         _thresholdMinutes = thresholdMinutes;
         _message = string.IsNullOrWhiteSpace(message) ? "Your parent wants your attention" : message;
         Title = "Warden";
@@ -152,6 +156,21 @@ public sealed class AttentionWindow : Window
             Foreground = UiTheme.TextBrush,
             TextWrapping = TextWrapping.Wrap
         };
+        if (style.Motion == AttentionMotion.Celebrate && bonusMinutes > 0)
+        {
+            // "Your parent added +N minutes" with +N in its own block so it can count up and bump.
+            _countText = new TextBlock
+            {
+                Text = $"+{bonusMinutes}",
+                Foreground = UiTheme.AccentBrush,
+                FontWeight = FontWeights.Bold
+            };
+            _messageText.Text = string.Empty;
+            _messageText.Inlines.Add(new System.Windows.Documents.Run("Your parent added "));
+            _messageText.Inlines.Add(new System.Windows.Documents.InlineUIContainer(_countText) { BaselineAlignment = BaselineAlignment.Baseline });
+            _messageText.Inlines.Add(new System.Windows.Documents.Run(" minutes"));
+        }
+
         _messageHost = new Grid { Margin = new Thickness(0, 0, 0, 20) };
         _messageHost.Children.Add(_messageText);
         stack.Children.Add(_messageHost);
@@ -493,6 +512,42 @@ public sealed class AttentionWindow : Window
             case AttentionMotion.TimeCheck:
                 BlockyMotion.DropIn(_card);
                 break;
+            case AttentionMotion.Celebrate:
+                StartCelebrateMotion();
+                break;
+        }
+    }
+
+    /// <summary>Bonus time: pop in, star spins, square particles burst from the icon, minutes count up.</summary>
+    private void StartCelebrateMotion()
+    {
+        if (!BlockyMotion.Enabled) return;
+
+        // Measure the icon centre before the pop scales the card.
+        var origin = _icon.TranslatePoint(new System.Windows.Point(_icon.ActualWidth / 2, _icon.ActualHeight / 2), _particleLayer);
+        BlockyMotion.PopIn(_card);
+        BlockyMotion.Spin(_iconGlyph, TimeSpan.FromMilliseconds(200));
+        BlockyMotion.Burst(
+            _particleLayer,
+            origin,
+            [
+                UiTheme.Accent,
+                System.Windows.Media.Color.FromRgb(0xf2, 0xc1, 0x4e),
+                System.Windows.Media.Color.FromRgb(0xee, 0xf2, 0xf0),
+                System.Windows.Media.Color.FromRgb(0x9f, 0xe8, 0xbd)
+            ],
+            20,
+            TimeSpan.FromMilliseconds(250));
+
+        if (_countText != null && _bonusMinutes is > 0 and var minutes)
+        {
+            var countStart = TimeSpan.FromMilliseconds(350);
+            var frames = Warden.Core.Theming.BlockyTimeline.CountUpFrames(minutes, TimeSpan.FromMilliseconds(700))
+                .Select(f => f with { At = f.At + countStart })
+                .Prepend(new Warden.Core.Theming.TextFrame(TimeSpan.Zero, "+0"))
+                .ToList();
+            BlockyMotion.PlayText(_countText, frames, $"+{minutes}");
+            BlockyMotion.Bump(_countText, TimeSpan.FromMilliseconds(1050), peak: 1.35);
         }
     }
 

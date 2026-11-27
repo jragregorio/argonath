@@ -93,6 +93,43 @@ public class AttentionWindowMotionTests
         Assert.Equal("Your parent wants your attention", done);
     });
 
+    private static System.Windows.Controls.TextBlock? CountText(AttentionWindow w) =>
+        (System.Windows.Controls.TextBlock?)typeof(AttentionWindow).GetField("_countText", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(w);
+
+    private static System.Windows.Controls.Canvas Particles(AttentionWindow w) =>
+        (System.Windows.Controls.Canvas)typeof(AttentionWindow).GetField("_particleLayer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(w)!;
+
+    [Fact]
+    public void Bonus_bursts_particles_and_counts_up_to_the_minutes() => RunSta(() =>
+    {
+        if (!BlockyMotion.Enabled) return;
+        var w = ShowOffscreen(new AttentionWindow("Extra time", "Your parent added +30 minutes", okDelaySeconds: 0, bonusMinutes: 30));
+        Pump(TimeSpan.FromMilliseconds(250));
+        var startCount = CountText(w)!.Text;
+        Pump(TimeSpan.FromMilliseconds(250));
+        var particles = Particles(w).Children.Count;
+        Pump(TimeSpan.FromMilliseconds(1400));
+        var endCount = CountText(w)!.Text;
+        var particlesAfter = Particles(w).Children.Count;
+        w.Close();
+        Assert.Equal("+0", startCount);
+        Assert.Equal(20, particles);
+        Assert.Equal("+30", endCount);
+        Assert.Equal(0, particlesAfter);
+    });
+
+    [Fact]
+    public void Bonus_without_minutes_keeps_extra_screen_time_wording() => RunSta(() =>
+    {
+        var w = ShowOffscreen(new AttentionWindow("Extra time", "Your parent added extra screen time", okDelaySeconds: 0, bonusMinutes: 0));
+        Pump(TimeSpan.FromMilliseconds(1200));
+        var text = MessageText(w);
+        var count = CountText(w);
+        w.Close();
+        Assert.Equal("Your parent added extra screen time", text);
+        Assert.Null(count);
+    });
+
     [Fact]
     public void Ok_becomes_clickable_when_the_fill_finishes() => RunSta(() =>
     {

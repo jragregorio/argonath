@@ -1054,7 +1054,7 @@ static class Program
         var body = extraMinutes > 0
             ? $"Your parent added +{extraMinutes} minutes"
             : "Your parent added extra screen time";
-        var window = new AttentionWindow("Extra time", body, okDelaySeconds: 0);
+        var window = new AttentionWindow("Extra time", body, okDelaySeconds: 0, bonusMinutes: extraMinutes);
         window.Closed += (_, _) => ReleaseAttentionSlot();
         window.Show();
         WardenLog.Info("Extension", $"Showing Extra time UI for +{extraMinutes}m");
