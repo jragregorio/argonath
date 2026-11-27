@@ -60,3 +60,6 @@ apps/mobile/android/keystore.properties
 # Agent installer outputs
 apps/agent/artifacts/
 apps/agent/Warden.Installer/obj/bootstrap/
+
+# Brainstorm mockups and plan-execution scratch
+.superpowers/

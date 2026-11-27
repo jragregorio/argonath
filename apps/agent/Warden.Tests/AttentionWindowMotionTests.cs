@@ -189,6 +189,41 @@ public class AttentionWindowMotionTests
     });
 
     [Fact]
+    public void Animations_off_shows_final_states_and_keeps_the_countdown() => RunSta(() =>
+    {
+        BlockyMotion.ForceDisabled = true;
+        try
+        {
+            var nudge = ShowOffscreen(new AttentionWindow("NUDGE", "Dinner's ready, come downstairs", okDelaySeconds: 5, enableNudgeReply: true));
+            Pump(TimeSpan.FromMilliseconds(200));
+            var nudgeText = MessageText(nudge);
+            var okLabel = Ok(nudge).Content as string;
+            nudge.Close();
+
+            var bonus = ShowOffscreen(new AttentionWindow("Extra time", "Your parent added +30 minutes", okDelaySeconds: 0, bonusMinutes: 30));
+            Pump(TimeSpan.FromMilliseconds(200));
+            var count = CountText(bonus)!.Text;
+            var particles = Particles(bonus).Children.Count;
+            bonus.Close();
+
+            var check = ShowOffscreen(TimeCheck(5));
+            Pump(TimeSpan.FromMilliseconds(200));
+            var livesGone = Lives(check).All(l => l.Opacity == 0);
+            check.Close();
+
+            Assert.Equal("Dinner's ready, come downstairs", nudgeText);
+            Assert.Equal("OK (5)", okLabel);
+            Assert.Equal("+30", count);
+            Assert.Equal(0, particles);
+            Assert.True(livesGone);
+        }
+        finally
+        {
+            BlockyMotion.ForceDisabled = false;
+        }
+    });
+
+    [Fact]
     public void Ok_becomes_clickable_when_the_fill_finishes() => RunSta(() =>
     {
         if (!BlockyMotion.Enabled) return;
