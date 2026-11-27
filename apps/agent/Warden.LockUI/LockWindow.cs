@@ -35,15 +35,12 @@ public class LockWindow : Window
     private static readonly SolidColorBrush DangerBrush = Freeze(Color.FromRgb(0xb5, 0x4a, 0x3f));
     private static readonly SolidColorBrush DangerTextBrush = Freeze(Color.FromRgb(0xff, 0x8a, 0x7a));
     private static readonly SolidColorBrush MoonBrush = Freeze(Color.FromRgb(0xf2, 0xd2, 0x7a));
-    private static readonly SolidColorBrush MoonFillBrush = Freeze(Color.FromArgb(38, 0xf2, 0xd2, 0x7a));
     private static readonly SolidColorBrush FaintBrush = Freeze(Color.FromRgb(0x8f, 0x9b, 0x97));
 
     // Windows 11 UI font; falls back to Segoe UI on Windows 10.
     private static readonly FontFamily BodyFont = new("Segoe UI");
     private static readonly FontFamily DisplayFont = new("Segoe UI");
 
-    private const string MoonGeometry = "M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z";
-    private const string SparkleGeometry = "M17 3.5l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5z";
 
     /// <summary>Star positions as fractions of the screen (x, y, radius px, opacity).</summary>
     private static readonly (double X, double Y, double R, double O)[] Stars =
@@ -66,6 +63,30 @@ public class LockWindow : Window
     private readonly TextBlock? _timeText;
     private readonly TextBlock? _pinStatusText;
     private readonly bool _isPrimary;
+
+    /// <summary>Elements whose looping animation starts once the window is loaded.</summary>
+    private readonly List<(FrameworkElement Element, LoopKind Kind, TimeSpan Offset)> _loops = new();
+
+    private FrameworkElement? _content;
+    private readonly bool _preview;
+
+    /// <summary>
+    /// Test-only preview: no focus stealing, not topmost, closable without the lock manager.
+    /// Never set by the app (internal, visible to Warden.Tests only).
+    /// </summary>
+    internal bool Preview
+    {
+        get => _preview;
+        init
+        {
+            _preview = value;
+            if (value)
+            {
+                Topmost = false;
+                ShowActivated = false;
+            }
+        }
+    }
 
     public LockWindow(
         MonitorBounds bounds,
@@ -103,13 +124,14 @@ public class LockWindow : Window
         Closing += (_, e) =>
         {
             // Only allow programmatic close via LockWindowManager.Hide.
-            if (!LockWindowManager.AllowClose)
+            if (!LockWindowManager.AllowClose && !_preview)
             {
                 e.Cancel = true;
             }
         };
         Deactivated += (_, _) =>
         {
+            if (_preview) return;
             try
             {
                 Topmost = true;
@@ -125,10 +147,13 @@ public class LockWindow : Window
         var layers = new Grid();
         System.Windows.Documents.TextElement.SetFontFamily(layers, BodyFont);
         layers.Children.Add(BuildStars(bounds.Width, bounds.Height, palette));
+        Loaded += (_, _) => StartSkyMotion();
+        Closed += (_, _) => BlockyMotion.StopAll(this);
 
         if (!bounds.IsPrimary)
         {
-            layers.Children.Add(BuildSecondaryContent());
+            _content = (FrameworkElement)BuildSecondaryContent();
+            layers.Children.Add(_content);
             Content = layers;
             return;
         }
@@ -141,6 +166,8 @@ public class LockWindow : Window
             MaxWidth = 560
         };
 
+        mainPanel.Tag = "lock-content";
+        _content = mainPanel;
         mainPanel.Children.Add(CreateMoon(84, bottomMargin: 18));
 
         _titleText = new TextBlock
@@ -322,48 +349,81 @@ public class LockWindow : Window
         return sky;
     }
 
-    private static UIElement BuildStars(double width, double height, AccentPalette palette)
+    private UIElement BuildStars(double width, double height, AccentPalette palette)
     {
         var canvas = new Canvas { IsHitTestVisible = false };
         var starBrush = Freeze(Rgb(palette.Star));
+
+        // Faint block clouds drift behind everything.
+        var cloudBrush = Freeze(Color.FromArgb(31, palette.Star.R, palette.Star.G, palette.Star.B));
+        foreach (var (w, y, offset) in new[] { (70.0, 0.58, 0.0), (44.0, 0.22, -7.0) })
+        {
+            var cloud = new Rectangle { Width = w, Height = 10, Fill = cloudBrush, Tag = "cloud", SnapsToDevicePixels = true };
+            Canvas.SetLeft(cloud, 0);
+            Canvas.SetTop(cloud, y * height);
+            canvas.Children.Add(cloud);
+            _loops.Add((cloud, LoopKind.Drift, TimeSpan.FromSeconds(offset)));
+        }
+
+        var i = 0;
         foreach (var (x, y, r, o) in Stars)
         {
-            var star = new Ellipse { Width = r * 2, Height = r * 2, Fill = starBrush, Opacity = o };
+            var star = new Rectangle { Width = r * 2, Height = r * 2, Fill = starBrush, Opacity = o, Tag = "star", SnapsToDevicePixels = true };
             Canvas.SetLeft(star, x * width - r);
             Canvas.SetTop(star, y * height - r);
             canvas.Children.Add(star);
+            _loops.Add((star, LoopKind.Twinkle, TimeSpan.FromSeconds(i * 0.37 % 2.4)));
+            i++;
         }
 
         return canvas;
     }
 
-    private static UIElement CreateMoon(double size, double bottomMargin)
+    /// <summary>Starts the twinkles, drifts and moon bob, and fades the content in (all skipped when animations are off).</summary>
+    private void StartSkyMotion()
     {
-        var grid = new Grid
+        foreach (var (element, kind, offset) in _loops)
+        {
+            BlockyMotion.Loop(element, kind, offset);
+        }
+
+        if (_content != null) BlockyMotion.FadeUp(_content, TimeSpan.FromMilliseconds(1400));
+    }
+
+    /// <summary>Pixel moon cells on a 12x12 grid (x, y, width, height).</summary>
+    private static readonly (int X, int Y, int W, int H)[] MoonCells =
+    [
+        (4, 1, 3, 1), (2, 2, 3, 1), (1, 3, 3, 2), (1, 5, 3, 2),
+        (1, 7, 4, 1), (2, 8, 6, 1), (3, 9, 5, 1), (8, 7, 2, 1)
+    ];
+
+    private UIElement CreateMoon(double size, double bottomMargin)
+    {
+        var cell = size / 12;
+        var canvas = new Canvas
         {
             Width = size,
             Height = size,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, bottomMargin)
+            Margin = new Thickness(0, 0, 0, bottomMargin),
+            SnapsToDevicePixels = true
         };
-        grid.Children.Add(new Path
+        foreach (var (x, y, w, h) in MoonCells)
         {
-            Data = Geometry.Parse(MoonGeometry),
-            Stroke = MoonBrush,
-            StrokeThickness = 1.4,
-            Fill = MoonFillBrush,
-            Stretch = Stretch.None,
-            RenderTransform = new ScaleTransform(size / 24, size / 24)
-        });
-        grid.Children.Add(new Path
-        {
-            Data = Geometry.Parse(SparkleGeometry),
-            Stroke = MoonBrush,
-            StrokeThickness = 1.4,
-            Stretch = Stretch.None,
-            RenderTransform = new ScaleTransform(size / 24, size / 24)
-        });
-        return grid;
+            var rect = new Rectangle { Width = w * cell, Height = h * cell, Fill = MoonBrush, Tag = "moon-cell" };
+            Canvas.SetLeft(rect, x * cell);
+            Canvas.SetTop(rect, y * cell);
+            canvas.Children.Add(rect);
+        }
+
+        var sparkle = new Rectangle { Width = cell, Height = cell, Fill = MoonBrush, Tag = "sparkle" };
+        Canvas.SetLeft(sparkle, 9 * cell);
+        Canvas.SetTop(sparkle, 2 * cell);
+        canvas.Children.Add(sparkle);
+
+        _loops.Add((canvas, LoopKind.Bob, TimeSpan.Zero));
+        _loops.Add((sparkle, LoopKind.Twinkle, TimeSpan.Zero));
+        return canvas;
     }
 
     private static StackPanel IconLabel(string glyph, string text, Brush brush, double size)
@@ -420,7 +480,8 @@ public class LockWindow : Window
         var panel = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Tag = "lock-content"
         };
 
         panel.Children.Add(CreateMoon(64, bottomMargin: 16));

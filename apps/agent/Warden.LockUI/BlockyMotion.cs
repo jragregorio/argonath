@@ -38,8 +38,15 @@ public static class BlockyMotion
     private static readonly ConditionalWeakTable<DependencyObject, List<(Storyboard Sb, FrameworkElement On)>> Running = new();
     private static readonly ConditionalWeakTable<Storyboard, FrameworkElement> BeganOn = new();
 
-    /// <summary>Test hook: behave as if Windows animations were off.</summary>
-    internal static bool ForceDisabled { get; set; }
+    [ThreadStatic]
+    private static bool _forceDisabled;
+
+    /// <summary>Test hook (per UI thread): behave as if Windows animations were off.</summary>
+    internal static bool ForceDisabled
+    {
+        get => _forceDisabled;
+        set => _forceDisabled = value;
+    }
 
     /// <summary>False when Windows' "Animation effects" setting is off.</summary>
     public static bool Enabled => !ForceDisabled && SystemParameters.ClientAreaAnimation;
@@ -66,6 +73,18 @@ public static class BlockyMotion
         sb.Children.Add(Tween(el, Part(el, s, ScaleTransform.ScaleXProperty), 0.3, 1, d, Ms(600), ease));
         sb.Children.Add(Tween(el, Part(el, s, ScaleTransform.ScaleYProperty), 0.3, 1, d, Ms(600), ease));
         sb.Children.Add(Tween(el, Own(UIElement.OpacityProperty), 0, 1, d, Ms(300), new CubicEase { EasingMode = EasingMode.EaseOut }));
+        return Begin(el, sb);
+    }
+
+    /// <summary>Fades in while rising <paramref name="rise"/> px into place.</summary>
+    public static Storyboard? FadeUp(FrameworkElement el, TimeSpan duration, double rise = 10)
+    {
+        if (!Enabled) return null;
+        var (_, _, t) = Transforms(el);
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var sb = new Storyboard();
+        sb.Children.Add(Tween(el, Own(UIElement.OpacityProperty), 0, 1, TimeSpan.Zero, duration, ease));
+        sb.Children.Add(Tween(el, Part(el, t, TranslateTransform.YProperty), rise, 0, TimeSpan.Zero, duration, ease));
         return Begin(el, sb);
     }
 
@@ -132,19 +151,7 @@ public static class BlockyMotion
                 on = BeganOn.TryGetValue(sb, out var began) ? began : owner;
             }
 
-            sb.Stop(on);
-            sb.Remove(on);
-
-            // Belt and braces: drop any clock still holding a property the storyboard animated on the element itself.
-            foreach (var child in sb.Children)
-            {
-                if (Storyboard.GetTarget(child) is UIElement target
-                    && Storyboard.GetTargetProperty(child) is { PathParameters.Count: 1 } path
-                    && path.PathParameters[0] is DependencyProperty dp)
-                {
-                    target.BeginAnimation(dp, null);
-                }
-            }
+            Halt(sb, on);
         }
 
         setFinal();
@@ -351,7 +358,23 @@ public static class BlockyMotion
         if (list == null) return;
         foreach (var (sb, on) in list)
         {
-            sb.Stop(on);
+            Halt(sb, on);
+        }
+    }
+
+    /// <summary>Stops and removes <paramref name="sb"/>, and drops any clock it left on an element's own property.</summary>
+    private static void Halt(Storyboard sb, FrameworkElement on)
+    {
+        sb.Stop(on);
+        sb.Remove(on);
+        foreach (var child in sb.Children)
+        {
+            if (Storyboard.GetTarget(child) is UIElement target
+                && Storyboard.GetTargetProperty(child) is { PathParameters.Count: 1 } path
+                && path.PathParameters[0] is DependencyProperty dp)
+            {
+                target.BeginAnimation(dp, null);
+            }
         }
     }
 
