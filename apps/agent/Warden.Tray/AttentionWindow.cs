@@ -497,12 +497,12 @@ public sealed class AttentionWindow : Window
                 _autoDismissTimer.Start();
             }
 
-            StartMotion();
+            BlockyMotion.Guard(StartMotion, "Attention");
         };
 
         Closed += (_, _) =>
         {
-            BlockyMotion.StopAll(this);
+            BlockyMotion.Guard(() => BlockyMotion.StopAll(this), "Attention");
             _okDelayTimer?.Stop();
             _autoDismissTimer?.Stop();
             _closed = true;
@@ -680,16 +680,15 @@ public sealed class AttentionWindow : Window
     {
         _typingSkipped = true;
         if (_typing == null && _typingDots == null) return;
-        BlockyMotion.Finish(_typing, _messageText, () =>
+        BlockyMotion.Guard(() => BlockyMotion.Finish(_typing, _messageText, () =>
         {
             if (_typingDots != null)
             {
                 _typingDots.BeginAnimation(OpacityProperty, null);
                 _typingDots.Visibility = Visibility.Collapsed;
             }
-
-            _messageText.Text = _message;
-        });
+        }), "Attention");
+        _messageText.Text = _message;
         _typing = null;
         _typingDots = null;
     }

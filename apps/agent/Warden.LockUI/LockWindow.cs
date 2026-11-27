@@ -147,8 +147,8 @@ public class LockWindow : Window
         var layers = new Grid();
         System.Windows.Documents.TextElement.SetFontFamily(layers, BodyFont);
         layers.Children.Add(BuildStars(bounds.Width, bounds.Height, palette));
-        Loaded += (_, _) => StartSkyMotion();
-        Closed += (_, _) => BlockyMotion.StopAll(this);
+        Loaded += (_, _) => BlockyMotion.Guard(StartSkyMotion, "LockUI");
+        Closed += (_, _) => BlockyMotion.Guard(() => BlockyMotion.StopAll(this), "LockUI");
 
         if (!bounds.IsPrimary)
         {

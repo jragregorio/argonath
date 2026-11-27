@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
+using Warden.Core.Diagnostics;
 using Warden.Core.Theming;
 
 namespace Warden.LockUI;
@@ -50,6 +51,26 @@ public static class BlockyMotion
 
     /// <summary>False when Windows' "Animation effects" setting is off.</summary>
     public static bool Enabled => !ForceDisabled && SystemParameters.ClientAreaAnimation;
+
+    /// <summary>
+    /// Runs animation work so a failure degrades to a still frame and never escapes into
+    /// lock/unlock or the popup queue. Failures go to <paramref name="onError"/>.
+    /// </summary>
+    public static void Guard(Action action, Action<Exception> onError)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            try { onError(ex); } catch { /* never let reporting throw */ }
+        }
+    }
+
+    /// <summary><see cref="Guard(Action, Action{Exception})"/> that logs a warning under <paramref name="area"/>.</summary>
+    public static void Guard(Action action, string area) =>
+        Guard(action, ex => WardenLog.Warn(area, "Animation failed (showing still frame)", ex));
 
     /// <summary>Card falls in from above with a small overshoot.</summary>
     public static Storyboard? DropIn(FrameworkElement card)
@@ -262,6 +283,8 @@ public static class BlockyMotion
     {
         if (!Enabled) return null;
         var sb = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
+        // Calm loops look the same at 20 fps and cost far less over a long lock.
+        Timeline.SetDesiredFrameRate(sb, 20);
         var z = TimeSpan.Zero;
         switch (kind)
         {

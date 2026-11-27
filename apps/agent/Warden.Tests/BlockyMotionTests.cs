@@ -57,6 +57,27 @@ public class BlockyMotionTests
     });
 
     [Fact]
+    public void Guarded_motion_swallows_and_reports_failures()
+    {
+        Exception? reported = null;
+        BlockyMotion.Guard(() => throw new InvalidOperationException("boom"), ex => reported = ex);
+        Assert.IsType<InvalidOperationException>(reported);
+    }
+
+    [Fact]
+    public void Loops_are_capped_at_twenty_frames_per_second() => RunSta(() =>
+    {
+        BlockyMotion.ForceDisabled = false;
+        if (!BlockyMotion.Enabled) return;
+        var star = new Border { Width = 4, Height = 4 };
+        var window = new Window { Content = star, Left = -20000, Top = 0, Width = 50, Height = 50, ShowActivated = false, ShowInTaskbar = false };
+        window.Show();
+        var sb = BlockyMotion.Loop(star, LoopKind.Twinkle);
+        window.Close();
+        Assert.Equal(20, System.Windows.Media.Animation.Timeline.GetDesiredFrameRate(sb!));
+    });
+
+    [Fact]
     public void Disabled_pulse_adds_no_ring() => RunSta(() =>
     {
         BlockyMotion.ForceDisabled = true;
